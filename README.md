@@ -19,16 +19,17 @@ still require a listening review and Xbox playtest.
 On this computer dependencies are installed in `.venv`. Double-click
 **Launch.cmd**, select or drop a song, enter metadata, and click **Generate charts**.
 
-Double-click **Compare Charts.cmd** to compare a completed review with an official
-gameplay video. Drop the output folder containing `review.html`, paste its YouTube
-link, and open the comparison workspace. The two players appear side by side with
-shared playback controls, an adjustable time offset, slow playback, and buttons
+Double-click **Compare Charts.cmd** to compare a completed review. Drop the output
+folder containing `review.html` and choose one of two modes. A reference `notes.mid`
+produces an automatic note-by-note report. A YouTube gameplay link opens a guided
+visual review; video pages do not expose their underlying notes. Embeddable videos
+use shared playback controls, an adjustable time offset and slow playback. The
+workspace has buttons
 for recording extra notes, missing notes, lane/pattern errors, timing errors and
 sustain errors. Export the timestamped observations as JSON when finished. The
 reference video and observations are never supplied to chart generation.
-Some uploaders disable embedded playback; the workspace detects that condition
-and provides **Open on YouTube** so the same timestamped review can continue in
-a second window.
+Some uploaders disable embedded playback. The launcher now opens the normal
+YouTube page separately so those videos remain viewable.
 
 - Precision mode uses six-stem Demucs for guitar/keys and fine-tuned Demucs for
   drums/bass/vocals. It is slower and caches its results.

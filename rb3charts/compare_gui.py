@@ -5,6 +5,7 @@ import webbrowser
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
+from .compare import compare_charts
 from .video_compare import create_video_comparison, start_comparison_server
 
 
@@ -29,16 +30,19 @@ class ComparisonWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("RB3 Chart Comparison")
-        self.resize(720, 230)
+        self.resize(760, 330)
         self.servers = []
         root = QWidget(); layout = QVBoxLayout(root)
-        intro = QLabel("Compare a generated review with an official YouTube gameplay chart.\nThe generated chart and reference video remain separate.")
+        intro = QLabel("Automatic comparison needs a reference chart MIDI. A YouTube link opens a guided visual review because videos do not expose their underlying note data.")
         intro.setWordWrap(True); layout.addWidget(intro)
-        form = QFormLayout(); self.folder = FolderEdit(); self.url = QLineEdit()
+        form = QFormLayout(); self.folder = FolderEdit(); self.reference = QLineEdit(); self.url = QLineEdit()
+        self.reference.setPlaceholderText("Optional notes.mid for automatic measurements")
         self.url.setPlaceholderText("https://www.youtube.com/watch?v=…")
         row = QHBoxLayout(); row.addWidget(self.folder); browse = QPushButton("Browse…"); browse.clicked.connect(self._browse); row.addWidget(browse)
-        form.addRow("Review folder", row); form.addRow("Official chart video", self.url); layout.addLayout(form)
-        create = QPushButton("Open comparison workspace"); create.clicked.connect(self._create); layout.addWidget(create, alignment=Qt.AlignRight)
+        reference_row = QHBoxLayout(); reference_row.addWidget(self.reference); reference_browse = QPushButton("Browse…"); reference_browse.clicked.connect(self._browse_reference); reference_row.addWidget(reference_browse)
+        form.addRow("Generated review folder", row); form.addRow("Reference MIDI (automatic)", reference_row); form.addRow("YouTube video (guided)", self.url); layout.addLayout(form)
+        note = QLabel("Choose a reference MIDI for automatic note-by-note results, or paste a video link for visual review."); note.setWordWrap(True); layout.addWidget(note)
+        create = QPushButton("Start comparison"); create.clicked.connect(self._create); layout.addWidget(create, alignment=Qt.AlignRight)
         self.setCentralWidget(root)
 
     def _browse(self):
@@ -46,15 +50,28 @@ class ComparisonWindow(QMainWindow):
         if selected:
             self.folder.setText(selected)
 
+    def _browse_reference(self):
+        selected, _ = QFileDialog.getOpenFileName(self, "Choose reference chart MIDI", filter="MIDI files (*.mid *.midi)")
+        if selected:
+            self.reference.setText(selected)
+
     def _create(self):
         try:
+            if self.reference.text().strip():
+                result = compare_charts(self.folder.text(), self.reference.text())
+                webbrowser.open(Path(result["output"]["html"]).as_uri())
+                QMessageBox.information(self, "Automatic comparison complete", f"Report:\n{result['output']['html']}")
+                return
+            if not self.url.text().strip():
+                raise ValueError("Choose a reference MIDI or enter a YouTube gameplay-video URL")
             result = create_video_comparison(self.folder.text(), self.url.text())
             server, url = start_comparison_server(result)
             self.servers.append(server)
+            webbrowser.open(result["video_url"])
             webbrowser.open(url)
         except Exception as exc:
             QMessageBox.critical(self, "Could not create comparison", str(exc)); return
-        QMessageBox.information(self, "Comparison created", f"Opened:\n{url}\n\nKeep this launcher open while reviewing.")
+        QMessageBox.information(self, "Guided comparison created", "The normal YouTube page and generated review were opened separately. Keep this launcher open while reviewing.")
 
 
 def launch():
