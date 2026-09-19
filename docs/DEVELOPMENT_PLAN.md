@@ -9,7 +9,7 @@ provide agent instructions and checkpoint on main. GitHub publication is a
 separate approval step. Existing Setup.ps1, Launch.cmd and README already cover
 installation; a clean-machine installation has not yet been verified.
 
-## 2. Establish measured chart regressions — next implementation
+## 2. Establish measured chart regressions — implemented
 
 Build a deterministic replay command that consumes saved transcription candidates
 and tempo, runs the existing authoring stages, and writes a fresh output directory.
@@ -38,6 +38,25 @@ chord/hold rates and repeated-phrase lane agreement, per stage and time region.
 Keep absolute-lane agreement distinct from relative-shape agreement. Report
 coverage and false-lock rate: a system that labels nothing a motif cannot earn
 a perfect consistency score. Human listening remains the acceptance gate.
+
+Status update (2026-09-19):
+
+- Added a deterministic cached replay command (`rb3charts.cli replay`) and
+  `pipeline.replay_cached` path that reruns authoring from saved analysis
+  artifacts without rerunning decode/separation/model inference.
+- Added `analysis/replay-provenance.json` with consumed input hashes, git
+  revision/dirty state, replay settings/profile context, and runtime versions.
+- Added additive guitar stage snapshots in
+  `analysis/guitar-stage-snapshots.json`.
+- Added replay-time `analysis/regression-metrics.json` plus concise log summary.
+- Added synthetic regression fixtures/tests for repeated runs, transposed
+  returns, strong near-variation, missing rests/attacks, chord boundaries,
+  rhythm-only coincidences, late transposition confirmation behavior, variable
+  tempo, and phrase-boundary splitting.
+
+Deferred:
+
+- Snapshot/metric expansion beyond guitar remains future work.
 
 ## 3. Consolidate motif understanding — architecture proposal
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import re
 import shutil
@@ -17,9 +17,85 @@ from .preview import create_preview
 from .assessment import assess_chart, write_song_review_notes, write_batch_review
 from .events import write_event_trace
 from .phrases import select_lead_phrases, author_guitar_phrases
+from .regression import (
+    compute_regression_metrics,
+    git_state,
+    hash_file,
+    reductions_entry,
+    runtime_versions,
+    stage_entry,
+    summarize_metrics,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SUPPORTED = {".mp3",".wav",".flac",".ogg",".m4a",".aiff",".aif",".wma"}
+
+
+def _new_output_folder(base_output: Path, artist: str, title: str):
+    slug=re.sub(r"[^a-zA-Z0-9]+","_",artist+"_"+title).strip("_")[:48] or "song"
+    folder=base_output.resolve()/f"{slug}_{datetime.now():%Y%m%d_%H%M%S_%f}"
+    for part in ("source","audio","analysis","midi","metadata","logs","rb3"):
+        (folder/part).mkdir(parents=True,exist_ok=True)
+    return folder
+
+
+def _record_stage_snapshot(store: dict, instrument: str, stage: str, notes):
+    payload=store.setdefault(instrument,{"instrument":instrument,"source_join":"source_id","stages":[]})
+    payload["stages"].append(stage_entry(stage,notes))
+
+
+def _record_reduction_snapshot(store: dict, instrument: str, charts: dict):
+    payload=store.setdefault(instrument,{"instrument":instrument,"source_join":"source_id","stages":[]})
+    payload["reductions"]=reductions_entry("after_reductions",charts)
+
+
+def _tempo_from_payload(payload: dict):
+    from .model import TempoMap
+
+    return TempoMap(payload["beats"],payload.get("numerator",4),payload.get("confidence",0.0),payload.get("warnings",[]))
+
+
+def _notes_from_payload(rows):
+    from .model import Note
+
+    return [
+        Note(
+            start=float(row["start"]),
+            end=float(row["end"]),
+            lanes=tuple(int(lane) for lane in row["lanes"]),
+            confidence=float(row.get("confidence",1.0)),
+            source_id=str(row.get("source_id","")),
+            pitch=(float(row["pitch"]) if row.get("pitch") is not None else None),
+            toms=tuple(int(item) for item in row.get("toms",())),
+        )
+        for row in rows
+    ]
+
+
+def _load_accepted_event_groups(analysis_folder: Path, instrument: str):
+    groups=[]
+    for report_path in sorted(analysis_folder.glob(f"{instrument}-*-events.json")):
+        payload=json.loads(report_path.read_text(encoding="utf-8"))
+        events=payload.get("events",[])
+        if not isinstance(events,list):
+            continue
+        accepted=[dict(row) for row in events if isinstance(row,dict) and row.get("accepted")]
+        if accepted:
+            groups.append(accepted)
+    return groups
+
+
+def _replay_provenance(source_folder: Path, consumed_inputs: list[Path], options_payload: dict, profile_payload: dict):
+    return {
+        "mode":"cached_replay",
+        "replay_source_folder":str(source_folder),
+        "consumed_inputs":[{"path":str(path),"sha256":hash_file(path)} for path in sorted(consumed_inputs,key=lambda row:str(row))],
+        "settings":options_payload,
+        "chart_profile":profile_payload,
+        "git":git_state(ROOT),
+        "runtime_versions":runtime_versions(),
+        "timestamp_utc":datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z"),
+    }
 
 def generate(options: Options, progress=print):
     source=options.source.resolve()
@@ -46,11 +122,8 @@ def generate(options: Options, progress=print):
     metadata["artist"]=metadata["artist"] or "Unknown Artist"
     metadata["genre"]=metadata["genre"] or "Other"
     digest=fingerprint(source)
-    slug=re.sub(r"[^a-zA-Z0-9]+","_",metadata["artist"]+"_"+metadata["title"]).strip("_")[:48] or "song"
     song_id="rb3c_"+digest[:12]
-    folder=options.output.resolve()/f"{slug}_{datetime.now():%Y%m%d_%H%M%S_%f}"
-    for part in ("source","audio","analysis","midi","metadata","logs","rb3"):
-        (folder/part).mkdir(parents=True,exist_ok=True)
+    folder=_new_output_folder(options.output,metadata["artist"],metadata["title"])
     logfile=folder/"logs"/"generation.log"
     def log(message):
         text=str(message)
@@ -93,6 +166,7 @@ def generate(options: Options, progress=print):
         pattern_stabilization={}
         lead_focus={}
         phrase_authoring={}
+        stage_snapshots={}
         warnings=[]
         ordered=list(options.instruments)
         if resolved_profile=="electronic" and "drums" in ordered:
@@ -149,6 +223,8 @@ def generate(options: Options, progress=print):
                 notes=map_pitched(raw,instrument,
                                   "electronic_lead" if resolved_profile=="electronic" and instrument=="guitar" else "range",
                                   0.09 if resolved_profile=="electronic" and instrument!="guitar" else 0.22)
+                if instrument=="guitar":
+                    _record_stage_snapshot(stage_snapshots,instrument,"after_map_pitched",notes)
             notes=[n for n in notes if n.start<duration and n.end>n.start]
             for n in notes:
                 n.end=min(duration,n.end)
@@ -159,20 +235,29 @@ def generate(options: Options, progress=print):
                 continue
             notes,playability[instrument]=enforce_playability(notes,instrument,tempo,resolved_profile,
                                                            phrase_aware=instrument=="guitar")
+            if instrument=="guitar":
+                _record_stage_snapshot(stage_snapshots,instrument,"after_enforce_playability",notes)
             if resolved_profile=="band" and instrument in ("guitar","bass","keys"):
                 notes,reference_conformance[instrument]=conform_expert_to_reference(notes,tempo,instrument)
+                if instrument=="guitar":
+                    _record_stage_snapshot(stage_snapshots,instrument,"after_conform_expert_to_reference",notes)
             if resolved_profile=="band" and instrument=="guitar":
                 # Smooth the final playable shapes after corpus conformance;
                 # chord simplification can itself create new single-note moves.
                 notes=refine_band_guitar(notes,tempo)
+                _record_stage_snapshot(stage_snapshots,instrument,"after_refine_band_guitar",notes)
                 notes,pattern_stabilization[instrument]=stabilize_repeated_phrases(notes,tempo,instrument)
+                _record_stage_snapshot(stage_snapshots,instrument,"after_stabilize_repeated_phrases",notes)
             if instrument=="guitar":
                 notes,phrase_authoring[instrument]=author_guitar_phrases(notes,tempo)
+                _record_stage_snapshot(stage_snapshots,instrument,"after_author_guitar_phrases",notes)
             removed=playability[instrument]["removed"]
             if removed:
                 warnings.append(f"{instrument}: playability gate removed {removed} crowded attacks; retained {playability[instrument]['after']} with a peak four-second density of {playability[instrument]['peak_four_second_nps']:.2f}/s.")
             log(f"Reducing {instrument}: Expert → Hard → Medium → Easy")
             charts[instrument]=reductions(notes,instrument,tempo)
+            if instrument=="guitar":
+                _record_reduction_snapshot(stage_snapshots,instrument,charts[instrument])
             if instrument!="drums":
                 write_event_trace(folder/"analysis",instrument,raw,charts[instrument]["expert"])
         phrases={i:overdrive(parts,tempo,duration) for i,parts in charts.items()}
@@ -195,11 +280,15 @@ def generate(options: Options, progress=print):
         save_json(folder/"analysis"/"phrase-authoring.json",phrase_authoring)
         save_json(folder/"analysis"/"charts.json",charts)
         save_json(folder/"analysis"/"overdrive.json",phrases)
+        for instrument,payload in stage_snapshots.items():
+            save_json(folder/"analysis"/f"{instrument}-stage-snapshots.json",payload)
         log("Writing tempo-aware Rock Band MIDI")
         midi=folder/"midi"/"notes.mid"
         lead=write_midi(midi,tempo,charts,duration,phrases)
         gain=write_padded_audio(wav,folder/"audio"/"song.wav",lead)
-        metadata.update({"song_id":song_id,"source_seconds":duration,"lead_seconds":lead,"gain":gain,"preview_ms":round((lead+min(30,duration*0.25))*1000)})
+        metadata.update({"song_id":song_id,"source_seconds":duration,"lead_seconds":lead,"gain":gain,
+                         "preview_ms":round((lead+min(30,duration*0.25))*1000),
+                         "analysis_mode":"complete_audio_reanalysis"})
         save_json(folder/"metadata"/"song.json",metadata)
         report=validate(charts,tempo,duration,midi)
         report["warnings"].extend(warnings)
@@ -215,7 +304,7 @@ def generate(options: Options, progress=print):
         write_import(folder/"import",midi,folder/"audio"/"song.wav",metadata,charts,difficulty_tiers)
         save_json(folder/"analysis"/"quality-assessment.json",assessment)
         write_song_review_notes(folder/"review_notes.md",metadata["title"],metadata["artist"],assessment)
-        result={"status":"draft_ready","folder":str(folder),"review":str(folder/"review.html"),"review_notes":str(folder/"review_notes.md"),"title":metadata["title"],"artist":metadata["artist"],"chart_profile_requested":options.chart_profile,"chart_profile":resolved_profile,"assessment":assessment,"warnings":report["warnings"],"counts":report["counts"],"missing_instruments":missing,"package":None,"xbox_tested":False}
+        result={"status":"draft_ready","folder":str(folder),"review":str(folder/"review.html"),"review_notes":str(folder/"review_notes.md"),"title":metadata["title"],"artist":metadata["artist"],"chart_profile_requested":options.chart_profile,"chart_profile":resolved_profile,"analysis_mode":"complete_audio_reanalysis","assessment":assessment,"warnings":report["warnings"],"counts":report["counts"],"missing_instruments":missing,"package":None,"xbox_tested":False}
         if options.compile:
             log("Compiling with Onyx and its Magma toolchain")
             try:
@@ -264,6 +353,224 @@ def package_existing(folder, progress=print, onyx=None):
         result.setdefault("warnings",[]).append(str(exc))
         log(f"Packaging failed: {exc}")
     save_json(result_path,result)
+    return result
+
+
+def replay_cached(folder, output=None, progress=print, compile=False, onyx=None):
+    """Replay authoring from cached analysis artifacts without new audio inference."""
+    source_folder=Path(folder).resolve()
+    analysis_source=source_folder/"analysis"
+    metadata_source=source_folder/"metadata"
+    required=[analysis_source/"tempo.json",metadata_source/"song.json"]
+    missing=[str(path) for path in required if not path.is_file()]
+    if missing:
+        raise FileNotFoundError("Replay source is incomplete: "+", ".join(missing))
+    consumed_inputs=set()
+    song_path=metadata_source/"song.json"
+    song_metadata=json.loads(song_path.read_text(encoding="utf-8"))
+    consumed_inputs.add(song_path)
+    options_path=metadata_source/"options.json"
+    options_payload=(json.loads(options_path.read_text(encoding="utf-8")) if options_path.is_file() else {})
+    if options_path.is_file():
+        consumed_inputs.add(options_path)
+    title=song_metadata.get("title") or "Replay"
+    artist=song_metadata.get("artist") or "Unknown Artist"
+    folder=_new_output_folder(Path(output) if output else source_folder.parent,artist,title)
+    logfile=folder/"logs"/"generation.log"
+
+    def log(message):
+        text=str(message)
+        with logfile.open("a",encoding="utf-8") as stream:
+            stream.write(text+"\n")
+        try:
+            progress(text)
+        except UnicodeEncodeError:
+            progress(text.encode("ascii",errors="replace").decode("ascii"))
+
+    log("Starting cached replay (no source decoding, stem separation, or model inference)")
+    analysis_folder=folder/"analysis"
+    copied_candidates=[]
+    for path in sorted(analysis_source.glob("*-events.json"))+sorted(analysis_source.glob("*-transcription.json")):
+        shutil.copy2(path,analysis_folder/path.name)
+        copied_candidates.append(path)
+    for shared in ("chart-profile.json","tempo.json","stems.json"):
+        shared_path=analysis_source/shared
+        if shared_path.is_file():
+            shutil.copy2(shared_path,analysis_folder/shared)
+            copied_candidates.append(shared_path)
+    source_json=source_folder/"source"/"source.json"
+    decoded_wav=source_folder/"source"/"decoded.wav"
+    if source_json.is_file():
+        shutil.copy2(source_json,folder/"source"/"source.json")
+        consumed_inputs.add(source_json)
+    if not decoded_wav.is_file():
+        raise FileNotFoundError(f"Replay requires cached decoded audio: {decoded_wav}")
+    shutil.copy2(decoded_wav,folder/"source"/"decoded.wav")
+    tempo_path=analysis_source/"tempo.json"
+    tempo=_tempo_from_payload(json.loads(tempo_path.read_text(encoding="utf-8")))
+    consumed_inputs.add(tempo_path)
+    profile_path=analysis_source/"chart-profile.json"
+    profile_payload=(json.loads(profile_path.read_text(encoding="utf-8")) if profile_path.is_file() else {})
+    if profile_path.is_file():
+        consumed_inputs.add(profile_path)
+    previous_charts_path=analysis_source/"charts.json"
+    previous_charts=(json.loads(previous_charts_path.read_text(encoding="utf-8")) if previous_charts_path.is_file() else {})
+    if previous_charts_path.is_file():
+        consumed_inputs.add(previous_charts_path)
+    resolved_profile=profile_payload.get("resolved") or song_metadata.get("chart_profile") or "band"
+    duration=float(song_metadata.get("source_seconds",0))
+    if duration<=0:
+        import soundfile as sf
+
+        duration=float(sf.info(decoded_wav).duration)
+    available_transcriptions=[
+        path.name.replace("-transcription.json","")
+        for path in analysis_source.glob("*-transcription.json")
+    ]
+    instruments=tuple(options_payload.get("instruments") or sorted(set(previous_charts)|set(available_transcriptions)) or ("guitar","bass","drums"))
+    ordered=list(instruments)
+    if resolved_profile=="electronic" and "drums" in ordered:
+        ordered.remove("drums")
+        ordered.insert(0,"drums")
+    charts={}
+    playability={}
+    reference_conformance={}
+    pattern_stabilization={}
+    lead_focus={}
+    phrase_authoring={}
+    stage_snapshots={}
+    warnings=[]
+    for instrument in ordered:
+        if instrument=="drums":
+            if instrument not in previous_charts:
+                warnings.append("drums: prior chart unavailable in replay source; instrument omitted")
+                continue
+            charts[instrument]={difficulty:_notes_from_payload(notes) for difficulty,notes in previous_charts[instrument].items()}
+            continue
+        if resolved_profile=="electronic" and instrument in ("guitar","bass"):
+            report_paths=sorted(analysis_source.glob(f"{instrument}-*-events.json"))
+            consumed_inputs.update(report_paths)
+            groups=_load_accepted_event_groups(analysis_source,instrument)
+            if not groups:
+                raise FileNotFoundError(f"Cached replay for electronic {instrument} requires {instrument}-*-events.json event reports")
+            if instrument=="guitar":
+                raw,lead_focus[instrument]=select_lead_phrases(groups)
+                save_json(analysis_folder/f"{instrument}-replay-selected.json",raw)
+                log(f"Replayed electronic lead selection for {instrument} from cached event reports")
+            else:
+                raw=electronic_bass_events(groups,charts.get("drums",{}).get("expert",[]))
+                save_json(analysis_folder/f"{instrument}-replay-selected.json",raw)
+                log("Replayed electronic bass role selection from cached event reports")
+        else:
+            transcription_path=analysis_source/f"{instrument}-transcription.json"
+            if not transcription_path.is_file():
+                warnings.append(f"{instrument}: cached transcription missing; instrument omitted")
+                continue
+            raw=json.loads(transcription_path.read_text(encoding="utf-8"))
+            consumed_inputs.add(transcription_path)
+            save_json(analysis_folder/f"{instrument}-transcription.json",raw)
+        notes=map_pitched(raw,instrument,
+                          "electronic_lead" if resolved_profile=="electronic" and instrument=="guitar" else "range",
+                          0.09 if resolved_profile=="electronic" and instrument!="guitar" else 0.22)
+        if instrument=="guitar":
+            _record_stage_snapshot(stage_snapshots,instrument,"after_map_pitched",notes)
+        notes=[note for note in notes if note.start<duration and note.end>note.start]
+        for note in notes:
+            note.end=min(duration,note.end)
+        if not notes:
+            warnings.append(f"{instrument}: no replay notes after mapping; instrument omitted")
+            continue
+        notes,playability[instrument]=enforce_playability(notes,instrument,tempo,resolved_profile,phrase_aware=instrument=="guitar")
+        if instrument=="guitar":
+            _record_stage_snapshot(stage_snapshots,instrument,"after_enforce_playability",notes)
+        if resolved_profile=="band" and instrument in ("guitar","bass","keys"):
+            notes,reference_conformance[instrument]=conform_expert_to_reference(notes,tempo,instrument)
+            if instrument=="guitar":
+                _record_stage_snapshot(stage_snapshots,instrument,"after_conform_expert_to_reference",notes)
+        if resolved_profile=="band" and instrument=="guitar":
+            notes=refine_band_guitar(notes,tempo)
+            _record_stage_snapshot(stage_snapshots,instrument,"after_refine_band_guitar",notes)
+            notes,pattern_stabilization[instrument]=stabilize_repeated_phrases(notes,tempo,instrument)
+            _record_stage_snapshot(stage_snapshots,instrument,"after_stabilize_repeated_phrases",notes)
+        if instrument=="guitar":
+            notes,phrase_authoring[instrument]=author_guitar_phrases(notes,tempo)
+            _record_stage_snapshot(stage_snapshots,instrument,"after_author_guitar_phrases",notes)
+        charts[instrument]=reductions(notes,instrument,tempo)
+        if instrument=="guitar":
+            _record_reduction_snapshot(stage_snapshots,instrument,charts[instrument])
+        write_event_trace(analysis_folder,instrument,raw,charts[instrument]["expert"])
+    phrases={instrument:overdrive(parts,tempo,duration) for instrument,parts in charts.items()}
+    patterns={instrument:analyze_patterns(parts["expert"],tempo,instrument) for instrument,parts in charts.items()}
+    for instrument,details in pattern_stabilization.items():
+        patterns.setdefault(instrument,{})["stabilization"]=details
+    if resolved_profile=="electronic":
+        warnings.append("Cached replay used electronic role selection from saved event reports.")
+    # Replay starts from already-authored drum charts from analysis/charts.json.
+    # Reapplying activation alignment would shift drums twice.
+    corrections=[]
+    save_json(analysis_folder/"timing-adjustments.json",corrections)
+    save_json(analysis_folder/"playability.json",playability)
+    save_json(analysis_folder/"patterns.json",patterns)
+    save_json(analysis_folder/"reference-conformance.json",reference_conformance)
+    save_json(analysis_folder/"pattern-stabilization.json",pattern_stabilization)
+    save_json(analysis_folder/"lead-focus.json",lead_focus)
+    save_json(analysis_folder/"phrase-authoring.json",phrase_authoring)
+    save_json(analysis_folder/"charts.json",charts)
+    save_json(analysis_folder/"overdrive.json",phrases)
+    for instrument,payload in stage_snapshots.items():
+        save_json(analysis_folder/f"{instrument}-stage-snapshots.json",payload)
+    metrics=compute_regression_metrics(stage_snapshots.get("guitar",{"instrument":"guitar","stages":[]}),tempo)
+    save_json(analysis_folder/"regression-metrics.json",metrics)
+    log(summarize_metrics(metrics))
+    save_json(analysis_folder/"replay-provenance.json",_replay_provenance(source_folder,sorted(consumed_inputs|set(copied_candidates),key=lambda row:str(row)),options_payload,profile_payload))
+    log("Writing tempo-aware Rock Band MIDI from cached replay")
+    midi=folder/"midi"/"notes.mid"
+    lead=write_midi(midi,tempo,charts,duration,phrases)
+    gain=write_padded_audio(decoded_wav,folder/"audio"/"song.wav",lead)
+    metadata=dict(song_metadata)
+    metadata.update({
+        "source_seconds":duration,
+        "lead_seconds":lead,
+        "gain":gain,
+        "preview_ms":round((lead+min(30,duration*0.25))*1000),
+        "analysis_mode":"cached_replay",
+        "replay_source_folder":str(source_folder),
+    })
+    metadata.setdefault("album","")
+    metadata.setdefault("year","")
+    metadata.setdefault("genre","Other")
+    save_json(folder/"metadata"/"song.json",metadata)
+    save_json(folder/"metadata"/"options.json",options_payload)
+    report=validate(charts,tempo,duration,midi)
+    report["warnings"].extend(warnings)
+    (folder/"validation_report.txt").write_text(report_text(report),encoding="utf-8")
+    save_json(folder/"validation_report.json",report)
+    if not report["passed"]:
+        raise RuntimeError("Cached replay validation failed. See validation_report.txt")
+    create_preview(folder,charts,tempo,lead,metadata)
+    missing=[instrument for instrument in instruments if instrument not in charts]
+    assessment=assess_chart(charts,patterns,playability,resolved_profile,missing)
+    difficulty_tiers={name:item["difficulty_tier"] for name,item in assessment["instruments"].items() if "difficulty_tier" in item}
+    write_import(folder/"import",midi,folder/"audio"/"song.wav",metadata,charts,difficulty_tiers)
+    save_json(analysis_folder/"quality-assessment.json",assessment)
+    write_song_review_notes(folder/"review_notes.md",metadata["title"],metadata["artist"],assessment)
+    result={"status":"draft_ready","folder":str(folder),"review":str(folder/"review.html"),
+            "review_notes":str(folder/"review_notes.md"),"title":metadata["title"],"artist":metadata["artist"],
+            "chart_profile_requested":song_metadata.get("chart_profile_requested",resolved_profile),
+            "chart_profile":resolved_profile,"analysis_mode":"cached_replay",
+            "replay_source_folder":str(source_folder),"assessment":assessment,"warnings":report["warnings"],
+            "counts":report["counts"],"missing_instruments":missing,"package":None,"xbox_tested":False}
+    if compile:
+        log("Compiling cached replay with Onyx and its Magma toolchain")
+        try:
+            result["package"]=str(compile_rb3(folder/"import",folder,metadata["song_id"],onyx or find_onyx(),log))
+            result["status"]="compiled_needs_playtest"
+        except Exception as exc:
+            result["status"]="compile_failed"
+            result["warnings"].append(str(exc))
+            log(f"Compilation failed: {exc}")
+    save_json(folder/"result.json",result)
+    log(f"Finished cached replay: {result['status']} — {folder}")
     return result
 
 def batch(options, progress=print):
