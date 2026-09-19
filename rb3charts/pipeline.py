@@ -9,14 +9,15 @@ from .model import Options, save_json
 from .audio import decode, fingerprint, separate, read_mono, write_padded_audio, detect_chart_profile
 from .timing import analyze_tempo
 from .transcribe import pitched, neural_drums, import_gm_drums, electronic_bass_events, band_guitar_lead_events
-from .chart import map_pitched, clean, reductions, overdrive, align_drum_activations, enforce_playability, analyze_patterns, refine_band_guitar, conform_expert_to_reference, stabilize_repeated_phrases
+from .chart import map_pitched, clean, overdrive, align_drum_activations, analyze_patterns
+from .authoring import author_chart
 from .midi import write_midi
 from .validate import validate, report_text
 from .export import write_import, compile_rb3, find_onyx
 from .preview import create_preview
 from .assessment import assess_chart, write_song_review_notes, write_batch_review
 from .events import write_event_trace
-from .phrases import select_lead_phrases, author_guitar_phrases
+from .phrases import select_lead_phrases
 
 ROOT = Path(__file__).resolve().parents[1]
 SUPPORTED = {".mp3",".wav",".flac",".ogg",".m4a",".aiff",".aif",".wma"}
@@ -157,22 +158,19 @@ def generate(options: Options, progress=print):
                     write_event_trace(folder/"analysis",instrument,raw,[])
                 warnings.append(f"{instrument}: no confident notes; omitted")
                 continue
-            notes,playability[instrument]=enforce_playability(notes,instrument,tempo,resolved_profile,
-                                                           phrase_aware=instrument=="guitar")
-            if resolved_profile=="band" and instrument in ("guitar","bass","keys"):
-                notes,reference_conformance[instrument]=conform_expert_to_reference(notes,tempo,instrument)
-            if resolved_profile=="band" and instrument=="guitar":
-                # Smooth the final playable shapes after corpus conformance;
-                # chord simplification can itself create new single-note moves.
-                notes=refine_band_guitar(notes,tempo)
-                notes,pattern_stabilization[instrument]=stabilize_repeated_phrases(notes,tempo,instrument)
-            if instrument=="guitar":
-                notes,phrase_authoring[instrument]=author_guitar_phrases(notes,tempo)
+            parts,author_reports,stage_audit=author_chart(notes,instrument,tempo,resolved_profile)
+            playability[instrument]=author_reports["playability"]
+            for key,target in (("reference_conformance",reference_conformance),
+                               ("pattern_stabilization",pattern_stabilization),
+                               ("phrase_authoring",phrase_authoring)):
+                if key in author_reports:
+                    target[instrument]=author_reports[key]
+            save_json(folder/"analysis"/f"{instrument}-authoring-stages.json",stage_audit)
             removed=playability[instrument]["removed"]
             if removed:
                 warnings.append(f"{instrument}: playability gate removed {removed} crowded attacks; retained {playability[instrument]['after']} with a peak four-second density of {playability[instrument]['peak_four_second_nps']:.2f}/s.")
             log(f"Reducing {instrument}: Expert → Hard → Medium → Easy")
-            charts[instrument]=reductions(notes,instrument,tempo)
+            charts[instrument]=parts
             if instrument!="drums":
                 write_event_trace(folder/"analysis",instrument,raw,charts[instrument]["expert"])
         phrases={i:overdrive(parts,tempo,duration) for i,parts in charts.items()}

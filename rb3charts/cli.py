@@ -16,6 +16,12 @@ def main():
     parser=argparse.ArgumentParser(description="Generate local Rock Band 3 draft charts")
     sub=parser.add_subparsers(dest="command")
     sub.add_parser("gui")
+    replay_parser=sub.add_parser("replay",help="Diagnose authoring from cached post-voice-selection pitched events")
+    replay_parser.add_argument("folder",type=Path)
+    replay_parser.add_argument("--output",type=Path,default=Path("output"))
+    replay_parser.add_argument("--instrument",choices=["guitar","bass","keys"],default="guitar")
+    replay_parser.add_argument("--start",type=float,default=0)
+    replay_parser.add_argument("--end",type=float)
     demo=sub.add_parser("demo")
     demo.add_argument("--compile",action="store_true")
     demo.add_argument("--output",type=Path,default=Path("output"))
@@ -48,6 +54,11 @@ def main():
     if args.command in (None,"gui"):
         from .gui import launch
         return launch()
+    if args.command=="replay":
+        from .replay import replay
+        result=replay(args.folder,args.output,args.instrument,args.start,args.end)
+        print(result["report"])
+        return 0
     from .pipeline import generate,batch,package_existing
     if args.command=="analyze-reference":
         from .reference import analyze_reference_corpus
