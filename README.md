@@ -18,6 +18,9 @@ still require a listening review and Xbox playtest.
 
 On this computer dependencies are installed in `.venv`. Double-click
 **Launch.cmd**, select or drop a song, enter metadata, and click **Generate charts**.
+If you want one-click testing of the latest local branch state, use
+**UpdateAndLaunch.cmd** (runs `git fetch` + `git pull --ff-only` for the current
+branch, then starts the GUI).
 
 - Precision mode uses six-stem Demucs for guitar/keys and fine-tuned Demucs for
   drums/bass/vocals. It is slower and caches its results.
@@ -70,6 +73,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli generate 'C:\Music\EDM Track.flac' --chart-profile electronic
 .\.venv\Scripts\python.exe -m rb3charts.cli batch 'C:\Music\To Chart'
 .\.venv\Scripts\python.exe -m rb3charts.cli package 'C:\Path\To\Reviewed_Output'
+.\.venv\Scripts\python.exe -m rb3charts.cli replay 'C:\Path\To\Existing_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli demo --compile
 .\.venv\Scripts\python.exe -m pytest -q
 ```
@@ -304,7 +308,8 @@ reported as `compile_failed`, while keeping the authoring files and review page.
 - `preview.py`, `gui.py`, `cli.py`: local review and entry points.
 - `events.py`, `phrases.py`: candidate evidence, tracing and phrase fingering.
 - `pipeline.py`: engine orchestration, independent of the GUI.
-- `assessment.py`, `reference.py`: quality triage and reference statistics.
+- `assessment.py`, `reference.py`, `regression.py`: quality triage, replay
+  regression snapshots/metrics and reference statistics.
 - `tests/`: synthetic regression fixtures; no commercial audio required.
 - `reference/style-profile.json`: compact runtime statistics; full local reference
   reports and downloaded chart repositories are excluded from Git.

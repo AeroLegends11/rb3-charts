@@ -19,9 +19,14 @@ def main():
     demo=sub.add_parser("demo")
     demo.add_argument("--compile",action="store_true")
     demo.add_argument("--output",type=Path,default=Path("output"))
-    package=sub.add_parser("package",help="Compile an already reviewed output folder")
+    package=sub.add_parser("package",help="Compile an already reviewed output folder without reanalysis")
     package.add_argument("folder",type=Path)
     package.add_argument("--onyx",type=Path)
+    replay=sub.add_parser("replay",help="Cached replay: rerun authoring from saved analysis (no new audio reanalysis)")
+    replay.add_argument("folder",type=Path,help="Existing output run folder with analysis candidates and tempo")
+    replay.add_argument("--output",type=Path,default=None,help="Destination root for the replay run folder")
+    replay.add_argument("--onyx",type=Path)
+    replay.add_argument("--compile",action="store_true",help="Compile replay output with Onyx/Magma after validation")
     reference=sub.add_parser("analyze-reference",help="Learn style statistics from finished Rock Band MIDI charts")
     reference.add_argument("folder",type=Path)
     reference.add_argument("--output",type=Path,default=Path("reference")/"style-profile.json")
@@ -48,7 +53,7 @@ def main():
     if args.command in (None,"gui"):
         from .gui import launch
         return launch()
-    from .pipeline import generate,batch,package_existing
+    from .pipeline import generate,batch,package_existing,replay_cached
     if args.command=="analyze-reference":
         from .reference import analyze_reference_corpus
         report=analyze_reference_corpus(args.folder,args.output)
@@ -56,6 +61,8 @@ def main():
         return 1 if report["failed_files"] else 0
     if args.command=="package":
         result=package_existing(args.folder,onyx=args.onyx)
+    elif args.command=="replay":
+        result=replay_cached(args.folder,output=args.output,onyx=args.onyx,compile=args.compile)
     elif args.command=="demo":
         from .demo import make_demo
         source,stems=make_demo(Path("input")/"demo")

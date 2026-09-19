@@ -26,7 +26,8 @@ requested. A passing test suite does not certify musical quality or Xbox playabi
   reductions. `pipeline.py` orders the passes; inspect it before adding a pass.
 - `model.py`: source-time notes, shared tempo map, metadata and options.
 - `midi.py`, `validate.py`, `export.py`: MIDI, structural checks, Onyx/Magma.
-- `assessment.py`, `preview.py`: heuristic triage and listening review.
+- `assessment.py`, `preview.py`, `regression.py`: heuristic triage, replay
+  regression snapshots/metrics and listening review.
 - `gui.py` and `cli.py` call the engine; keep musical logic out of GUI callbacks.
 
 Keep source IDs and source-audio timing traceable. Never use reference chart
