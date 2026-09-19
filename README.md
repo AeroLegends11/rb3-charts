@@ -18,6 +18,9 @@ still require a listening review and Xbox playtest.
 
 On this computer dependencies are installed in `.venv`. Double-click
 **Launch.cmd**, select or drop a song, enter metadata, and click **Generate charts**.
+If you want one-click testing of the latest local branch state, use
+**UpdateAndLaunch.cmd** (runs `git fetch` + `git pull --ff-only` for the current
+branch, then starts the GUI).
 
 - Precision mode uses six-stem Demucs for guitar/keys and fine-tuned Demucs for
   drums/bass/vocals. It is slower and caches its results.
