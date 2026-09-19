@@ -97,3 +97,50 @@ def test_real_rest_allows_new_hand_position():
     notes=[Note(1,1.065,(4,),.9,'a',60),Note(4,4.065,(0,),.9,'b',72)]
     _,report=author_guitar_phrases(notes,grid())
     assert not report['phrases'][1]['joined_previous_phrase']
+
+
+def test_phrase_motif_reuses_transposed_shape_without_pitch_edits():
+    notes=[]
+    for offset,pitches in ((1.0,(60,62,64,65)),(4.0,(67,69,71,72))):
+        for step,pitch in enumerate(pitches):
+            notes.append(Note(offset+step*.25,offset+step*.25+.11,(4,),.9,f"{offset}-{step}",pitch))
+    result,report=author_guitar_phrases(notes,grid())
+    assert [n.pitch for n in result]==[n.pitch for n in notes]
+    assert [n.lanes for n in result[:4]]==[n.lanes for n in result[4:]]
+    assert report["phrases"][0]["motif_family"]==report["phrases"][1]["motif_family"]
+
+
+def test_phrase_motif_keeps_strong_variation_and_rhythm_only_coincidence_distinct():
+    notes=[]
+    for offset,pitches in (
+            (1.0,(60,62,64,65)),
+            (4.0,(60,66,67,70)),
+            (7.0,(72,60,75,59))):
+        for step,pitch in enumerate(pitches):
+            notes.append(Note(offset+step*.25,offset+step*.25+.11,(2,),.9,f"{offset}-{step}",pitch))
+    _,report=author_guitar_phrases(notes,grid())
+    families=[phrase["motif_family"] for phrase in report["phrases"]]
+    assert families[1] is None and families[2] is None
+    assert not any(phrase["motif_reused"] for phrase in report["phrases"])
+
+
+def test_phrase_motif_late_confirmation_labels_earlier_weak_occurrence():
+    notes=[]
+    for offset,pitches,conf in (
+            (1.0,(60,63,64,65),(.9,.4,.9,.9)),
+            (4.0,(60,62,64,65),(.9,.9,.9,.9)),
+            (7.0,(67,69,71,72),(.9,.9,.9,.9))):
+        for step,(pitch,c) in enumerate(zip(pitches,conf)):
+            notes.append(Note(offset+step*.25,offset+step*.25+.11,(3,),c,f"{offset}-{step}",pitch))
+    _,report=author_guitar_phrases(notes,grid())
+    families=[phrase["motif_family"] for phrase in report["phrases"]]
+    assert families[0] == families[1] == families[2]
+
+
+def test_phrase_motif_matching_is_deterministic():
+    notes=[Note(1+i*.25,1+i*.25+.11,(4,),.9,str(i),p)
+           for i,p in enumerate((60,62,64,65,67,69,71,72,60,62,64,65))]
+    first,first_report=author_guitar_phrases(notes,grid())
+    second,second_report=author_guitar_phrases(notes,grid())
+    assert [(n.lanes,n.pitch,n.end) for n in first]==[(n.lanes,n.pitch,n.end) for n in second]
+    assert first_report["phrases"]==second_report["phrases"]
