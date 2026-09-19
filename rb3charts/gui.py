@@ -1,10 +1,12 @@
 from pathlib import Path
 import sys
 import traceback
+from datetime import datetime
 from PySide6.QtCore import Qt, QThread, Signal, QUrl
 from PySide6.QtGui import QDesktopServices, QFontDatabase, QIcon
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog, QFormLayout, QComboBox, QCheckBox, QPlainTextEdit, QProgressBar, QGroupBox, QMessageBox, QScrollArea
 from .model import Options
+from . import __version__
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -30,7 +32,7 @@ class Window(QMainWindow):
         for font in ("segoeui.ttf","segoeuib.ttf"):
             path=Path("C:/Windows/Fonts")/font
             if path.exists():QFontDatabase.addApplicationFont(str(path))
-        self.setWindowTitle("RB3 Charts • Local authoring")
+        self.setWindowTitle(f"RB3 Charts • Local authoring • v{__version__}")
         icon=ROOT/"assets"/"rb3-chart-maker.ico"
         if icon.exists():self.setWindowIcon(QIcon(str(icon)))
         self.resize(930,860)
@@ -50,6 +52,9 @@ class Window(QMainWindow):
         heading=QLabel("RB3 CHARTS")
         heading.setObjectName("heading")
         layout.addWidget(heading)
+        build_info=QLabel(f"v{__version__} · Launched {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        build_info.setObjectName("build_info")
+        layout.addWidget(build_info)
         subtitle=QLabel("Your songs. Four difficulties. A better first draft.")
         subtitle.setObjectName("subtitle")
         layout.addWidget(subtitle)
@@ -152,7 +157,7 @@ class Window(QMainWindow):
         self.open_output.clicked.connect(lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.last_folder or ROOT/"output"))))
         row.addWidget(self.open_output)
         layout.addLayout(row)
-        self.setStyleSheet('''QMainWindow,QWidget{background:#111a28;color:#e5edf8;font:14px "Segoe UI"}QLabel#heading{font-size:28px;font-weight:700;letter-spacing:3px;color:#6ee7c5}QLabel#subtitle{font-size:18px;color:#b1c2d9}QLabel#hint{color:#a6b6ce;font-size:12px}QLineEdit,QComboBox,QPlainTextEdit{background:#1b293b;border:1px solid #34475e;border-radius:6px;padding:7px}QPushButton{background:#263a52;border:1px solid #435e7a;border-radius:7px;padding:9px 16px}QPushButton:hover{background:#33516e}QPushButton:disabled{color:#697b90}QPushButton#primary{background:#51c9a5;color:#10241e;font-weight:700;font-size:16px;padding:12px}QGroupBox{border:1px solid #34475e;border-radius:8px;margin-top:12px;padding-top:16px}QGroupBox::title{subcontrol-origin:margin;left:12px;padding:0 5px}QProgressBar{background:#23344a;border:0;height:5px}QProgressBar::chunk{background:#6ee7c5}''')
+        self.setStyleSheet('''QMainWindow,QWidget{background:#111a28;color:#e5edf8;font:14px "Segoe UI"}QLabel#heading{font-size:28px;font-weight:700;letter-spacing:3px;color:#6ee7c5}QLabel#build_info{font-size:11px;color:#7c8ea8;letter-spacing:1px}QLabel#subtitle{font-size:18px;color:#b1c2d9}QLabel#hint{color:#a6b6ce;font-size:12px}QLineEdit,QComboBox,QPlainTextEdit{background:#1b293b;border:1px solid #34475e;border-radius:6px;padding:7px}QPushButton{background:#263a52;border:1px solid #435e7a;border-radius:7px;padding:9px 16px}QPushButton:hover{background:#33516e}QPushButton:disabled{color:#697b90}QPushButton#primary{background:#51c9a5;color:#10241e;font-weight:700;font-size:16px;padding:12px}QGroupBox{border:1px solid #34475e;border-radius:8px;margin-top:8px;padding-top:16px}QGroupBox::title{subcontrol-origin:margin;left:10px;padding:0 4px}''')
 
     def select_song(self):
         name,_=QFileDialog.getOpenFileName(self,"Select audio",str(ROOT),"Audio (*.mp3 *.wav *.flac *.ogg *.m4a *.aiff *.wma)")
