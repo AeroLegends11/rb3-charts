@@ -1,0 +1,53 @@
+{
+  "guitar": {
+    "before": 874,
+    "after": 815,
+    "removed": 59,
+    "max_attacks_per_beat": 3,
+    "minimum_allowed_gap_ms": 54.875,
+    "recurring_riff_fourth_attack_allowed": true,
+    "minimum_gap_ms": 43.719,
+    "peak_four_second_nps": 7.25,
+    "recurring_pattern_families": 38,
+    "pattern_supported_candidates": 291,
+    "sustain_threshold_ms": 220,
+    "holds": 225,
+    "longest_hold_seconds": 3.228,
+    "phrase_aware_guitar": true,
+    "supported_phrase_attacks_per_beat": 4
+  },
+  "bass": {
+    "before": 443,
+    "after": 431,
+    "removed": 12,
+    "max_attacks_per_beat": 3,
+    "minimum_allowed_gap_ms": 54.875,
+    "recurring_riff_fourth_attack_allowed": true,
+    "minimum_gap_ms": 48.526,
+    "peak_four_second_nps": 5.75,
+    "recurring_pattern_families": 29,
+    "pattern_supported_candidates": 179,
+    "sustain_threshold_ms": 220,
+    "holds": 226,
+    "longest_hold_seconds": 10.012,
+    "phrase_aware_guitar": false,
+    "supported_phrase_attacks_per_beat": 3
+  },
+  "drums": {
+    "before": 687,
+    "after": 682,
+    "removed": 5,
+    "max_attacks_per_beat": 4,
+    "minimum_allowed_gap_ms": 41.156,
+    "recurring_riff_fourth_attack_allowed": false,
+    "minimum_gap_ms": 110.295,
+    "peak_four_second_nps": 6.5,
+    "recurring_pattern_families": 68,
+    "pattern_supported_candidates": 563,
+    "sustain_threshold_ms": 220,
+    "holds": 0,
+    "longest_hold_seconds": 0.065,
+    "phrase_aware_guitar": false,
+    "supported_phrase_attacks_per_beat": 4
+  }
+}

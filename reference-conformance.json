@@ -1,0 +1,30 @@
+{
+  "guitar": {
+    "applied": true,
+    "reference_songs": 21,
+    "chord_rate_target": 0.2277,
+    "three_note_chord_rate_p90": 0.018,
+    "hold_rate_p90": 0.1547,
+    "isolated_phrase_chords_removed": 12,
+    "chords_before": 0,
+    "chords_after": 0,
+    "triads_before": 0,
+    "triads_after": 0,
+    "holds_before": 225,
+    "holds_after": 127
+  },
+  "bass": {
+    "applied": true,
+    "reference_songs": 21,
+    "chord_rate_target": 0.0,
+    "three_note_chord_rate_p90": 0.0,
+    "hold_rate_p90": 0.3416,
+    "isolated_phrase_chords_removed": 0,
+    "chords_before": 0,
+    "chords_after": 0,
+    "triads_before": 0,
+    "triads_after": 0,
+    "holds_before": 226,
+    "holds_after": 148
+  }
+}

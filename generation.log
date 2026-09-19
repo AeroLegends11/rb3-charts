@@ -1,0 +1,27 @@
+Decoding source audio
+Running ffmpeg-win-x86_64-v7.1.exe
+Separating htdemucs_6s on cpu; first run downloads the model weights
+Separating htdemucs_ft on cpu; first run downloads the model weights
+Analyzing tempo and beat positions
+Generating guitar Expert chart
+Transcribing guitar with Basic Pitch ONNX
+guitar/guitar: accepted 1403 of 1582 pitched candidates from event evidence
+Selecting the lead-guitar contour from ambiguous pitched candidates
+Reducing guitar: Expert → Hard → Medium → Easy
+Generating bass Expert chart
+Transcribing bass with Basic Pitch ONNX
+bass/bass: accepted 479 of 558 pitched candidates from event evidence
+Reducing bass: Expert → Hard → Medium → Easy
+Generating drums Expert chart
+Transcribing drums with trained ADTOF model on cpu
+Drum analysis: 30s / 204s
+Drum analysis: 60s / 204s
+Drum analysis: 90s / 204s
+Drum analysis: 120s / 204s
+Drum analysis: 150s / 204s
+Drum analysis: 180s / 204s
+Drum analysis: 204s / 204s
+Reducing drums: Expert → Hard → Medium → Easy
+Writing tempo-aware Rock Band MIDI
+Creating audible timing check and chart review
+Finished: draft_ready — C:\Users\Josh7\OneDrive\Desktop\projects folder\rb3 chart test1\rb3-charts-main\output\Weezer_My_Name_Is_Jonas_20260919_161720_363184

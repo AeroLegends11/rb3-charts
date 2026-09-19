@@ -1,0 +1,13 @@
+{
+  "guitar": {
+    "candidates": 1403,
+    "onset_groups": 995,
+    "ambiguous_groups": 334,
+    "groups_resolved": 315,
+    "pitch_corrections": 119,
+    "octave_anchors": 174,
+    "rapid_duplicates_removed": 37,
+    "retained": 901,
+    "sequential_outliers_removed": 90
+  }
+}

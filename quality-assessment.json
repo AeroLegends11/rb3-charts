@@ -1,0 +1,54 @@
+{
+  "status": "close_enough",
+  "label": "Close enough to review",
+  "profile": "band",
+  "summary": [
+    "No automatic congestion, lane, contour, chord or sustain flags."
+  ],
+  "severe": [],
+  "concerns": [],
+  "instruments": {
+    "guitar": {
+      "attacks": 815,
+      "lane_coverage": 5,
+      "hold_ratio": 0.156,
+      "chord_ratio": 0.0,
+      "removed_ratio": 0.068,
+      "peak_four_second_nps": 7.25,
+      "recurring_pattern_families": 49,
+      "difficulty_score_0_6": 4.63,
+      "difficulty_tier": 5,
+      "difficulty_label": "Nightmare",
+      "suggested_rb3_rank": 370,
+      "expert_forbidden_chords": 0,
+      "hard_forbidden_chords": 0,
+      "contour_agreement_ratio": 0.993,
+      "flattened_change_ratio": 0.019,
+      "adjacent_motion_rate": 0.843,
+      "wide_jump_rate": 0.044
+    },
+    "bass": {
+      "attacks": 431,
+      "lane_coverage": 5,
+      "hold_ratio": 0.343,
+      "chord_ratio": 0.0,
+      "removed_ratio": 0.027,
+      "peak_four_second_nps": 5.75,
+      "recurring_pattern_families": 32,
+      "contour_agreement_ratio": 1.0,
+      "flattened_change_ratio": 0.145,
+      "adjacent_motion_rate": 0.825,
+      "wide_jump_rate": 0.103
+    },
+    "drums": {
+      "attacks": 682,
+      "lane_coverage": 5,
+      "hold_ratio": 0.0,
+      "chord_ratio": 0,
+      "removed_ratio": 0.007,
+      "peak_four_second_nps": 6.5,
+      "recurring_pattern_families": 69
+    }
+  },
+  "human_review_required": true
+}
