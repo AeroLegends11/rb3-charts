@@ -20,8 +20,10 @@ On this computer dependencies are installed in `.venv`. Double-click
 **Launch.cmd**, select or drop a song, enter metadata, and click **Generate charts**.
 
 Double-click **Compare Charts.cmd** to compare a completed review. Drop the output
-folder containing `review.html` and choose one of two modes. A reference `notes.mid`
-produces an automatic note-by-note report. A YouTube gameplay link opens a guided
+folder containing `review.html` and click **Start comparison** with the other fields
+empty. The app searches Chorus Encore for an exact Harmonix or Neversoft chart,
+retrieves only `notes.mid` from its SNG package, and produces an automatic report.
+A local reference `notes.mid` can override that choice. A YouTube gameplay link opens a guided
 visual review; video pages do not expose their underlying notes. Embeddable videos
 use shared playback controls, an adjustable time offset and slow playback. The
 workspace has buttons
@@ -84,6 +86,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli package 'C:\Path\To\Reviewed_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-video 'C:\Path\To\Reviewed_Output' 'https://www.youtube.com/watch?v=VIDEO_ID'
 .\.venv\Scripts\python.exe -m rb3charts.cli compare 'C:\Path\To\Generated_Output' 'C:\Path\To\Official\notes.mid'
+.\.venv\Scripts\python.exe -m rb3charts.cli compare-encore 'C:\Path\To\Generated_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli demo --compile
 .\.venv\Scripts\python.exe -m pytest -q
 ```
@@ -106,10 +109,21 @@ Useful options:
 ### Comparing generated charts
 
 The normal comparison workflow uses **Compare Charts.cmd** and needs only an
-RB3 Charts review folder plus a YouTube gameplay-chart URL. Set the time offset
-once so the same musical moment is visible in both players, then use the finding
-buttons while reviewing. The exported JSON gives later charting changes a stable
-list of song times and error types to check again.
+RB3 Charts review folder. With both reference fields empty, it reads the run's
+artist/title metadata and searches Chorus Encore for an exact official reference.
+It downloads byte ranges for the SNG header, file index and `notes.mid` only. It
+does not request or store the reference audio, images or video. The chart MIDI is
+cached under ignored `reference/encore-cache/`.
+
+`reference/catalog.json` pins the provider chart ID, package MD5, chart hash,
+tempo-map hash and per-track hashes. Commit this small catalog with the code so a
+different workstation or fresh clone resolves the same reference version. The
+local cache can be rebuilt from the catalog and is deliberately excluded from Git.
+
+For video-only review, paste a YouTube gameplay URL. Set the time offset once so
+the same musical moment is visible in both players, then use the finding buttons.
+The exported JSON gives later charting changes a stable list of song times and
+error types to check again.
 
 When a legally obtained official `notes.mid` is available, the `compare` command
 adds exact attack precision/recall, timing error, lane and chord agreement,

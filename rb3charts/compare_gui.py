@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from .compare import compare_charts
+from .encore import compare_with_encore
 from .video_compare import create_video_comparison, start_comparison_server
 
 
@@ -33,7 +34,7 @@ class ComparisonWindow(QMainWindow):
         self.resize(760, 330)
         self.servers = []
         root = QWidget(); layout = QVBoxLayout(root)
-        intro = QLabel("Automatic comparison needs a reference chart MIDI. A YouTube link opens a guided visual review because videos do not expose their underlying note data.")
+        intro = QLabel("Drop a review folder and click Start to find a matching Chorus Encore reference and compare it automatically. You can override it with a local MIDI, or use a YouTube link for guided visual review.")
         intro.setWordWrap(True); layout.addWidget(intro)
         form = QFormLayout(); self.folder = FolderEdit(); self.reference = QLineEdit(); self.url = QLineEdit()
         self.reference.setPlaceholderText("Optional notes.mid for automatic measurements")
@@ -41,7 +42,7 @@ class ComparisonWindow(QMainWindow):
         row = QHBoxLayout(); row.addWidget(self.folder); browse = QPushButton("Browse…"); browse.clicked.connect(self._browse); row.addWidget(browse)
         reference_row = QHBoxLayout(); reference_row.addWidget(self.reference); reference_browse = QPushButton("Browse…"); reference_browse.clicked.connect(self._browse_reference); reference_row.addWidget(reference_browse)
         form.addRow("Generated review folder", row); form.addRow("Reference MIDI (automatic)", reference_row); form.addRow("YouTube video (guided)", self.url); layout.addLayout(form)
-        note = QLabel("Choose a reference MIDI for automatic note-by-note results, or paste a video link for visual review."); note.setWordWrap(True); layout.addWidget(note)
+        note = QLabel("Leave both reference fields blank for automatic Chorus Encore lookup. Only notes.mid is retrieved from its SNG package; audio is not downloaded."); note.setWordWrap(True); layout.addWidget(note)
         create = QPushButton("Start comparison"); create.clicked.connect(self._create); layout.addWidget(create, alignment=Qt.AlignRight)
         self.setCentralWidget(root)
 
@@ -63,7 +64,11 @@ class ComparisonWindow(QMainWindow):
                 QMessageBox.information(self, "Automatic comparison complete", f"Report:\n{result['output']['html']}")
                 return
             if not self.url.text().strip():
-                raise ValueError("Choose a reference MIDI or enter a YouTube gameplay-video URL")
+                result = compare_with_encore(self.folder.text())
+                webbrowser.open(Path(result["output"]["html"]).as_uri())
+                reference = result["encore_reference"]
+                QMessageBox.information(self, "Encore comparison complete", f"Compared against {reference['charter']} chart #{reference['chart_id']}.\n\nReport:\n{result['output']['html']}")
+                return
             result = create_video_comparison(self.folder.text(), self.url.text())
             server, url = start_comparison_server(result)
             self.servers.append(server)

@@ -18,3 +18,16 @@ The reference analyzer can generate a full local report with:
 
 Do not overwrite the versioned profile with a full report. Updating the runtime
 aggregate is a chart-behavior change: compare metrics and review it separately.
+
+## Chorus Encore comparison catalog
+
+`catalog.json` contains small, versioned identities for official comparison
+charts. It records provider IDs and hashes, but contains no note events, audio,
+artwork or video. `compare-encore` uses it to retrieve only `notes.mid` byte ranges
+from the indexed SNG file. Retrieved MIDIs and their local provenance manifests
+are stored in ignored `reference/encore-cache/` and can be rebuilt on any machine
+with network access.
+
+An automatic lookup is pinned into the catalog the first time an exact Harmonix
+or Neversoft artist/title match is selected. Use `--refresh` only when deliberately
+reviewing a newer provider version.

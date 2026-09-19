@@ -36,6 +36,12 @@ def main():
     video_parser.add_argument("video_url")
     video_parser.add_argument("--output",type=Path,default=Path("comparisons"))
     video_parser.add_argument("--no-open",action="store_true")
+    encore_parser=sub.add_parser("compare-encore",help="Find a pinned Chorus Encore reference and compare automatically")
+    encore_parser.add_argument("folder",type=Path,help="RB3 Charts output folder")
+    encore_parser.add_argument("--output",type=Path,default=Path("comparisons"))
+    encore_parser.add_argument("--instrument",choices=["guitar","bass","drums","keys"],default="guitar")
+    encore_parser.add_argument("--difficulty",choices=["easy","medium","hard","expert"],default="expert")
+    encore_parser.add_argument("--refresh",action="store_true",help="Refresh the pinned catalog entry from Encore")
     demo=sub.add_parser("demo")
     demo.add_argument("--compile",action="store_true")
     demo.add_argument("--output",type=Path,default=Path("output"))
@@ -94,6 +100,12 @@ def main():
                 from threading import Event
                 Event().wait()
             except KeyboardInterrupt:server.shutdown()
+        return 0
+    if args.command=="compare-encore":
+        from .encore import compare_with_encore
+        report=compare_with_encore(args.folder,args.output,refresh=args.refresh,instrument=args.instrument,difficulty=args.difficulty)
+        reference=report["encore_reference"]
+        print(f"{reference['charter']} chart #{reference['chart_id']} -> {report['output']['html']}")
         return 0
     from .pipeline import generate,batch,package_existing
     if args.command=="analyze-reference":

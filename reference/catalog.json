@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "references": [
+    {
+      "provider": "chorus-encore",
+      "chart_id": 364724,
+      "title": "My Name Is Jonas",
+      "artist": "Weezer",
+      "album": "Weezer (The Blue Album)",
+      "charter": "Harmonix",
+      "pack": "Rock Band 2 DLC",
+      "icon": "rb2dlc",
+      "md5": "b53dc1b5ae44e5cf00e9c8918ffd7e79",
+      "encoder_version": 0,
+      "chart_hash": "5oHBY_8whAvPotgsND4ghz4u0kxyZOrPVccUw3SBTB4=",
+      "tempo_map_hash": "2bee68b6d74481f497740bb264fc8a5c",
+      "track_hashes": {
+        "drums.expert": "CpVSy0i_DWAWvFHylqaNoLpsqI66QnqzEbb_VVTiPNY=",
+        "drums.hard": "rPGKxxy2npozwg1cLZOmjqe5MRFlkMndbBGvyQmryS8=",
+        "drums.medium": "3iP-cTvlxBw5ncYIF9bsAtJPI4YtP3Ht1jQuh5URCBk=",
+        "drums.easy": "n3bRIvGorQnI6BtYKz-gq4sNXF1NI2hEHIoxumOZjuw=",
+        "guitar.expert": "ZMS0e-Bto5-RlKGoe8FHbDRr6UQYJgDAQZ_9w26UmRs=",
+        "guitar.hard": "xBm7mHe4dlsBRwcWMv7YKWcLP_ZOClXgOcESn0u2ckA=",
+        "guitar.medium": "N_CpXdDClk5m3S1KskqcgS4_XQyOBJEdIQezqmedLOM=",
+        "guitar.easy": "bcgpIES8qhlWaj7s7GnxnKCcps5w6sHXux3T-pkVXO8=",
+        "bass.expert": "v7kGWe0SNtrab_BHz3-9GDP_RUWap-rn_Eaw8VhmRb0=",
+        "bass.hard": "dO_HLzf43e2tdX0tTAYari9WBxlH9WiWJdap1ihoKxI=",
+        "bass.medium": "lhQBMpBmVRXLeH2n_nqjCpiLBDu6pWZqM8qafb2OYHc=",
+        "bass.easy": "uAg71dsVO1zJXD9bdxXhX3PGv32PDCf5ezvTqXm8PBE="
+      },
+      "expert_guitar_notes": 848,
+      "modified_time": "2024-01-08T06:36:42.000Z"
+    }
+  ]
+}

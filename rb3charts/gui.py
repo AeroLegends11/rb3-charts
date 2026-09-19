@@ -17,6 +17,11 @@ class Worker(QThread):
         self.payload,self.mode=payload,mode
     def run(self):
         try:
+            if self.mode=="encore":
+                from .encore import compare_with_encore
+                self.message.emit("Finding an exact official Chorus Encore reference…")
+                self.result.emit(compare_with_encore(self.payload))
+                return
             from .pipeline import generate,batch,package_existing
             action={"generate":generate,"batch":batch,"package":package_existing}[self.mode]
             self.result.emit(action(self.payload,self.message.emit))
@@ -152,6 +157,10 @@ class Window(QMainWindow):
         self.open_output.clicked.connect(lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.last_folder or ROOT/"output"))))
         row.addWidget(self.open_output)
         layout.addLayout(row)
+        self.compare_reference=QPushButton("Compare draft to official Encore chart")
+        self.compare_reference.setEnabled(False)
+        self.compare_reference.clicked.connect(self.compare_to_encore)
+        layout.addWidget(self.compare_reference)
         self.setStyleSheet('''QMainWindow,QWidget{background:#111a28;color:#e5edf8;font:14px "Segoe UI"}QLabel#heading{font-size:28px;font-weight:700;letter-spacing:3px;color:#6ee7c5}QLabel#subtitle{font-size:18px;color:#b1c2d9}QLabel#hint{color:#a6b6ce;font-size:12px}QLineEdit,QComboBox,QPlainTextEdit{background:#1b293b;border:1px solid #34475e;border-radius:6px;padding:7px}QPushButton{background:#263a52;border:1px solid #435e7a;border-radius:7px;padding:9px 16px}QPushButton:hover{background:#33516e}QPushButton:disabled{color:#697b90}QPushButton#primary{background:#51c9a5;color:#10241e;font-weight:700;font-size:16px;padding:12px}QGroupBox{border:1px solid #34475e;border-radius:8px;margin-top:12px;padding-top:16px}QGroupBox::title{subcontrol-origin:margin;left:12px;padding:0 5px}QProgressBar{background:#23344a;border:0;height:5px}QProgressBar::chunk{background:#6ee7c5}''')
 
     def select_song(self):
@@ -219,6 +228,7 @@ class Window(QMainWindow):
                 self.log.appendPlainText("Review: "+warning)
             self.review.setEnabled(True)
             self.package.setEnabled(result["status"] in ("draft_ready","compile_failed"))
+            self.compare_reference.setEnabled(True)
     def open_review(self):
         if self.review_path:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.review_path)))
@@ -234,6 +244,24 @@ class Window(QMainWindow):
         self.worker.failed.connect(self.failed)
         self.worker.finished.connect(self.reset)
         self.worker.start()
+    def compare_to_encore(self):
+        if not self.last_folder:return
+        self.compare_reference.setEnabled(False)
+        self.progress.setRange(0,0)
+        self.status.setText("Comparing against Chorus Encore · Chart notes only, no reference audio")
+        self.worker=Worker(self.last_folder,"encore")
+        self.worker.message.connect(self.log.appendPlainText)
+        self.worker.result.connect(self.comparison_finished)
+        self.worker.failed.connect(self.failed)
+        self.worker.finished.connect(self.reset)
+        self.worker.start()
+    def comparison_finished(self,result):
+        reference=result["encore_reference"]
+        summary=result["summary"]
+        self.status.setText(f"Comparison ready · {reference['charter']} chart #{reference['chart_id']}")
+        self.log.appendPlainText(f"Attack precision {summary['attack_precision']:.1%} · recall {summary['attack_recall']:.1%} · F1 {summary['attack_f1']:.1%}")
+        self.log.appendPlainText(f"Median timing error {summary.get('median_timing_error_seconds',0)*1000:.0f} ms · exact lanes {summary['exact_lane_rate']:.1%}")
+        QDesktopServices.openUrl(QUrl.fromLocalFile(result["output"]["html"]))
     def failed(self,error):
         self.status.setText("Generation failed · See details below")
         self.log.appendPlainText(error)
@@ -243,6 +271,7 @@ class Window(QMainWindow):
         self.generate.setEnabled(True)
         if self.last_result:
             self.package.setEnabled(self.last_result.get("status") in ("draft_ready","compile_failed"))
+            self.compare_reference.setEnabled(True)
     def closeEvent(self,event):
         if self.worker and self.worker.isRunning():
             QMessageBox.information(self,"Generation in progress","Please leave this window open until generation finishes.")

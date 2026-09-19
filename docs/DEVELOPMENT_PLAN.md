@@ -104,6 +104,13 @@ the uploader blocks embedding. Automatic note extraction from video is a later
 measured computer-vision task; the video mode does not claim machine-derived note
 accuracy.
 
+Chorus Encore is now an optional reproducible reference provider. Exact official
+artist/title matches are pinned by chart ID and hashes in `reference/catalog.json`.
+Only the SNG index and `notes.mid` byte range are fetched; reference audio is not
+downloaded. The main GUI can run the comparison after generation, and a fresh
+clone rebuilds its ignored local MIDI cache from the same manifest. Reference
+notes remain evaluation-only and never enter the authoring pipeline.
+
 ## 5. Tempo and broader musical structure
 
 Address accelerating electronic tempo independently from motif fingering. The

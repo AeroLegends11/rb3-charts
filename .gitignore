@@ -44,6 +44,7 @@ htmlcov/
 /reference/*
 !/reference/style-profile.json
 !/reference/README.md
+!/reference/catalog.json
 *.m4a
 *.aif
 *.aiff

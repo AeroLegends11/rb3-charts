@@ -33,7 +33,7 @@ def test_chart_comparison_aligns_and_reports_differences(tmp_path):
 
     result = compare_charts(generated, reference, tmp_path / "comparisons")
 
-    assert result["provenance"]["alignment_offset_beats"] == 4
+    assert result["provenance"]["alignment_offset_seconds"] == 2
     assert result["summary"]["matched_attacks"] == 4
     assert result["summary"]["extra_attacks"] == 1
     assert result["summary"]["missing_attacks"] == 1
