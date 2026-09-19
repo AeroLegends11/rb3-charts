@@ -1,0 +1,17 @@
+{
+  "PART GUITAR": {
+    "authored_onsets": 61,
+    "compiled_onsets": 61,
+    "max_nearest_error_ms": 0.5208333333381887
+  },
+  "PART BASS": {
+    "authored_onsets": 62,
+    "compiled_onsets": 62,
+    "max_nearest_error_ms": 0.5208333333399651
+  },
+  "PART DRUMS": {
+    "authored_onsets": 124,
+    "compiled_onsets": 124,
+    "max_nearest_error_ms": 0.5208333333435178
+  }
+}

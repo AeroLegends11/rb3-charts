@@ -1,0 +1,23 @@
+{
+  "guitar": {
+    "reference_events": 62,
+    "detected_events": 61,
+    "matched_within_30ms": 61,
+    "median_nearest_error_ms": 4.0816326530617175,
+    "p95_nearest_error_ms": 4.8526077097506
+  },
+  "bass": {
+    "reference_events": 62,
+    "detected_events": 62,
+    "matched_within_30ms": 62,
+    "median_nearest_error_ms": 7.709750566892826,
+    "p95_nearest_error_ms": 8.979591836734357
+  },
+  "drums": {
+    "reference_events": 124,
+    "detected_events": 124,
+    "matched_within_30ms": 124,
+    "median_nearest_error_ms": 1.1224489795917947,
+    "p95_nearest_error_ms": 1.4512471655336867
+  }
+}

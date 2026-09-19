@@ -1,0 +1,59 @@
+.venv/
+.research/
+tools/
+output/
+cache/
+input/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.mid
+*.con
+*.log
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+secrets*.json
+.codex/
+.idea/
+.vscode/
+
+# Python build/test products
+*.py[cod]
+build/
+dist/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local song library, packages, models and downloaded research repositories
+/Ready for Xbox/
+/logs/
+/reference/*
+!/reference/style-profile.json
+!/reference/README.md
+*.m4a
+*.aif
+*.aiff
+*.wma
+*.mogg
+*.midi
+*.stfs
+*.zip
+*.7z
+*.pt
+*.pth
+*.onnx
+# Generated desktop screenshot; may contain local paths.
+/docs/gui-preview.png

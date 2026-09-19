@@ -1,0 +1,1235 @@
+{
+  "schema": 1,
+  "midi_files": 21,
+  "analyzed_files": 21,
+  "failed_files": 0,
+  "styles": {
+    "drums.easy": {
+      "songs": 19,
+      "attacks": 12874,
+      "attacks_per_song": {
+        "p10": 468.4,
+        "median": 627.0,
+        "p90": 1017.6
+      },
+      "chord_rate": 0.2782,
+      "three_note_chord_rate": 0.0,
+      "green_orange_chord_rate": 0.0157,
+      "hold_rate": 0.0,
+      "hold_beats": {
+        "p10": 0,
+        "median": 0,
+        "p90": 0
+      },
+      "song_chord_rate": {
+        "p10": 0.1378,
+        "median": 0.2582,
+        "p90": 0.3958
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_hold_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "inter_attack_beats": {
+        "p10": 0.5,
+        "median": 1.0,
+        "p90": 1.0
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 5.0,
+        "median": 7.0,
+        "p90": 8.0
+      },
+      "adjacent_motion_rate": 0.8303,
+      "wide_jump_rate": 0.0855,
+      "song_adjacent_motion_rate": {
+        "p10": 0.7587,
+        "median": 0.8185,
+        "p90": 0.906
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0445,
+        "median": 0.0741,
+        "p90": 0.1496
+      },
+      "lane_rates": {
+        "0": 0.0943,
+        "1": 0.3759,
+        "2": 0.1578,
+        "3": 0.1398,
+        "4": 0.2321
+      },
+      "chord_shapes": {
+        "14": 1355,
+        "12": 1167,
+        "13": 820,
+        "04": 202,
+        "03": 14,
+        "01": 11,
+        "23": 9,
+        "02": 3,
+        "41": 1
+      }
+    },
+    "drums.medium": {
+      "songs": 19,
+      "attacks": 14507,
+      "attacks_per_song": {
+        "p10": 520.8,
+        "median": 676.0,
+        "p90": 1181.8
+      },
+      "chord_rate": 0.5733,
+      "three_note_chord_rate": 0.0044,
+      "green_orange_chord_rate": 0.0937,
+      "hold_rate": 0.0,
+      "hold_beats": {
+        "p10": 0,
+        "median": 0,
+        "p90": 0
+      },
+      "song_chord_rate": {
+        "p10": 0.4279,
+        "median": 0.5853,
+        "p90": 0.7077
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0065
+      },
+      "song_hold_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "inter_attack_beats": {
+        "p10": 0.5,
+        "median": 1.0,
+        "p90": 1.0
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 5.0,
+        "median": 8.0,
+        "p90": 9.2
+      },
+      "adjacent_motion_rate": 0.8332,
+      "wide_jump_rate": 0.0626,
+      "song_adjacent_motion_rate": {
+        "p10": 0.6828,
+        "median": 0.8454,
+        "p90": 0.9238
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0163,
+        "median": 0.0711,
+        "p90": 0.1811
+      },
+      "lane_rates": {
+        "0": 0.153,
+        "1": 0.2973,
+        "2": 0.2339,
+        "3": 0.1309,
+        "4": 0.1849
+      },
+      "chord_shapes": {
+        "12": 2405,
+        "14": 1728,
+        "04": 1307,
+        "02": 1065,
+        "13": 1022,
+        "03": 586,
+        "01": 87,
+        "014": 49,
+        "23": 20,
+        "30": 19,
+        "012": 12,
+        "41": 9,
+        "40": 3,
+        "013": 3,
+        "20": 2
+      }
+    },
+    "drums.hard": {
+      "songs": 19,
+      "attacks": 21094,
+      "attacks_per_song": {
+        "p10": 768.6,
+        "median": 1023.0,
+        "p90": 1660.6
+      },
+      "chord_rate": 0.5064,
+      "three_note_chord_rate": 0.0112,
+      "green_orange_chord_rate": 0.0975,
+      "hold_rate": 0.0,
+      "hold_beats": {
+        "p10": 0,
+        "median": 0,
+        "p90": 0
+      },
+      "song_chord_rate": {
+        "p10": 0.4311,
+        "median": 0.5078,
+        "p90": 0.5881
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0019,
+        "p90": 0.0157
+      },
+      "song_hold_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "inter_attack_beats": {
+        "p10": 0.25,
+        "median": 0.5,
+        "p90": 1.0
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 8.0,
+        "median": 13.0,
+        "p90": 15.2
+      },
+      "adjacent_motion_rate": 0.723,
+      "wide_jump_rate": 0.1464,
+      "song_adjacent_motion_rate": {
+        "p10": 0.419,
+        "median": 0.722,
+        "p90": 0.9084
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0314,
+        "median": 0.0842,
+        "p90": 0.4088
+      },
+      "lane_rates": {
+        "0": 0.25,
+        "1": 0.2589,
+        "2": 0.2086,
+        "3": 0.1297,
+        "4": 0.1527
+      },
+      "chord_shapes": {
+        "12": 2305,
+        "02": 1914,
+        "04": 1882,
+        "14": 1685,
+        "03": 1302,
+        "13": 1083,
+        "014": 154,
+        "23": 131,
+        "01": 65,
+        "34": 54,
+        "012": 41,
+        "013": 26,
+        "24": 13,
+        "034": 13,
+        "40": 6,
+        "30": 5,
+        "024": 2,
+        "32": 1,
+        "203": 1
+      }
+    },
+    "drums.expert": {
+      "songs": 21,
+      "attacks": 32976,
+      "attacks_per_song": {
+        "p10": 1027.0,
+        "median": 1473.0,
+        "p90": 2137.0
+      },
+      "chord_rate": 0.4871,
+      "three_note_chord_rate": 0.0618,
+      "green_orange_chord_rate": 0.1036,
+      "hold_rate": 0.0,
+      "hold_beats": {
+        "p10": 0,
+        "median": 0,
+        "p90": 0
+      },
+      "song_chord_rate": {
+        "p10": 0.3866,
+        "median": 0.449,
+        "p90": 0.6364
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0009,
+        "median": 0.0531,
+        "p90": 0.1263
+      },
+      "song_hold_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "inter_attack_beats": {
+        "p10": 0.25,
+        "median": 0.25,
+        "p90": 0.5
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 15.0,
+        "median": 19.0,
+        "p90": 25.0
+      },
+      "adjacent_motion_rate": 0.7651,
+      "wide_jump_rate": 0.1201,
+      "song_adjacent_motion_rate": {
+        "p10": 0.5845,
+        "median": 0.8157,
+        "p90": 0.9385
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0238,
+        "median": 0.0946,
+        "p90": 0.2479
+      },
+      "lane_rates": {
+        "0": 0.3576,
+        "1": 0.2326,
+        "2": 0.173,
+        "3": 0.116,
+        "4": 0.1208
+      },
+      "chord_shapes": {
+        "02": 2929,
+        "04": 2470,
+        "03": 2259,
+        "12": 2014,
+        "14": 1558,
+        "13": 1425,
+        "01": 1004,
+        "012": 755,
+        "014": 659,
+        "013": 259,
+        "024": 147,
+        "23": 137,
+        "034": 101,
+        "023": 97,
+        "24": 76,
+        "34": 71,
+        "20": 30,
+        "40": 26,
+        "30": 21,
+        "140": 10,
+        "120": 6,
+        "10": 4,
+        "042": 3,
+        "41": 1,
+        "130": 1
+      }
+    },
+    "bass.easy": {
+      "songs": 21,
+      "attacks": 7300,
+      "attacks_per_song": {
+        "p10": 231.0,
+        "median": 324.0,
+        "p90": 429.0
+      },
+      "chord_rate": 0.0,
+      "three_note_chord_rate": 0.0,
+      "green_orange_chord_rate": 0.0,
+      "hold_rate": 0.0697,
+      "hold_beats": {
+        "p10": 0.3333,
+        "median": 0.75,
+        "p90": 4.0
+      },
+      "song_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_hold_rate": {
+        "p10": 0.0027,
+        "median": 0.0298,
+        "p90": 0.1157
+      },
+      "inter_attack_beats": {
+        "p10": 1.0,
+        "median": 1.5,
+        "p90": 2.5
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 3.0,
+        "median": 4.0,
+        "p90": 6.0
+      },
+      "adjacent_motion_rate": 0.8182,
+      "wide_jump_rate": 0.001,
+      "song_adjacent_motion_rate": {
+        "p10": 0.6374,
+        "median": 0.8199,
+        "p90": 0.8977
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0058
+      },
+      "lane_rates": {
+        "0": 0.3668,
+        "1": 0.3256,
+        "2": 0.3,
+        "3": 0.0052,
+        "4": 0.0023
+      },
+      "chord_shapes": {}
+    },
+    "bass.medium": {
+      "songs": 21,
+      "attacks": 12204,
+      "attacks_per_song": {
+        "p10": 373.0,
+        "median": 553.0,
+        "p90": 784.0
+      },
+      "chord_rate": 0.002,
+      "three_note_chord_rate": 0.0,
+      "green_orange_chord_rate": 0.0,
+      "hold_rate": 0.0658,
+      "hold_beats": {
+        "p10": 0.3333,
+        "median": 0.3333,
+        "p90": 2.9958
+      },
+      "song_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0017
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_hold_rate": {
+        "p10": 0.0017,
+        "median": 0.0248,
+        "p90": 0.0892
+      },
+      "inter_attack_beats": {
+        "p10": 0.5,
+        "median": 1.0,
+        "p90": 1.5
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 5.0,
+        "median": 6.0,
+        "p90": 8.0
+      },
+      "adjacent_motion_rate": 0.7862,
+      "wide_jump_rate": 0.0435,
+      "song_adjacent_motion_rate": {
+        "p10": 0.6149,
+        "median": 0.7908,
+        "p90": 0.9002
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0093,
+        "median": 0.0433,
+        "p90": 0.0718
+      },
+      "lane_rates": {
+        "0": 0.265,
+        "1": 0.273,
+        "2": 0.3002,
+        "3": 0.1569,
+        "4": 0.0049
+      },
+      "chord_shapes": {
+        "01": 10,
+        "12": 6,
+        "23": 5,
+        "02": 2,
+        "13": 1
+      }
+    },
+    "bass.hard": {
+      "songs": 21,
+      "attacks": 19697,
+      "attacks_per_song": {
+        "p10": 581.0,
+        "median": 944.0,
+        "p90": 1254.0
+      },
+      "chord_rate": 0.0204,
+      "three_note_chord_rate": 0.0,
+      "green_orange_chord_rate": 0.0,
+      "hold_rate": 0.0974,
+      "hold_beats": {
+        "p10": 0.3333,
+        "median": 0.75,
+        "p90": 1.5
+      },
+      "song_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0295
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_hold_rate": {
+        "p10": 0.004,
+        "median": 0.0446,
+        "p90": 0.2475
+      },
+      "inter_attack_beats": {
+        "p10": 0.3333,
+        "median": 0.5,
+        "p90": 1.0
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 8.0,
+        "median": 9.0,
+        "p90": 13.0
+      },
+      "adjacent_motion_rate": 0.7832,
+      "wide_jump_rate": 0.0755,
+      "song_adjacent_motion_rate": {
+        "p10": 0.6356,
+        "median": 0.7762,
+        "p90": 0.9021
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0306,
+        "median": 0.074,
+        "p90": 0.1303
+      },
+      "lane_rates": {
+        "0": 0.2363,
+        "1": 0.2504,
+        "2": 0.227,
+        "3": 0.2016,
+        "4": 0.0847
+      },
+      "chord_shapes": {
+        "12": 163,
+        "23": 87,
+        "34": 61,
+        "02": 45,
+        "13": 22,
+        "14": 12,
+        "24": 7,
+        "01": 3,
+        "03": 2
+      }
+    },
+    "bass.expert": {
+      "songs": 21,
+      "attacks": 25543,
+      "attacks_per_song": {
+        "p10": 626.0,
+        "median": 1180.0,
+        "p90": 1604.0
+      },
+      "chord_rate": 0.0191,
+      "three_note_chord_rate": 0.0009,
+      "green_orange_chord_rate": 0.0003,
+      "hold_rate": 0.1106,
+      "hold_beats": {
+        "p10": 0.3333,
+        "median": 0.75,
+        "p90": 1.25
+      },
+      "song_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0284
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_hold_rate": {
+        "p10": 0.0032,
+        "median": 0.0697,
+        "p90": 0.3416
+      },
+      "inter_attack_beats": {
+        "p10": 0.25,
+        "median": 0.5,
+        "p90": 1.0
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 10.0,
+        "median": 14.0,
+        "p90": 17.0
+      },
+      "adjacent_motion_rate": 0.7908,
+      "wide_jump_rate": 0.0877,
+      "song_adjacent_motion_rate": {
+        "p10": 0.6139,
+        "median": 0.809,
+        "p90": 0.8854
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0268,
+        "median": 0.0774,
+        "p90": 0.2212
+      },
+      "lane_rates": {
+        "0": 0.2615,
+        "1": 0.2415,
+        "2": 0.2073,
+        "3": 0.1789,
+        "4": 0.1109
+      },
+      "chord_shapes": {
+        "12": 217,
+        "34": 87,
+        "23": 63,
+        "03": 35,
+        "13": 20,
+        "14": 17,
+        "02": 13,
+        "012": 12,
+        "234": 11,
+        "04": 8,
+        "01": 3,
+        "24": 2
+      }
+    },
+    "guitar.easy": {
+      "songs": 21,
+      "attacks": 7113,
+      "attacks_per_song": {
+        "p10": 222.0,
+        "median": 303.0,
+        "p90": 455.0
+      },
+      "chord_rate": 0.0105,
+      "three_note_chord_rate": 0.0,
+      "green_orange_chord_rate": 0.0,
+      "hold_rate": 0.1251,
+      "hold_beats": {
+        "p10": 0.3333,
+        "median": 1.5,
+        "p90": 4.775
+      },
+      "song_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.028
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_hold_rate": {
+        "p10": 0.0212,
+        "median": 0.0726,
+        "p90": 0.2133
+      },
+      "inter_attack_beats": {
+        "p10": 1.0,
+        "median": 1.5,
+        "p90": 3.0
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 3.0,
+        "median": 4.0,
+        "p90": 6.0
+      },
+      "adjacent_motion_rate": 0.8386,
+      "wide_jump_rate": 0.0048,
+      "song_adjacent_motion_rate": {
+        "p10": 0.7525,
+        "median": 0.8211,
+        "p90": 0.9273
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0031
+      },
+      "lane_rates": {
+        "0": 0.3204,
+        "1": 0.3645,
+        "2": 0.3091,
+        "3": 0.0028,
+        "4": 0.0032
+      },
+      "chord_shapes": {
+        "01": 48,
+        "12": 17,
+        "02": 10
+      }
+    },
+    "guitar.medium": {
+      "songs": 21,
+      "attacks": 11107,
+      "attacks_per_song": {
+        "p10": 364.0,
+        "median": 499.0,
+        "p90": 699.0
+      },
+      "chord_rate": 0.1992,
+      "three_note_chord_rate": 0.0,
+      "green_orange_chord_rate": 0.0,
+      "hold_rate": 0.1148,
+      "hold_beats": {
+        "p10": 0.3333,
+        "median": 1.25,
+        "p90": 3.7083
+      },
+      "song_chord_rate": {
+        "p10": 0.0024,
+        "median": 0.1634,
+        "p90": 0.5086
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_hold_rate": {
+        "p10": 0.0203,
+        "median": 0.0796,
+        "p90": 0.1805
+      },
+      "inter_attack_beats": {
+        "p10": 0.5,
+        "median": 1.0,
+        "p90": 1.75
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 4.0,
+        "median": 6.0,
+        "p90": 8.0
+      },
+      "adjacent_motion_rate": 0.7935,
+      "wide_jump_rate": 0.036,
+      "song_adjacent_motion_rate": {
+        "p10": 0.6535,
+        "median": 0.8222,
+        "p90": 0.8855
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0051,
+        "median": 0.027,
+        "p90": 0.1037
+      },
+      "lane_rates": {
+        "0": 0.2258,
+        "1": 0.3058,
+        "2": 0.3176,
+        "3": 0.1483,
+        "4": 0.0026
+      },
+      "chord_shapes": {
+        "12": 539,
+        "01": 480,
+        "02": 411,
+        "23": 393,
+        "13": 386,
+        "03": 4
+      }
+    },
+    "guitar.hard": {
+      "songs": 21,
+      "attacks": 18638,
+      "attacks_per_song": {
+        "p10": 543.0,
+        "median": 880.0,
+        "p90": 1209.0
+      },
+      "chord_rate": 0.2138,
+      "three_note_chord_rate": 0.0001,
+      "green_orange_chord_rate": 0.0,
+      "hold_rate": 0.1058,
+      "hold_beats": {
+        "p10": 0.3333,
+        "median": 0.8229,
+        "p90": 3.25
+      },
+      "song_chord_rate": {
+        "p10": 0.0576,
+        "median": 0.1984,
+        "p90": 0.3807
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_hold_rate": {
+        "p10": 0.0136,
+        "median": 0.0749,
+        "p90": 0.1718
+      },
+      "inter_attack_beats": {
+        "p10": 0.25,
+        "median": 0.5,
+        "p90": 1.0
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 8.0,
+        "median": 11.0,
+        "p90": 16.0
+      },
+      "adjacent_motion_rate": 0.7501,
+      "wide_jump_rate": 0.0977,
+      "song_adjacent_motion_rate": {
+        "p10": 0.6461,
+        "median": 0.7571,
+        "p90": 0.8892
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0076,
+        "median": 0.0725,
+        "p90": 0.1587
+      },
+      "lane_rates": {
+        "0": 0.2273,
+        "1": 0.223,
+        "2": 0.2643,
+        "3": 0.1873,
+        "4": 0.0981
+      },
+      "chord_shapes": {
+        "02": 806,
+        "13": 680,
+        "23": 576,
+        "24": 558,
+        "12": 455,
+        "01": 308,
+        "03": 225,
+        "14": 216,
+        "34": 159,
+        "123": 2
+      }
+    },
+    "guitar.expert": {
+      "songs": 21,
+      "attacks": 26473,
+      "attacks_per_song": {
+        "p10": 627.0,
+        "median": 1161.0,
+        "p90": 1631.0
+      },
+      "chord_rate": 0.2099,
+      "three_note_chord_rate": 0.0052,
+      "green_orange_chord_rate": 0.0,
+      "hold_rate": 0.1054,
+      "hold_beats": {
+        "p10": 0.3333,
+        "median": 0.75,
+        "p90": 2.75
+      },
+      "song_chord_rate": {
+        "p10": 0.0656,
+        "median": 0.2277,
+        "p90": 0.3907
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.018
+      },
+      "song_hold_rate": {
+        "p10": 0.0199,
+        "median": 0.084,
+        "p90": 0.1547
+      },
+      "inter_attack_beats": {
+        "p10": 0.25,
+        "median": 0.3333,
+        "p90": 0.75
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 14.0,
+        "median": 20.0,
+        "p90": 25.0
+      },
+      "adjacent_motion_rate": 0.7968,
+      "wide_jump_rate": 0.0786,
+      "song_adjacent_motion_rate": {
+        "p10": 0.7004,
+        "median": 0.7917,
+        "p90": 0.9076
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.0273,
+        "median": 0.0734,
+        "p90": 0.1446
+      },
+      "lane_rates": {
+        "0": 0.2483,
+        "1": 0.23,
+        "2": 0.2543,
+        "3": 0.1782,
+        "4": 0.0893
+      },
+      "chord_shapes": {
+        "23": 939,
+        "02": 909,
+        "13": 752,
+        "12": 732,
+        "24": 646,
+        "01": 551,
+        "34": 361,
+        "14": 295,
+        "03": 232,
+        "023": 52,
+        "134": 23,
+        "234": 20,
+        "123": 16,
+        "012": 14,
+        "124": 10,
+        "013": 3,
+        "42": 1
+      }
+    },
+    "keys.easy": {
+      "songs": 2,
+      "attacks": 290,
+      "attacks_per_song": {
+        "p10": 75.4,
+        "median": 145.0,
+        "p90": 214.6
+      },
+      "chord_rate": 0.0,
+      "three_note_chord_rate": 0.0,
+      "green_orange_chord_rate": 0.0,
+      "hold_rate": 0.3034,
+      "hold_beats": {
+        "p10": 1.0,
+        "median": 2.5,
+        "p90": 5.0
+      },
+      "song_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_hold_rate": {
+        "p10": 0.2703,
+        "median": 0.403,
+        "p90": 0.5358
+      },
+      "inter_attack_beats": {
+        "p10": 1.0,
+        "median": 2.0,
+        "p90": 4.5
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 2.1,
+        "median": 2.5,
+        "p90": 2.9
+      },
+      "adjacent_motion_rate": 0.678,
+      "wide_jump_rate": 0.1582,
+      "song_adjacent_motion_rate": {
+        "p10": 0.2702,
+        "median": 0.4623,
+        "p90": 0.6544
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.1673,
+        "median": 0.2411,
+        "p90": 0.3149
+      },
+      "lane_rates": {
+        "0": 0.1483,
+        "1": 0.2,
+        "2": 0.2724,
+        "3": 0.2207,
+        "4": 0.1586
+      },
+      "chord_shapes": {}
+    },
+    "keys.medium": {
+      "songs": 2,
+      "attacks": 424,
+      "attacks_per_song": {
+        "p10": 99.2,
+        "median": 212.0,
+        "p90": 324.8
+      },
+      "chord_rate": 0.375,
+      "three_note_chord_rate": 0.0,
+      "green_orange_chord_rate": 0.0259,
+      "hold_rate": 0.2642,
+      "hold_beats": {
+        "p10": 0.775,
+        "median": 2.0,
+        "p90": 3.5
+      },
+      "song_chord_rate": {
+        "p10": 0.045,
+        "median": 0.2252,
+        "p90": 0.4054
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0,
+        "median": 0.0,
+        "p90": 0.0
+      },
+      "song_hold_rate": {
+        "p10": 0.2376,
+        "median": 0.3949,
+        "p90": 0.5522
+      },
+      "inter_attack_beats": {
+        "p10": 1.0,
+        "median": 1.0,
+        "p90": 4.0
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 2.4,
+        "median": 4.0,
+        "p90": 5.6
+      },
+      "adjacent_motion_rate": 0.6932,
+      "wide_jump_rate": 0.1761,
+      "song_adjacent_motion_rate": {
+        "p10": 0.1597,
+        "median": 0.4351,
+        "p90": 0.7104
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.1604,
+        "median": 0.4123,
+        "p90": 0.6643
+      },
+      "lane_rates": {
+        "0": 0.1732,
+        "1": 0.2075,
+        "2": 0.2075,
+        "3": 0.2367,
+        "4": 0.175
+      },
+      "chord_shapes": {
+        "13": 30,
+        "03": 26,
+        "23": 23,
+        "34": 19,
+        "14": 16,
+        "12": 11,
+        "04": 11,
+        "02": 10,
+        "24": 7,
+        "01": 6
+      }
+    },
+    "keys.hard": {
+      "songs": 2,
+      "attacks": 520,
+      "attacks_per_song": {
+        "p10": 108.8,
+        "median": 260.0,
+        "p90": 411.2
+      },
+      "chord_rate": 0.3846,
+      "three_note_chord_rate": 0.0442,
+      "green_orange_chord_rate": 0.025,
+      "hold_rate": 0.2173,
+      "hold_beats": {
+        "p10": 1.0,
+        "median": 2.5,
+        "p90": 5.0
+      },
+      "song_chord_rate": {
+        "p10": 0.0445,
+        "median": 0.2227,
+        "p90": 0.4009
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.0051,
+        "median": 0.0256,
+        "p90": 0.0461
+      },
+      "song_hold_rate": {
+        "p10": 0.2015,
+        "median": 0.3748,
+        "p90": 0.5482
+      },
+      "inter_attack_beats": {
+        "p10": 0.5,
+        "median": 1.0,
+        "p90": 4.0
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 2.6,
+        "median": 5.0,
+        "p90": 7.4
+      },
+      "adjacent_motion_rate": 0.6681,
+      "wide_jump_rate": 0.1659,
+      "song_adjacent_motion_rate": {
+        "p10": 0.1548,
+        "median": 0.4102,
+        "p90": 0.6656
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.1684,
+        "median": 0.4168,
+        "p90": 0.6652
+      },
+      "lane_rates": {
+        "0": 0.1723,
+        "1": 0.2046,
+        "2": 0.2153,
+        "3": 0.2342,
+        "4": 0.1736
+      },
+      "chord_shapes": {
+        "13": 29,
+        "03": 25,
+        "23": 25,
+        "34": 24,
+        "12": 19,
+        "14": 14,
+        "01": 12,
+        "24": 12,
+        "02": 8,
+        "04": 6,
+        "034": 5,
+        "234": 4,
+        "012": 3,
+        "134": 3,
+        "123": 3,
+        "024": 2,
+        "013": 2,
+        "31": 1,
+        "32": 1,
+        "21": 1,
+        "023": 1
+      }
+    },
+    "keys.expert": {
+      "songs": 2,
+      "attacks": 653,
+      "attacks_per_song": {
+        "p10": 122.1,
+        "median": 326.5,
+        "p90": 530.9
+      },
+      "chord_rate": 0.294,
+      "three_note_chord_rate": 0.0352,
+      "green_orange_chord_rate": 0.0199,
+      "hold_rate": 0.2435,
+      "hold_beats": {
+        "p10": 0.5,
+        "median": 1.5,
+        "p90": 3.5
+      },
+      "song_chord_rate": {
+        "p10": 0.033,
+        "median": 0.1649,
+        "p90": 0.2969
+      },
+      "song_three_note_chord_rate": {
+        "p10": 0.004,
+        "median": 0.0198,
+        "p90": 0.0356
+      },
+      "song_hold_rate": {
+        "p10": 0.2383,
+        "median": 0.4767,
+        "p90": 0.7151
+      },
+      "inter_attack_beats": {
+        "p10": 0.25,
+        "median": 0.75,
+        "p90": 3.0
+      },
+      "peak_attacks_per_four_beats": {
+        "p10": 3.4,
+        "median": 9.0,
+        "p90": 14.6
+      },
+      "adjacent_motion_rate": 0.7589,
+      "wide_jump_rate": 0.1068,
+      "song_adjacent_motion_rate": {
+        "p10": 0.162,
+        "median": 0.4463,
+        "p90": 0.7307
+      },
+      "song_wide_jump_rate": {
+        "p10": 0.1331,
+        "median": 0.3972,
+        "p90": 0.6613
+      },
+      "lane_rates": {
+        "0": 0.1774,
+        "1": 0.2108,
+        "2": 0.2212,
+        "3": 0.235,
+        "4": 0.1555
+      },
+      "chord_shapes": {
+        "13": 29,
+        "23": 25,
+        "03": 24,
+        "12": 18,
+        "34": 15,
+        "14": 15,
+        "24": 13,
+        "01": 12,
+        "02": 8,
+        "04": 6,
+        "034": 4,
+        "234": 4,
+        "012": 3,
+        "134": 3,
+        "123": 3,
+        "21": 2,
+        "024": 2,
+        "013": 2,
+        "31": 1,
+        "32": 1,
+        "023": 1,
+        "043": 1
+      }
+    }
+  },
+  "expert_to_hard_retention": {
+    "guitar": {
+      "p10": 0.5992,
+      "median": 0.7476,
+      "p90": 0.8543
+    },
+    "bass": {
+      "p10": 0.6179,
+      "median": 0.8394,
+      "p90": 0.9441
+    },
+    "drums": {
+      "p10": 0.6046,
+      "median": 0.7306,
+      "p90": 0.8239
+    },
+    "keys": {
+      "p10": 0.7943,
+      "median": 0.8857,
+      "p90": 0.9771
+    }
+  }
+}

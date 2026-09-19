@@ -1,0 +1,440 @@
+import numpy as np
+import pytest
+from rb3charts.model import Note,TempoMap
+from rb3charts.chart import reductions,map_pitched,clean,enforce_playability,analyze_patterns,refine_band_guitar,conform_expert_to_reference,stabilize_repeated_phrases
+from rb3charts.midi import write_midi,note_times
+from rb3charts.validate import validate
+from rb3charts.transcribe import electronic_lead_events,electronic_bass_events,_refine_pitched_articulations,_focus_band_guitar_candidates,_filter_sequential_lead_outliers
+
+def test_tempo_map_roundtrip_drifting_and_pickups():
+    tempo=TempoMap([0.7,1.2,1.69,2.17,2.8,3.4])
+    for seconds in np.linspace(0,5,501):
+        assert tempo.seconds_at(tempo.beat_at(seconds))==pytest.approx(seconds,abs=1e-10)
+
+def test_midi_serialization_preserves_drifting_onsets(tmp_path):
+    tempo=TempoMap([0.3,0.8,1.29,1.77,2.4,3.0,3.4,4.1,4.7,5.2])
+    original=[0.0,0.19,0.8,1.23,2.39,3.44,4.95,6.8]
+    notes=[Note(t,t+0.06,(i%5,),source_id=str(i)) for i,t in enumerate(original)]
+    charts={"guitar":reductions(notes,"guitar",tempo)}
+    path=tmp_path/"notes.mid"
+    lead=write_midi(path,tempo,charts,7.0,{})
+    actual=[t-lead for t,n in note_times(path) if 96<=n<=100]
+    assert actual==pytest.approx(original,abs=0.001)
+
+def test_reductions_preserve_ancestry_and_reduce_density():
+    tempo=TempoMap(np.arange(0,20,0.5).tolist())
+    notes=[Note(i/8,i/8+0.06,(i%5,),source_id=str(i)) for i in range(100)]
+    charts=reductions(notes,"guitar",tempo)
+    assert len(charts["expert"])>len(charts["hard"])>len(charts["medium"])>len(charts["easy"])
+    for p,c in [("expert","hard"),("hard","medium"),("medium","easy")]:
+        assert {n.start for n in charts[c]} <= {n.start for n in charts[p]}
+        assert {n.source_id for n in charts[c]} <= {n.source_id for n in charts[p]}
+    assert max(max(n.lanes) for n in charts["easy"])<=2
+
+def test_repeated_riff_has_identical_mapping():
+    events=[{"start":i*0.5,"end":i*0.5+0.3,"pitch":p,"confidence":0.9,"source_id":str(i)} for i,p in enumerate([48,52,55,50]*3)]
+    notes=map_pitched(events,"guitar")
+    assert [n.lanes for n in notes[:4]]==[n.lanes for n in notes[4:8]]==[n.lanes for n in notes[8:]]
+
+def test_validator_rejects_three_handed_drums():
+    tempo=TempoMap([0,0.5,1,1.5,2])
+    charts={d:[Note(0.5,0.6,(0,1,2,3),source_id="a")] for d in ("expert","hard","medium","easy")}
+    result=validate({"drums":charts},tempo,2)
+    assert not result["passed"]
+    assert any("hands" in e for e in result["errors"])
+
+def test_invalid_beat_map_rejected():
+    with pytest.raises(ValueError):TempoMap([0,0.5,0.4])
+
+def test_cleanup_cuts_sustains_before_next_attack():
+    notes=clean([Note(0,2,(0,)),Note(0.5,1,(1,))],"guitar")
+    assert notes[0].end<notes[1].start
+
+def test_validator_rejects_new_reduction_note():
+    tempo=TempoMap([0,0.5,1,1.5,2])
+    charts=reductions([Note(0.5,0.6,(0,),source_id="original")],"guitar",tempo)
+    charts["easy"][0].source_id="invented"
+    assert not validate({"guitar":charts},tempo,2)["passed"]
+
+def test_electronic_lead_prefers_high_hook_and_deduplicates_stems():
+    guitar=[{"start":1.0,"end":1.2,"pitch":60,"confidence":.9,"source_id":"guitar-0","source":"guitar"}]
+    synth=[{"start":1.01,"end":1.3,"pitch":72,"confidence":.84,"source_id":"other-0","source":"other"}]
+    result=electronic_lead_events([guitar,synth])
+    assert len(result)==1
+    assert result[0]["pitch"]==72
+
+def test_electronic_bass_retriggers_sustained_tone_on_kicks():
+    bass=[[{"start":0.0,"end":1.2,"pitch":40,"confidence":.9,"source_id":"bass-0","source":"bass"}]]
+    drums=[Note(.5,.56,(0,),source_id="kick"),Note(1.5,1.56,(0,),source_id="late")]
+    result=electronic_bass_events(bass,drums)
+    assert [e["start"] for e in result]==[0.0,.5]
+    assert result[1]["pitch"]==40
+    assert result[1]["source"]=="kick"
+
+def test_electronic_lead_consolidates_recurring_octave_harmonics():
+    events=[]
+    for i,pitch in enumerate([68,80,92]*4):
+        events.append({"start":i*.12,"end":i*.12+.2,"pitch":pitch,"confidence":.7 if pitch==80 else .5,"source_id":f"other-{i}","source":"other"})
+    result=electronic_lead_events([events],beat_period=.47)
+    assert {event["pitch"] for event in result}=={80}
+
+def test_electronic_lead_removes_weak_short_texture_events():
+    events=[{"start":i*.15,"end":i*.15+(.05 if i%2 else .2),"pitch":60+i%3,"confidence":.41 if i%2 else .8,"source_id":f"other-{i}","source":"other"} for i in range(24)]
+    result=electronic_lead_events([events],beat_period=.5)
+    assert len(result)==12
+    assert all(event["confidence"]==.8 for event in result)
+
+def test_electronic_mapping_anchors_dominant_pitch_in_center_lane():
+    events=[]
+    for i,pitch in enumerate([68,75,80,80,80,80,84,92]):
+        events.append({"start":i*.2,"end":i*.2+.15,"pitch":pitch,"confidence":.8,"source_id":str(i)})
+    notes=map_pitched(events,"guitar","electronic_lead")
+    by_pitch={note.pitch:note.lanes[0] for note in notes}
+    assert by_pitch[80]==2
+    assert by_pitch[75]==1 and by_pitch[84]==3
+    assert by_pitch[68]==0 and by_pitch[92]==4
+
+def test_electronic_lead_caps_texture_bursts_near_sixteenth_notes():
+    events=[{"start":i*.07,"end":i*.07+.065,"pitch":80,"confidence":.7,"source_id":f"other-{i}","source":"other"} for i in range(12)]
+    result=electronic_lead_events([events],beat_period=60/130)
+    assert all(b["start"]-a["start"]>=.1 for a,b in zip(result,result[1:]))
+
+def test_playability_gate_caps_electronic_roles_at_two_attacks_per_beat():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    notes=[Note(1+i*.07,1+i*.07+.065,(i%5,),confidence=.6+i*.01,source_id=str(i)) for i in range(12)]
+    result,report=enforce_playability(notes,"guitar",tempo,"electronic")
+    assert report["removed"]>0
+    assert report["max_attacks_per_beat"]==2
+    assert all(b.start-a.start>=.125-1e-9 for a,b in zip(result,result[1:]))
+
+def test_playability_gate_prefers_legitimate_holds():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    notes=[Note(1+i*.04,1+i*.04+.065,(i,),confidence=.8,source_id=str(i)) for i in range(3)]
+    notes.append(Note(1.08,1.55,(2,),confidence=.7,source_id="hold"))
+    result,report=enforce_playability(notes,"guitar",tempo,"electronic")
+    assert any(n.source_id=="hold" and n.end-n.start>=.15 for n in result)
+    assert report["holds"]==1
+
+def test_band_profile_allows_clear_sixteenth_note_part():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    notes=[Note(1+i*.125,1+i*.125+.065,(i%5,),source_id=str(i)) for i in range(8)]
+    result,report=enforce_playability(notes,"guitar",tempo,"band")
+    assert len(result)==len(notes)
+    assert report["removed"]==0
+
+def test_band_profile_reduces_unpatterned_crowding():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    notes=[Note(1+i*.045,1+i*.045+.065,(i%5,),confidence=.8-i*.01,source_id=str(i),pitch=48+i) for i in range(4)]
+    result,report=enforce_playability(notes,"guitar",tempo,"band")
+    assert len(result)<len(notes)
+    assert report["max_attacks_per_beat"]==3
+
+def test_pitch_specific_reattack_splits_hold_and_preserves_releases():
+    from basic_pitch.note_creation import model_frames_to_time,MIDI_OFFSET
+    sr=22050
+    y=np.zeros(sr*2,dtype=np.float32)
+    for start,length in ((.50,.28),(.90,.38)):
+        a=int(start*sr); n=int(length*sr); t=np.arange(n)/sr
+        y[a:a+n]+=np.sin(2*np.pi*261.63*t)*np.exp(-t*8)
+    times=model_frames_to_time(180)
+    output={"onset":np.zeros((180,88),dtype=np.float32)}
+    frame=int(np.argmin(abs(times-.90)))
+    output["onset"][frame,60-MIDI_OFFSET]=.8
+    events=[{"start":.50,"end":1.35,"pitch":60,"confidence":.8,"source_id":"other-0","source":"other"}]
+    result=_refine_pitched_articulations(events,output,y,sr,40,100,"other")
+    assert len(result)==2
+    assert result[0]["end"]<result[1]["start"]
+    assert result[1]["source_id"].startswith("other-reattack-")
+    assert all(event["end"]-event["start"]>=.065 for event in result)
+
+def test_map_pitched_preserves_brief_electronic_decay_as_sustain():
+    events=[{"start":1.0,"end":1.105,"pitch":68,"confidence":.8,"source_id":"piano-1"}]
+    note=map_pitched(events,"guitar","electronic_lead")[0]
+    assert note.end-note.start==pytest.approx(.105)
+
+def test_band_mapping_turns_brief_articulation_into_tap():
+    events=[{"start":1.0,"end":1.105,"pitch":48,"confidence":.8,"source_id":"guitar-1"}]
+    note=map_pitched(events,"guitar","range")[0]
+    assert note.end-note.start==pytest.approx(.065)
+
+def test_band_mapping_uses_common_register_despite_high_outlier():
+    events=[]
+    for index,pitch in enumerate([48,48,48,50,51,53,55,58,60,87]):
+        events.append({"start":index*.2,"end":index*.2+.1,"pitch":pitch,"confidence":.8,"source_id":str(index)})
+    notes=map_pitched(events,"guitar","range")
+    riff_lanes={note.lanes[0] for note in notes[:-1]}
+    assert len(riff_lanes)>=4
+    assert notes[0].lanes!=notes[4].lanes
+
+def test_pattern_analysis_finds_repeated_riff_and_checks_contour():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    notes=[]
+    for offset in (0.0,2.0):
+        for step,pitch in enumerate((48,50,53,51)):
+            lane=(0,1,3,2)[step]
+            notes.append(Note(offset+step*.25,offset+step*.25+.065,(lane,),source_id=f"{offset}-{step}",pitch=pitch))
+    report=analyze_patterns(notes,tempo,"guitar")
+    assert report["recurring_pattern_families"]>=1
+    assert report["pattern_supported_attacks"]==8
+    assert report["contour_agreement_ratio"]==1
+    assert report["adjacent_motion_rate"]==pytest.approx(2/3,abs=.001)
+    assert report["wide_jump_rate"]==0
+
+def test_band_guitar_refinement_snaps_jitter_and_removes_wide_shapes():
+    tempo=TempoMap(np.arange(0,4,.5).tolist())
+    notes=[Note(.49,.79,(0,4),source_id="wide",pitch=48),
+           Note(1.01,1.31,(0,2,4),source_id="illegal",pitch=55)]
+    result=refine_band_guitar(notes,tempo)
+    assert result[0].start==pytest.approx(.5)
+    assert result[0].lanes==(0,3)
+    assert all(not (len(note.lanes)==3 and 0 in note.lanes and 4 in note.lanes) for note in result)
+
+def test_band_guitar_uses_local_register_without_octave_compression():
+    tempo=TempoMap(np.arange(0,24,.5).tolist())
+    pitches=[48,48,48,50,51,53,55,48,50,51,87]
+    notes=[Note(1+i*.3,1+i*.3+.065,(1,),confidence=.8,source_id=str(i),pitch=pitch) for i,pitch in enumerate(pitches)]
+    result=refine_band_guitar(notes,tempo)
+    common={}
+    for note in result:
+        if note.pitch<60:common.setdefault(note.pitch,note.lanes[0])
+    assert len({note.lanes[0] for note in result if note.pitch<60})>=4
+    assert common[48]<common[50]<=common[51]<common[53]<=common[55]
+    assert result[-1].pitch==51
+    assert result[-1].lanes==result[4].lanes
+
+def test_band_guitar_wraps_small_intervals_to_adjacent_frets():
+    tempo=TempoMap(np.arange(0,12,.5).tolist())
+    notes=[Note(1,1.065,(0,),source_id="a",pitch=48),Note(1.25,1.315,(4,),source_id="b",pitch=51)]
+    result=refine_band_guitar(notes,tempo)
+    assert abs(result[1].lanes[0]-result[0].lanes[0])<=1
+
+
+def test_band_guitar_keeps_repeated_riff_pitch_on_same_fret():
+    tempo=TempoMap(np.arange(0,12,.5).tolist())
+    pitches=(48,48,50,51,48,48,50,51)
+    notes=[Note(1+i*.2,1+i*.2+.065,(0,),source_id=str(i),pitch=pitch) for i,pitch in enumerate(pitches)]
+    result=refine_band_guitar(notes,tempo)
+    lanes_by_pitch={pitch:{note.lanes[0] for note in result if note.pitch==pitch} for pitch in set(pitches)}
+    assert all(len(lanes)==1 for lanes in lanes_by_pitch.values())
+    assert [result[i].lanes[0] for i in range(4)]==[0,0,1,2]
+
+
+def test_repeated_phrase_stabilizer_reuses_one_playable_shape():
+    tempo=TempoMap(np.arange(0,16,.5).tolist())
+    notes=[]
+    lane_variants=((0,0,1,2),(1,1,3,4),(0,0,2,3))
+    for occurrence,(offset,lanes) in enumerate(zip((0.,2.,4.),lane_variants)):
+        for step,(pitch,lane) in enumerate(zip((48,48,50,51),lanes)):
+            notes.append(Note(offset+step*.25,offset+step*.25+.065,(lane,),confidence=.8,
+                              source_id=f"{occurrence}-{step}",pitch=pitch))
+    result,report=stabilize_repeated_phrases(notes,tempo,"guitar")
+    shapes=[tuple(note.lanes[0] for note in result[index:index+4]) for index in (0,4,8)]
+    assert shapes[0]==shapes[1]==shapes[2]
+    assert tuple(b-a for a,b in zip(shapes[0],shapes[0][1:]))==(0,1,1)
+    assert report["families"]>=1 and report["occurrences"]>=3
+
+
+def test_repeated_phrase_stabilizer_returns_to_same_root_fret():
+    tempo=TempoMap(np.arange(0,16,.5).tolist())
+    notes=[]
+    for occurrence,offset in enumerate((0.,2.,4.)):
+        for step,(pitch,lane) in enumerate(zip((48,50,51,48),(0,2,4,1))):
+            notes.append(Note(offset+step*.25,offset+step*.25+.065,(lane,),confidence=.8,
+                              source_id=f"return-{occurrence}-{step}",pitch=pitch))
+    result,report=stabilize_repeated_phrases(notes,tempo,"guitar")
+    for index in (0,4,8):assert result[index].lanes==result[index+3].lanes
+    assert report["families"]>=1
+
+
+def test_repeated_phrase_stabilizer_projects_transposed_partial_match():
+    tempo=TempoMap(np.arange(0,20,.5).tolist())
+    notes=[]
+    for occurrence,offset in enumerate((0.,2.,4.)):
+        for step,pitch in enumerate((48,48,50,51)):
+            notes.append(Note(offset+step*.25,offset+step*.25+.065,(step%3,),confidence=.8,
+                              source_id=f"base-{occurrence}-{step}",pitch=pitch))
+    for step,pitch in enumerate((53,53,55,48)):
+        notes.append(Note(6+step*.25,6+step*.25+.065,(3,),confidence=.4 if step==3 else .8,
+                          source_id=f"shift-{step}",pitch=pitch))
+    notes.append(Note(7.25,7.315,(4,),confidence=.8,source_id="shift-follow",pitch=53))
+    result,report=stabilize_repeated_phrases(notes,tempo,"guitar")
+    shifted=result[-5:-1]
+    assert [note.pitch for note in shifted]==[53,53,55,56]
+    assert [note.lanes[0] for note in shifted]==[1,1,2,3]
+    assert result[-1].lanes==(1,)
+    assert report["transposed_occurrences"]==1 and report["inferred_notes"]==1
+    assert report["propagated_notes"]==1
+
+
+def test_repeated_phrase_stabilizer_repairs_adjacent_weak_continuation():
+    tempo=TempoMap(np.arange(0,20,.5).tolist())
+    notes=[]
+    for occurrence,offset in enumerate((0.,2.,4.)):
+        for step,pitch in enumerate((48,48,50,51)):
+            notes.append(Note(offset+step*.25,offset+step*.25+.065,(step%3,),confidence=.8,
+                              source_id=f"clean-{occurrence}-{step}",pitch=pitch))
+    for step,(pitch,confidence) in enumerate(zip((48,51,44,51),(.8,.4,.4,.8))):
+        notes.append(Note(6+step*.25,6+step*.25+.065,(4,),confidence=confidence,
+                          source_id=f"noisy-{step}",pitch=pitch))
+    result,report=stabilize_repeated_phrases(notes,tempo,"guitar")
+    repaired=result[-4:]
+    assert [note.pitch for note in repaired]==[48,48,50,51]
+    assert [note.lanes[0] for note in repaired]==[0,0,1,2]
+    assert report["inferred_notes"]==2
+
+
+def test_repeated_phrase_stabilizer_does_not_reach_across_rest():
+    tempo=TempoMap(np.arange(0,20,.5).tolist())
+    notes=[]
+    for occurrence,offset in enumerate((0.,2.,4.)):
+        for step,pitch in enumerate((48,48,50,51)):
+            notes.append(Note(offset+step*.25,offset+step*.25+.065,(step%3,),confidence=.8,
+                              source_id=f"clean-{occurrence}-{step}",pitch=pitch))
+    for step,(time,pitch) in enumerate(zip((6.,6.25,6.5,7.),(53,53,55,48))):
+        notes.append(Note(time,time+.065,(3,),confidence=.4 if step==3 else .8,
+                          source_id=f"partial-{step}",pitch=pitch))
+    result,report=stabilize_repeated_phrases(notes,tempo,"guitar")
+    assert [note.pitch for note in result[-4:]]==[53,53,55,48]
+    assert report["transposed_occurrences"]==0
+
+
+def test_confirmed_transposition_colors_preceding_partial_response():
+    tempo=TempoMap(np.arange(0,20,.5).tolist())
+    notes=[]
+    for occurrence,offset in enumerate((0.,2.,4.)):
+        for step,pitch in enumerate((48,48,50,51)):
+            notes.append(Note(offset+step*.25,offset+step*.25+.065,(step%3,),confidence=.8,
+                              source_id=f"clean-{occurrence}-{step}",pitch=pitch))
+    for step,pitch in enumerate((53,53,55)):
+        notes.append(Note(5.25+step*.25,5.25+step*.25+.065,(4,),confidence=.8,
+                          source_id=f"partial-{step}",pitch=pitch))
+    for step,pitch in enumerate((53,53,55,48)):
+        notes.append(Note(6+step*.25,6+step*.25+.065,(4,),confidence=.4 if step==3 else .8,
+                          source_id=f"shift-{step}",pitch=pitch))
+    result,report=stabilize_repeated_phrases(notes,tempo,"guitar")
+    partial=result[-7:-4]
+    assert [note.lanes[0] for note in partial]==[1,1,2]
+    assert report["transposed_occurrences"]==1
+
+
+def test_transposed_riff_folds_nearby_weak_harmonic_and_chord():
+    tempo=TempoMap(np.arange(0,20,.5).tolist())
+    notes=[]
+    for occurrence,offset in enumerate((0.,2.,4.)):
+        for step,pitch in enumerate((48,48,50,51)):
+            notes.append(Note(offset+step*.25,offset+step*.25+.065,(step%3,),confidence=.8,
+                              source_id=f"base-{occurrence}-{step}",pitch=pitch))
+    for step,pitch in enumerate((53,53,55,48)):
+        notes.append(Note(6+step*.25,6+step*.25+.065,(3,),confidence=.4 if step==3 else .8,
+                          source_id=f"shift-{step}",pitch=pitch))
+    notes.append(Note(7.25,7.315,(0,2),confidence=.45,source_id="weak-harmonic",pitch=48))
+    result,report=stabilize_repeated_phrases(notes,tempo,"guitar")
+    assert result[-1].pitch==53
+    assert result[-1].lanes==(1,)
+    assert report["propagated_notes"]==1
+
+
+def test_band_guitar_lead_focus_uses_monophonic_guide_for_weak_harmonics():
+    times=np.arange(0,1,.01)
+    midi=np.full_like(times,48.0)
+    voiced=np.ones_like(times,dtype=bool)
+    events=[
+        {"start":.10,"end":.25,"pitch":48,"confidence":.62,"source_id":"root","source":"guitar"},
+        {"start":.30,"end":.45,"pitch":51,"confidence":.44,"source_id":"weak","source":"guitar"},
+        {"start":.50,"end":.65,"pitch":48,"confidence":.50,"source_id":"fundamental","source":"guitar"},
+        {"start":.50,"end":.65,"pitch":55,"confidence":.47,"source_id":"harmonic","source":"guitar"},
+    ]
+    result,report=_focus_band_guitar_candidates(events,times,midi,voiced,.375)
+    assert [event["pitch"] for event in result]==[48,48,48]
+    assert report["pitch_corrections"]==1
+    assert report["groups_resolved"]==1
+
+
+def test_band_guitar_lead_focus_preserves_strong_chord():
+    times=np.arange(0,1,.01)
+    midi=np.full_like(times,48.0)
+    voiced=np.ones_like(times,dtype=bool)
+    events=[
+        {"start":.20,"end":.50,"pitch":48,"confidence":.70,"source_id":"a","source":"guitar"},
+        {"start":.20,"end":.50,"pitch":55,"confidence":.64,"source_id":"b","source":"guitar"},
+    ]
+    result,report=_focus_band_guitar_candidates(events,times,midi,voiced,.375)
+    assert [event["pitch"] for event in result]==[48,55]
+    assert report["groups_resolved"]==0
+
+
+def test_band_guitar_lead_focus_anchors_weak_octave_to_recent_register():
+    times=np.arange(0,1.5,.01)
+    midi=np.where(times<.70,48.0,41.0)
+    voiced=np.ones_like(times,dtype=bool)
+    events=[]
+    for index,pitch in enumerate((48,48,50,51)):
+        start=.10+index*.14
+        events.append({"start":start,"end":start+.10,"pitch":pitch,"confidence":.7,
+                       "source_id":f"intro-{index}","source":"guitar"})
+    events.extend([
+        {"start":.75,"end":.90,"pitch":53,"confidence":.50,"source_id":"upper","source":"guitar"},
+        {"start":1.00,"end":1.15,"pitch":41,"confidence":.52,"source_id":"weak-low","source":"guitar"},
+    ])
+    result,report=_focus_band_guitar_candidates(events,times,midi,voiced,.375)
+    assert [event["pitch"] for event in result[-2:]]==[53,53]
+    assert report["octave_anchors"]>=2
+
+
+def test_band_guitar_lead_focus_keeps_two_supported_repeated_attacks():
+    times=np.arange(0,1,.01)
+    midi=np.full_like(times,48.0)
+    voiced=np.ones_like(times,dtype=bool)
+    events=[
+        {"start":.20,"end":.42,"pitch":48,"confidence":.60,"source_id":"first","source":"guitar"},
+        {"start":.34,"end":.53,"pitch":51,"confidence":.48,"source_id":"second","source":"guitar"},
+    ]
+    result,_=_focus_band_guitar_candidates(events,times,midi,voiced,.375)
+    assert [event["pitch"] for event in result]==[48,48]
+
+
+def test_band_guitar_voice_filter_removes_rapid_harmonic_spike():
+    events=[]
+    for index,pitch in enumerate((48,48,55,48,48)):
+        events.append({"start":index*.14,"end":index*.14+.10,"pitch":pitch,
+                       "confidence":.48,"source_id":str(index),"source":"guitar"})
+    result,report=_filter_sequential_lead_outliers(events,.375)
+    assert [event["pitch"] for event in result]==[48,48,48,48]
+    assert report["sequential_outliers_removed"]==1
+
+
+def test_band_guitar_voice_filter_keeps_coherent_high_run():
+    events=[]
+    for index,pitch in enumerate((48,48,60,62,64,48)):
+        events.append({"start":index*.14,"end":index*.14+.10,"pitch":pitch,
+                       "confidence":.5,"source_id":str(index),"source":"guitar"})
+    result,report=_filter_sequential_lead_outliers(events,.375)
+    assert [event["pitch"] for event in result]==[48,48,60,62,64,48]
+    assert report["sequential_outliers_removed"]==0
+
+def test_hard_wraps_quick_green_orange_jump_inward():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    expert=[Note(1,1.065,(0,),source_id="low",pitch=48),Note(1.25,1.315,(4,),source_id="high",pitch=60)]
+    hard=reductions(expert,"guitar",tempo)["hard"]
+    assert [note.lanes for note in hard]==[(0,),(3,)]
+
+def test_reference_conformance_reduces_ambiguous_chords_and_holds(monkeypatch):
+    style={"songs":20,"song_chord_rate":{"p90":.25},"song_three_note_chord_rate":{"p90":.05},"song_hold_rate":{"p90":.20}}
+    monkeypatch.setattr("rb3charts.chart._reference_style",lambda key:style)
+    tempo=TempoMap(np.arange(0,16,.5).tolist())
+    notes=[]
+    for i in range(20):
+        lanes=(0,2,3) if i<8 else ((0,2) if i<12 else (1,))
+        notes.append(Note(i*.3,i*.3+(.4 if i<10 else .065),lanes,confidence=.5+i*.01,source_id=str(i),pitch=48+i%5))
+    result,report=conform_expert_to_reference(notes,tempo,"guitar")
+    assert sum(len(note.lanes)>1 for note in result)<=5
+    assert sum(len(note.lanes)>2 for note in result)<=1
+    assert sum(note.end-note.start>=.22 for note in result)<=4
+    assert report["reference_songs"]==20
+
+def test_fast_hard_reduction_breaks_long_eighth_note_runs():
+    tempo=TempoMap(np.arange(0,8,.375).tolist())
+    expert=[Note(i*.1875,i*.1875+.065,(i%5,),source_id=str(i),pitch=48+i%5) for i in range(16)]
+    hard=reductions(expert,"guitar",tempo)["hard"]
+    assert len(hard)==12
+    assert all(note.lanes!=(0,4) for note in hard)
