@@ -5,6 +5,7 @@ It never creates an audio event or replaces a detected pitch with a fret number.
 """
 from dataclasses import replace
 import numpy as np
+from .motifs import discover_phrase_motifs
 
 
 def select_lead_phrases(source_events):
@@ -161,7 +162,27 @@ def author_guitar_phrases(notes, tempo):
     vocabulary = {}
     phrase_report = []
     indices={id(note):i for i,note in enumerate(result)}
-    for rows in phrases:
+    local_lanes = {}
+    motif_assignments = discover_phrase_motifs(phrases, tempo)
+    baseline = [replace(n) for n in result]
+    for phrase_index, rows in enumerate(phrases):
+        index = indices[id(rows[0])]
+        previous = baseline[index - 1] if index else None
+        period = tempo.seconds_at(tempo.beat_at(rows[0].start) + 1) - rows[0].start
+        if previous is not None and (len(previous.lanes) != 1 or rows[0].start - previous.start > period * .75):
+            previous = None
+        span = baseline[index:index + len(rows)]
+        lanes = _fingering(span, previous)
+        local_lanes[phrase_index] = lanes
+        for note, lane in zip(span, lanes):
+            note.lanes = (lane,)
+    family_lanes = {}
+    for phrase_index, assignment in motif_assignments.items():
+        canonical = assignment["canonical_phrase"]
+        if phrase_index != canonical:
+            continue
+        family_lanes[assignment["family_id"]] = local_lanes[canonical]
+    for phrase_index, rows in enumerate(phrases):
         index=indices[id(rows[0])]
         previous=result[index-1] if index else None
         period=tempo.seconds_at(tempo.beat_at(rows[0].start)+1)-rows[0].start
@@ -182,9 +203,43 @@ def author_guitar_phrases(notes, tempo):
             if _transition_cost(rows[0].pitch-previous.pitch,previous.lanes[0],lanes[0],rows[0].start-previous.start)>=5:
                 lanes=None
                 reused=False
+        motif_info = motif_assignments.get(phrase_index)
+        motif_reused = False
+        motif_reason = "not_matched"
+        if motif_info is not None and previous is None:
+            motif_reason = motif_info["reason"]
+            canonical = family_lanes.get(motif_info["family_id"])
+            if canonical is not None:
+                projected = list(local_lanes[phrase_index])
+                for source, target in motif_info["alignment"]:
+                    if source < len(canonical) and target < len(projected):
+                        projected[target] = canonical[source]
+                if previous is not None:
+                    shifts = range(-min(projected), 5 - max(projected))
+                    if shifts:
+                        shift = min(
+                            shifts,
+                            key=lambda value: _transition_cost(
+                                rows[0].pitch - previous.pitch,
+                                previous.lanes[0],
+                                projected[0] + value,
+                                rows[0].start - previous.start,
+                            ) + .01 * abs(value),
+                        )
+                        projected = [lane + shift for lane in projected]
+                        if _transition_cost(rows[0].pitch - previous.pitch, previous.lanes[0], projected[0],
+                                            rows[0].start - previous.start) >= 5:
+                            projected = local_lanes[phrase_index]
+                if projected != local_lanes[phrase_index]:
+                    motif_reused = True
+                lanes = projected
         if lanes is None:
-            lanes = _fingering(rows,previous)
-            vocabulary.setdefault(signature,lanes)
+            lanes = local_lanes[phrase_index]
+        vocabulary.setdefault(signature,lanes)
+        if previous is not None and previous.pitch == rows[0].pitch and len(previous.lanes) == 1:
+            boundary_delta = previous.lanes[0] - lanes[0]
+            if all(0 <= lane + boundary_delta <= 4 for lane in lanes):
+                lanes = [lane + boundary_delta for lane in lanes]
         before = [n.lanes[0] for n in rows]
         for note, lane in zip(rows, lanes):
             note.lanes = (lane,)
@@ -192,7 +247,10 @@ def author_guitar_phrases(notes, tempo):
                               "source_ids": [n.source_id for n in rows],
                               "pitches": [n.pitch for n in rows], "before": before,
                               "after": lanes, "reused_fingering": reused,
-                              "boundary_fret_shift":shift,"joined_previous_phrase":previous is not None})
+                              "boundary_fret_shift":shift,"joined_previous_phrase":previous is not None,
+                              "motif_family": motif_info["family_id"] if motif_info else None,
+                              "motif_reused": motif_reused,
+                              "motif_reason": motif_reason})
     tails = []
     for i, note in enumerate(result):
         duration = note.end - note.start
