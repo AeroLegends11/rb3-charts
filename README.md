@@ -19,6 +19,17 @@ still require a listening review and Xbox playtest.
 On this computer dependencies are installed in `.venv`. Double-click
 **Launch.cmd**, select or drop a song, enter metadata, and click **Generate charts**.
 
+Double-click **Compare Charts.cmd** to compare a completed review with an official
+gameplay video. Drop the output folder containing `review.html`, paste its YouTube
+link, and open the comparison workspace. The two players appear side by side with
+shared playback controls, an adjustable time offset, slow playback, and buttons
+for recording extra notes, missing notes, lane/pattern errors, timing errors and
+sustain errors. Export the timestamped observations as JSON when finished. The
+reference video and observations are never supplied to chart generation.
+Some uploaders disable embedded playback; the workspace detects that condition
+and provides **Open on YouTube** so the same timestamped review can continue in
+a second window.
+
 - Precision mode uses six-stem Demucs for guitar/keys and fine-tuned Demucs for
   drums/bass/vocals. It is slower and caches its results.
 - Balanced mode uses the six-stem model only.
@@ -70,6 +81,8 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli generate 'C:\Music\EDM Track.flac' --chart-profile electronic
 .\.venv\Scripts\python.exe -m rb3charts.cli batch 'C:\Music\To Chart'
 .\.venv\Scripts\python.exe -m rb3charts.cli package 'C:\Path\To\Reviewed_Output'
+.\.venv\Scripts\python.exe -m rb3charts.cli compare-video 'C:\Path\To\Reviewed_Output' 'https://www.youtube.com/watch?v=VIDEO_ID'
+.\.venv\Scripts\python.exe -m rb3charts.cli compare 'C:\Path\To\Generated_Output' 'C:\Path\To\Official\notes.mid'
 .\.venv\Scripts\python.exe -m rb3charts.cli demo --compile
 .\.venv\Scripts\python.exe -m pytest -q
 ```
@@ -88,6 +101,21 @@ Useful options:
 - `--stems 'C:\Music\MyStems'` to reuse properly aligned stems
 - `--confidence 0.45` to omit more uncertain notes
 - `--onyx 'C:\Tools\onyx.exe'` to select another Onyx CLI
+
+### Comparing generated charts
+
+The normal comparison workflow uses **Compare Charts.cmd** and needs only an
+RB3 Charts review folder plus a YouTube gameplay-chart URL. Set the time offset
+once so the same musical moment is visible in both players, then use the finding
+buttons while reviewing. The exported JSON gives later charting changes a stable
+list of song times and error types to check again.
+
+When a legally obtained official `notes.mid` is available, the `compare` command
+adds exact attack precision/recall, timing error, lane and chord agreement,
+sustain error, recurring-pattern coverage, and sixteen-beat region summaries.
+It accepts either a MIDI path or a folder containing `midi/notes.mid`,
+`import/notes.mid`, or `notes.mid`. Results go to the ignored `comparisons/`
+folder as HTML, Markdown and JSON. Reference notes are read only for reporting.
 
 Supplied stems must use the same start time and length as the original audio and
 be named `guitar.wav`, `bass.wav`, `drums.wav`, and optionally `piano.wav`. They

@@ -2,6 +2,7 @@
 .research/
 tools/
 output/
+comparisons/
 cache/
 input/
 __pycache__/

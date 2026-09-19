@@ -96,6 +96,14 @@ Add generated-versus-human comparisons with explicit time alignment and provenan
 Never substitute reference notes into generated output. Distinguish event-level
 similarity from audio similarity; the latter needs independent audio features.
 
+The first independent comparison workflow is complete: `Compare Charts.cmd`
+accepts a generated review folder and YouTube gameplay-chart URL, presents both
+players with an adjustable synchronization offset, and exports timestamped human
+observations. The CLI also performs read-only, onset-aligned MIDI comparisons when
+an official chart MIDI is locally available. Automatic note extraction from video
+is a later measured computer-vision task; the current video mode does not claim
+machine-derived note accuracy.
+
 ## 5. Tempo and broader musical structure
 
 Address accelerating electronic tempo independently from motif fingering. The

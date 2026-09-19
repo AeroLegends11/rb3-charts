@@ -16,12 +16,26 @@ def main():
     parser=argparse.ArgumentParser(description="Generate local Rock Band 3 draft charts")
     sub=parser.add_subparsers(dest="command")
     sub.add_parser("gui")
+    sub.add_parser("compare-gui",help="Open the folder-and-video comparison app")
     replay_parser=sub.add_parser("replay",help="Diagnose authoring from cached post-voice-selection pitched events")
     replay_parser.add_argument("folder",type=Path)
     replay_parser.add_argument("--output",type=Path,default=Path("output"))
     replay_parser.add_argument("--instrument",choices=["guitar","bass","keys"],default="guitar")
     replay_parser.add_argument("--start",type=float,default=0)
     replay_parser.add_argument("--end",type=float)
+    compare_parser=sub.add_parser("compare",help="Compare a generated chart with a finished five-lane reference MIDI")
+    compare_parser.add_argument("generated",type=Path,help="Generated notes.mid or output folder")
+    compare_parser.add_argument("reference",type=Path,help="Reference notes.mid or folder")
+    compare_parser.add_argument("--output",type=Path,default=Path("comparisons"))
+    compare_parser.add_argument("--instrument",choices=["guitar","bass","drums","keys"],default="guitar")
+    compare_parser.add_argument("--difficulty",choices=["easy","medium","hard","expert"],default="expert")
+    compare_parser.add_argument("--tolerance-beats",type=float,default=0.125)
+    compare_parser.add_argument("--offset-beats",type=float,help="Manual generated-to-reference beat offset")
+    video_parser=sub.add_parser("compare-video",help="Compare a review folder beside an official YouTube gameplay video")
+    video_parser.add_argument("folder",type=Path,help="RB3 Charts output folder containing review.html")
+    video_parser.add_argument("video_url")
+    video_parser.add_argument("--output",type=Path,default=Path("comparisons"))
+    video_parser.add_argument("--no-open",action="store_true")
     demo=sub.add_parser("demo")
     demo.add_argument("--compile",action="store_true")
     demo.add_argument("--output",type=Path,default=Path("output"))
@@ -54,10 +68,32 @@ def main():
     if args.command in (None,"gui"):
         from .gui import launch
         return launch()
+    if args.command=="compare-gui":
+        from .compare_gui import launch
+        return launch()
     if args.command=="replay":
         from .replay import replay
         result=replay(args.folder,args.output,args.instrument,args.start,args.end)
         print(result["report"])
+        return 0
+    if args.command=="compare":
+        from .compare import compare_charts
+        report=compare_charts(args.generated,args.reference,args.output,args.instrument,args.difficulty,args.tolerance_beats,args.offset_beats)
+        print(report["output"]["html"])
+        return 0
+    if args.command=="compare-video":
+        from .video_compare import create_video_comparison,start_comparison_server
+        result=create_video_comparison(args.folder,args.video_url,args.output,False)
+        print(result["html"])
+        if not args.no_open:
+            import webbrowser
+            server,url=start_comparison_server(result)
+            print(f"Serving {url} - press Ctrl+C when finished")
+            webbrowser.open(url)
+            try:
+                from threading import Event
+                Event().wait()
+            except KeyboardInterrupt:server.shutdown()
         return 0
     from .pipeline import generate,batch,package_existing
     if args.command=="analyze-reference":
