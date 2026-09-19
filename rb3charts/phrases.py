@@ -214,22 +214,6 @@ def author_guitar_phrases(notes, tempo):
                 for source, target in motif_info["alignment"]:
                     if source < len(canonical) and target < len(projected):
                         projected[target] = canonical[source]
-                if previous is not None:
-                    shifts = range(-min(projected), 5 - max(projected))
-                    if shifts:
-                        shift = min(
-                            shifts,
-                            key=lambda value: _transition_cost(
-                                rows[0].pitch - previous.pitch,
-                                previous.lanes[0],
-                                projected[0] + value,
-                                rows[0].start - previous.start,
-                            ) + .01 * abs(value),
-                        )
-                        projected = [lane + shift for lane in projected]
-                        if _transition_cost(rows[0].pitch - previous.pitch, previous.lanes[0], projected[0],
-                                            rows[0].start - previous.start) >= 5:
-                            projected = local_lanes[phrase_index]
                 if projected != local_lanes[phrase_index]:
                     motif_reused = True
                 lanes = projected
