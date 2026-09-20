@@ -354,20 +354,22 @@ continues to use its existing separate backend and diagnostics.
 
 Both Band and Electronic Guitar now receive a phrase pass after playability and
 before lower difficulties are derived. It groups single-note passages at rests,
-chords and eight-beat boundaries. Phrases with up to five distinct pitches use
-distinct adjacent frets. Larger pitch ranges use a whole-sequence cost balancing
-melodic direction, repeated pitches, hand movement and local register. Identical
-relative-pitch/rhythm phrases reuse their fingering, including transpositions.
-Chords and meaningful long holds remain; short tails become taps. Every attack's
-time, source ID and detected pitch are preserved by this pass.
+chords and eight-beat boundaries. Brief chord barriers still preserve nearby
+single-note continuity for returning riffs, but they do not create or infer new
+attacks. Phrases with up to five distinct pitches use distinct adjacent frets.
+Larger pitch ranges use a whole-sequence cost balancing melodic direction,
+repeated pitches, hand movement and local register. Identical relative-pitch/
+rhythm phrases reuse their fingering, including transpositions. Chords and
+meaningful long holds remain; short tails become taps. Every attack's time,
+source ID and detected pitch are preserved by this pass.
 
 `analysis/phrase-authoring.json` records each phrase's pitches, old/new frets,
-reused fingering, tail changes and contour diagnostics. This is a heuristic
-authoring layer, not a trained imitation of professional charters. It cannot
-recover notes that transcription missed, and ranges wider than five frets may
-still need hand-position resets. Electronic tempo acceleration detection remains
-unfinished: the constant-tempo assumption still needs correction for songs such
-as Less Talk More Rokk. Reference charts are used for validation, never copied
-into the generated output.
+reused fingering, continuity source, tail changes and contour diagnostics. This
+is a heuristic authoring layer, not a trained imitation of professional
+charters. It cannot recover notes that transcription missed, and ranges wider
+than five frets may still need hand-position resets. Electronic tempo
+acceleration detection remains unfinished: the constant-tempo assumption still
+needs correction for songs such as Less Talk More Rokk. Reference charts are
+used for validation, never copied into the generated output.
 
 See [docs/RESEARCH.md](docs/RESEARCH.md) for sources, decisions and tool licensing.
