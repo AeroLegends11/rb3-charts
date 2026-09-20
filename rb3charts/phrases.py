@@ -96,7 +96,45 @@ def _transition_cost(interval, old, new, gap):
     return musical+ergonomic
 
 
-def _fingering(rows, previous=None):
+def _phrase_signature(rows, tempo):
+    root = rows[0].pitch
+    return (tuple(note.pitch - root for note in rows),
+            tuple(round((tempo.beat_at(b.start) - tempo.beat_at(a.start)) * 12)
+                  for a, b in zip(rows, rows[1:])))
+
+
+def _motif_constraints(notes, tempo, window=4):
+    ordered = [note for note in sorted(notes, key=lambda note: note.start) if len(note.lanes) == 1]
+    repeated = {}
+    for index in range(len(ordered) - window + 1):
+        rows = ordered[index:index + window]
+        gaps = [tempo.beat_at(b.start) - tempo.beat_at(a.start) for a, b in zip(rows, rows[1:])]
+        if any(gap <= 0 or gap > 2 for gap in gaps):
+            continue
+        signature = (tuple(int(round(b.pitch - a.pitch)) for a, b in zip(rows, rows[1:])),
+                     tuple(round(gap * 4) / 4 for gap in gaps))
+        repeated.setdefault(signature, []).append((index, rows))
+    constraints = {}
+    for occurrences in repeated.values():
+        distinct = []
+        for occurrence in occurrences:
+            if not distinct or occurrence[0] - distinct[-1][0] >= window:
+                distinct.append(occurrence)
+        if len(distinct) < 2:
+            continue
+        for _, rows in distinct:
+            for note in rows:
+                constraints[id(note)] = note.lanes[0]
+    return constraints
+
+
+def _constraint_cost(lanes, preferred):
+    if preferred is None:
+        return 0
+    return float(sum(abs(lane - target) for lane, target in zip(lanes, preferred) if target is not None))
+
+
+def _fingering(rows, previous=None, preferred=None):
     pitches = [note.pitch for note in rows]
     unique = sorted(set(pitches))
     if len(unique) <= 5:
@@ -104,15 +142,23 @@ def _fingering(rows, previous=None):
         # pitch elsewhere cannot flatten this riff into a single color.
         options=[[offset+unique.index(pitch) for pitch in pitches] for offset in range(6-len(unique))]
         if previous is None:
-            return options[(5-len(unique))//2]
-        best=min(options,key=lambda lanes:_transition_cost(pitches[0]-previous.pitch,
-                 previous.lanes[0],lanes[0],rows[0].start-previous.start))
+            if preferred is None:
+                return options[(5-len(unique))//2]
+            center = np.mean([target for target in preferred if target is not None])
+            return min(options, key=lambda lanes: (_constraint_cost(lanes, preferred),
+                                                 abs(np.mean(lanes) - center)))
+        best=min(options,key=lambda lanes:(_transition_cost(pitches[0]-previous.pitch,
+                 previous.lanes[0],lanes[0],rows[0].start-previous.start)
+                 + .6 * _constraint_cost(lanes, preferred)))
         if _transition_cost(pitches[0]-previous.pitch,previous.lanes[0],best[0],rows[0].start-previous.start)<5:
             return best
         # No rigid pitch dictionary joins this boundary naturally. Let the
         # sequence optimizer preserve the incoming note and choose a later reset.
     target = np.interp(pitches, unique, np.linspace(0, 4, len(unique)))
     costs = .2 * (np.arange(5) - target[0])**2
+    if preferred is not None:
+        if preferred[0] is not None:
+            costs += .6 * np.abs(np.arange(5) - preferred[0])
     if previous is not None:
         costs+=np.array([_transition_cost(pitches[0]-previous.pitch,previous.lanes[0],lane,
                                          rows[0].start-previous.start) for lane in range(5)])
@@ -122,7 +168,10 @@ def _fingering(rows, previous=None):
         matrix = np.zeros((5, 5))
         for old in range(5):
             for new in range(5):
-                matrix[old, new] = costs[old] + _transition_cost(interval,old,new,rows[i].start-rows[i-1].start) + .2 * (new - target[i])**2
+                matrix[old, new] = (costs[old]
+                                    + _transition_cost(interval,old,new,rows[i].start-rows[i-1].start)
+                                    + .2 * (new - target[i])**2
+                                    + (.6 * abs(new - preferred[i]) if preferred is not None and preferred[i] is not None else 0))
         links.append(np.argmin(matrix, axis=0))
         costs = np.min(matrix, axis=0)
     lane = int(np.argmin(costs))
@@ -137,7 +186,9 @@ def author_guitar_phrases(notes, tempo):
     """Sight-reading pass: phrase contour, repeatable fingering, short tails.
 
     Preserve event identity, pitch, attack timing and count. Chords are barriers
-    to single-note fingering; their already-mapped voicing is retained.
+    to single-note fingering; their already-mapped voicing is retained. Upstream
+    repeated-phrase stabilization can contribute soft lane templates, but this
+    pass owns the final Expert fret assignment.
     """
     result = [replace(n) for n in sorted(notes, key=lambda n: n.start)]
     phrases = []
@@ -158,33 +209,52 @@ def author_guitar_phrases(notes, tempo):
         current.append(note)
     if current:
         phrases.append(current)
+    motif_constraints = _motif_constraints(result, tempo)
     vocabulary = {}
+    constrained_vocabulary = {}
     phrase_report = []
     indices={id(note):i for i,note in enumerate(result)}
+    constrained = 0
     for rows in phrases:
         index=indices[id(rows[0])]
         previous=result[index-1] if index else None
         period=tempo.seconds_at(tempo.beat_at(rows[0].start)+1)-rows[0].start
         if previous is not None and (len(previous.lanes)!=1 or rows[0].start-previous.start>period*.75):
             previous=None
-        root = rows[0].pitch
-        signature = (tuple(n.pitch - root for n in rows),
-                     tuple(round((tempo.beat_at(b.start) - tempo.beat_at(a.start)) * 12)
-                           for a, b in zip(rows, rows[1:])))
-        reused = signature in vocabulary
-        lanes = vocabulary.get(signature)
+        signature = _phrase_signature(rows, tempo)
+        preferred = [motif_constraints.get(id(note)) for note in rows]
+        constrained_phrase = all(target is not None for target in preferred)
+        preferred = preferred if constrained_phrase else None
+        constraint_key = (signature, tuple(preferred)) if preferred is not None else None
+        constrained += constrained_phrase
+        lanes = constrained_vocabulary.get(constraint_key) if constraint_key is not None else None
+        reused = lanes is not None
+        if lanes is None:
+            lanes = vocabulary.get(signature)
+            reused = lanes is not None
+        if lanes is not None and preferred is not None and _constraint_cost(lanes, preferred):
+            candidate = _fingering(rows, previous, preferred=preferred)
+            if _constraint_cost(candidate, preferred) < _constraint_cost(lanes, preferred):
+                lanes = candidate
+                reused = False
+                constrained_vocabulary[constraint_key] = lanes
         shift=0
         if lanes is not None and previous is not None:
             shift=min(range(-min(lanes),5-max(lanes)),key=lambda s:
                       _transition_cost(rows[0].pitch-previous.pitch,previous.lanes[0],lanes[0]+s,
-                                       rows[0].start-previous.start)+.01*abs(s))
+                                       rows[0].start-previous.start)
+                      + .6 * _constraint_cost([lane+s for lane in lanes], preferred)
+                      + .01*abs(s))
             lanes=[lane+shift for lane in lanes]
             if _transition_cost(rows[0].pitch-previous.pitch,previous.lanes[0],lanes[0],rows[0].start-previous.start)>=5:
                 lanes=None
                 reused=False
         if lanes is None:
-            lanes = _fingering(rows,previous)
-            vocabulary.setdefault(signature,lanes)
+            lanes = _fingering(rows,previous,preferred=preferred)
+            if constraint_key is not None:
+                constrained_vocabulary[constraint_key] = lanes
+            else:
+                vocabulary.setdefault(signature,lanes)
         before = [n.lanes[0] for n in rows]
         for note, lane in zip(rows, lanes):
             note.lanes = (lane,)
@@ -192,7 +262,8 @@ def author_guitar_phrases(notes, tempo):
                               "source_ids": [n.source_id for n in rows],
                               "pitches": [n.pitch for n in rows], "before": before,
                               "after": lanes, "reused_fingering": reused,
-                              "boundary_fret_shift":shift,"joined_previous_phrase":previous is not None})
+                              "boundary_fret_shift":shift,"joined_previous_phrase":previous is not None,
+                              "motif_constrained": constrained_phrase})
     tails = []
     for i, note in enumerate(result):
         duration = note.end - note.start
@@ -208,7 +279,8 @@ def author_guitar_phrases(notes, tempo):
                  if len(a.lanes) == len(b.lanes) == 1 and b.start - a.start < .8]
         return {"collapsed_pitch_changes": sum(a.pitch != b.pitch and a.lanes == b.lanes for a,b in pairs),
                 "reversed_pitch_changes": sum((b.pitch-a.pitch)*(b.lanes[0]-a.lanes[0]) < 0 for a,b in pairs)}
-    return result, {"method": "phrase-local fingering with whole-sequence ergonomic costs",
+    return result, {"method": "final phrase authoring with bounded repeated-phrase lane constraints",
                     "before": contour(sorted(notes, key=lambda n:n.start)), "after": contour(result),
                     "phrases": phrase_report, "short_tails_removed": tails,
+                    "motif_constrained_phrases": constrained,
                     "notes_added": 0, "notes_removed": 0}
