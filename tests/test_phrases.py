@@ -149,6 +149,19 @@ def test_short_chord_barrier_does_not_force_strong_variation():
     assert not report["phrases"][1]["reused_fingering"]
 
 
+def test_long_sustain_before_chord_does_not_fake_nearby_continuity():
+    notes = [
+        Note(1.0,2.9,(0,),.9,"hold",60),
+        Note(3.0,3.1,(0,2),.9,"chord",55),
+        Note(3.25,3.34,(4,),.9,"return-0",60),
+        Note(3.5,3.59,(4,),.9,"return-1",62),
+        Note(3.75,3.84,(4,),.9,"return-2",64),
+    ]
+    _,report=author_guitar_phrases(notes,grid())
+    assert report["phrases"][1]["continuity_source"] == "none"
+    assert not report["phrases"][1]["joined_previous_phrase"]
+
+
 def test_phrase_motif_reuses_transposed_shape_without_pitch_edits():
     notes=[]
     for offset,pitches in ((1.0,(60,62,64,65)),(4.0,(67,69,71,72))):
