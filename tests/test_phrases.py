@@ -138,6 +138,24 @@ def test_related_riff_with_small_pitch_change_reuses_lane_shape_and_reports_matc
                for row in report["motif_matching"]["accepted"])
 
 
+def test_three_note_related_riff_gets_motif_constraint_from_short_window():
+    notes = []
+    for offset, pitches, lanes, tag in (
+            (1.0, (60, 62, 64), (0, 1, 2), "a"),
+            (4.0, (63, 65, 68), (4, 4, 4), "b")):
+        for step, (pitch, lane) in enumerate(zip(pitches, lanes)):
+            notes.append(Note(offset + step * .125, offset + step * .125 + .11, (lane,), .8,
+                              f"{tag}-{step}", pitch))
+    result, report = author_guitar_phrases(notes, grid())
+    first = [note.lanes[0] for note in result[:3]]
+    second = [note.lanes[0] for note in result[3:]]
+    assert [b - a for a, b in zip(first[:2], first[1:])] == [b - a for a, b in zip(second[:2], second[1:])]
+    assert report["phrases"][1]["motif_constrained"]
+    assert report["motif_matching"]["windows_considered"] >= 2
+    assert any(row["reason"] == "accepted" and len(row["alignment"]) == 3
+               for row in report["motif_matching"]["accepted"])
+
+
 def test_offset_insert_alignment_constrains_shared_subsequence_without_crossing_boundaries():
     notes = []
     for step, (pitch, lane) in enumerate(zip((60, 62, 64, 65, 64), (0, 1, 2, 3, 2))):

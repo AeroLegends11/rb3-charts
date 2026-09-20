@@ -103,7 +103,7 @@ def _phrase_signature(rows, tempo):
                   for a, b in zip(rows, rows[1:])))
 
 
-def _motif_windows(phrases, tempo, min_window=4, max_window=5):
+def _motif_windows(phrases, tempo, min_window=3, max_window=5):
     windows = []
     for phrase_index, rows in enumerate(phrases):
         for start in range(len(rows) - min_window + 1):
