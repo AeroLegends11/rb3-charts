@@ -118,3 +118,36 @@ def test_motif_constraints_do_not_flatten_strong_variation():
     assert variation == [0, 1, 2, 3]
     assert report["motif_constrained_phrases"] == 2
     assert not report["phrases"][2]["motif_constrained"]
+    assert report["motif_matching"]["matches_rejected"] > 0
+
+
+def test_related_riff_with_small_pitch_change_reuses_lane_shape_and_reports_match():
+    notes = []
+    for offset, pitches, lanes, tag in (
+            (1.0, (60, 62, 64, 65, 64), (0, 1, 2, 3, 2), "a"),
+            (4.0, (63, 65, 67, 68, 70), (1, 2, 3, 4, 4), "b")):
+        for step, (pitch, lane) in enumerate(zip(pitches, lanes)):
+            notes.append(Note(offset + step * .125, offset + step * .125 + .11, (lane,), .8,
+                              f"{tag}-{step}", pitch))
+    result, report = author_guitar_phrases(notes, grid())
+    first = [note.lanes[0] for note in result[:5]]
+    second = [note.lanes[0] for note in result[5:]]
+    assert [b - a for a, b in zip(first[:4], first[1:4])] == [b - a for a, b in zip(second[:4], second[1:4])]
+    assert report["phrases"][1]["motif_constrained"]
+    assert any(row["reason"] == "accepted" and row["confidence"] >= .72
+               for row in report["motif_matching"]["accepted"])
+
+
+def test_offset_insert_alignment_constrains_shared_subsequence_without_crossing_boundaries():
+    notes = []
+    for step, (pitch, lane) in enumerate(zip((60, 62, 64, 65, 64), (0, 1, 2, 3, 2))):
+        notes.append(Note(1 + step * .125, 1 + step * .125 + .11, (lane,), .8, f"base-{step}", pitch))
+    for step, (pitch, lane) in enumerate(zip((58, 60, 62, 64, 65, 64), (4, 4, 3, 2, 1, 0))):
+        notes.append(Note(3 + step * .125, 3 + step * .125 + .11, (lane,), .8, f"shift-{step}", pitch))
+    original = [(note.start, note.source_id, note.pitch) for note in notes]
+    result, report = author_guitar_phrases(notes, grid())
+    assert [(note.start, note.source_id, note.pitch) for note in result] == original
+    assert len(report["phrases"]) == 2
+    inserted = [note.lanes[0] for note in result if note.source_id.startswith("shift-")]
+    assert inserted[1:5] == [1, 2, 3, 4]
+    assert any(row["edits"] == 1 and row["reason"] == "accepted" for row in report["motif_matching"]["accepted"])

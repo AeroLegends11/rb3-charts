@@ -103,35 +103,214 @@ def _phrase_signature(rows, tempo):
                   for a, b in zip(rows, rows[1:])))
 
 
-def _motif_constraints(notes, tempo, window=4):
-    ordered = [note for note in sorted(notes, key=lambda note: note.start) if len(note.lanes) == 1]
-    repeated = {}
-    for index in range(len(ordered) - window + 1):
-        rows = ordered[index:index + window]
-        gaps = [tempo.beat_at(b.start) - tempo.beat_at(a.start) for a, b in zip(rows, rows[1:])]
-        if any(gap <= 0 or gap > 2 for gap in gaps):
-            continue
-        signature = (tuple(int(round(b.pitch - a.pitch)) for a, b in zip(rows, rows[1:])),
-                     tuple(round(gap * 4) / 4 for gap in gaps))
-        repeated.setdefault(signature, []).append((index, rows))
-    constraints = {}
-    for occurrences in repeated.values():
-        distinct = []
-        for occurrence in occurrences:
-            if not distinct or occurrence[0] - distinct[-1][0] >= window:
-                distinct.append(occurrence)
-        if len(distinct) < 2:
-            continue
-        for _, rows in distinct:
-            for note in rows:
-                constraints[id(note)] = note.lanes[0]
-    return constraints
+def _motif_windows(phrases, tempo, min_window=4, max_window=5):
+    windows = []
+    for phrase_index, rows in enumerate(phrases):
+        for start in range(len(rows) - min_window + 1):
+            stop = min(len(rows), start + max_window)
+            for end in range(start + min_window, stop + 1):
+                window = rows[start:end]
+                beat_gaps = [tempo.beat_at(b.start) - tempo.beat_at(a.start) for a, b in zip(window, window[1:])]
+                if any(gap <= 0 or gap > 2 for gap in beat_gaps):
+                    continue
+                windows.append({
+                    "phrase_index": phrase_index,
+                    "start": start,
+                    "rows": window,
+                    "beat_gaps": beat_gaps,
+                    "start_time": window[0].start,
+                })
+    return sorted(windows, key=lambda row: (row["start_time"], row["phrase_index"], row["start"]))
+
+
+def _motif_alignment(a, b, max_edits=1):
+    rows_a, rows_b = a["rows"], b["rows"]
+    if abs(len(rows_a) - len(rows_b)) > max_edits:
+        return {"accepted": False, "reason": "length_gap_too_large"}
+    transpose_seed = [rows_b[0].pitch - rows_a[0].pitch]
+    overlap = min(len(rows_a), len(rows_b))
+    transpose_seed.append(float(np.median([rows_b[i].pitch - rows_a[i].pitch for i in range(overlap)])))
+    transpose_seed.extend(float(rows_b[j].pitch - rows_a[i].pitch)
+                          for i in range(len(rows_a)) for j in range(len(rows_b)))
+    transposes = sorted(set(int(round(seed)) for seed in transpose_seed))
+    best = None
+    for transpose in transposes:
+        n, m = len(rows_a), len(rows_b)
+        costs = np.full((n + 1, m + 1), float("inf"))
+        links = [[None] * (m + 1) for _ in range(n + 1)]
+        costs[0, 0] = 0
+        for i in range(1, n + 1):
+            costs[i, 0] = i
+            links[i][0] = (i - 1, 0, "delete", 1)
+        for j in range(1, m + 1):
+            costs[0, j] = j
+            links[0][j] = (0, j - 1, "insert", 1)
+        for i in range(1, n + 1):
+            for j in range(1, m + 1):
+                pitch_error = abs((rows_b[j - 1].pitch - rows_a[i - 1].pitch) - transpose)
+                gap_a = a["beat_gaps"][i - 2] if i > 1 else None
+                gap_b = b["beat_gaps"][j - 2] if j > 1 else None
+                rhythm_error = abs(gap_a - gap_b) if gap_a is not None and gap_b is not None else 0.0
+                contour_a = int(np.sign(rows_a[i - 1].pitch - rows_a[i - 2].pitch)) if i > 1 else 0
+                contour_b = int(np.sign(rows_b[j - 1].pitch - rows_b[j - 2].pitch)) if j > 1 else 0
+                lane_a = int(np.sign(rows_a[i - 1].lanes[0] - rows_a[i - 2].lanes[0])) if i > 1 else 0
+                lane_b = int(np.sign(rows_b[j - 1].lanes[0] - rows_b[j - 2].lanes[0])) if j > 1 else 0
+                contour_ok = contour_a == 0 or contour_b == 0 or contour_a == contour_b
+                lane_ok = lane_a == 0 or lane_b == 0 or lane_a == lane_b
+                substitute = 0 if pitch_error <= 1 and rhythm_error <= .25 and contour_ok else 1
+                options = (
+                    (costs[i - 1, j] + 1, (i - 1, j, "delete", 1)),
+                    (costs[i, j - 1] + 1, (i, j - 1, "insert", 1)),
+                    (costs[i - 1, j - 1] + substitute, (i - 1, j - 1, "match", substitute)),
+                )
+                value, link = min(options, key=lambda row: (row[0], row[1][2] != "match"))
+                costs[i, j] = value
+                links[i][j] = link
+        total = int(costs[n, m])
+        i, j = n, m
+        aligned = []
+        pitch_hits = rhythm_hits = contour_hits = lane_hits = 0
+        edits = 0
+        max_pitch_error = 0
+        while i or j:
+            prev_i, prev_j, action, penalty = links[i][j]
+            if action == "match":
+                aligned.append((prev_i, prev_j))
+                edits += penalty
+                aa, bb = rows_a[prev_i], rows_b[prev_j]
+                pitch_error = abs((bb.pitch - aa.pitch) - transpose)
+                max_pitch_error = max(max_pitch_error, pitch_error)
+                pitch_hits += pitch_error <= 1
+                if prev_i and prev_j:
+                    gap_error = abs(a["beat_gaps"][prev_i - 1] - b["beat_gaps"][prev_j - 1])
+                    rhythm_hits += gap_error <= .25
+                    contour_a = int(np.sign(aa.pitch - rows_a[prev_i - 1].pitch))
+                    contour_b = int(np.sign(bb.pitch - rows_b[prev_j - 1].pitch))
+                    lane_a = int(np.sign(aa.lanes[0] - rows_a[prev_i - 1].lanes[0]))
+                    lane_b = int(np.sign(bb.lanes[0] - rows_b[prev_j - 1].lanes[0]))
+                    contour_hits += contour_a == 0 or contour_b == 0 or contour_a == contour_b
+                    lane_hits += lane_a == 0 or lane_b == 0 or lane_a == lane_b
+            else:
+                edits += penalty
+            i, j = prev_i, prev_j
+        aligned.reverse()
+        compared = max(1, len(aligned))
+        linked = max(1, sum(1 for ia, ib in aligned if ia > 0 and ib > 0))
+        pitch_score = pitch_hits / compared
+        rhythm_score = rhythm_hits / linked
+        contour_score = contour_hits / linked
+        lane_score = lane_hits / linked
+        confidence = (.45 * pitch_score + .25 * rhythm_score + .2 * contour_score + .1 * lane_score)
+        accepted = (total <= max_edits and len(aligned) >= 3 and pitch_score >= .6
+                    and confidence >= .72 and max_pitch_error <= 5)
+        candidate = {
+            "accepted": accepted,
+            "transpose": transpose,
+            "edits": total,
+            "pitch_score": round(pitch_score, 3),
+            "rhythm_score": round(rhythm_score, 3),
+            "contour_score": round(contour_score, 3),
+            "lane_shape_score": round(lane_score, 3),
+            "confidence": round(confidence, 3),
+            "max_pitch_error": round(float(max_pitch_error), 3),
+            "alignment": aligned,
+            "reason": "accepted" if accepted else ("confidence_below_threshold" if total <= max_edits else "edit_distance_exceeded"),
+        }
+        if best is None or candidate["confidence"] > best["confidence"] or (
+                candidate["confidence"] == best["confidence"] and candidate["edits"] < best["edits"]):
+            best = candidate
+    return best or {"accepted": False, "reason": "no_alignment"}
+
+
+def _project_shape(reference_rows, alignment, transpose):
+    if not alignment:
+        return {}
+    aligned_reference = [reference_rows[source] for source, _ in alignment]
+    lower = -min(note.lanes[0] for note in aligned_reference)
+    upper = 4 - max(note.lanes[0] for note in aligned_reference)
+    shift = int(np.clip(round(float(transpose) / 5.0), lower, upper))
+    if shift == 0 and abs(transpose) >= 4:
+        shift = int(np.clip(int(np.sign(transpose)), lower, upper))
+    lanes = {}
+    for source, target in alignment:
+        lanes[target] = int(np.clip(reference_rows[source].lanes[0] + shift, 0, 4))
+    return lanes
+
+
+def _motif_constraints(phrases, tempo):
+    windows = _motif_windows(phrases, tempo)
+    evidence = {}
+    diagnostics = {"accepted": [], "rejected": []}
+    for i in range(len(windows)):
+        for j in range(i + 1, len(windows)):
+            left, right = windows[i], windows[j]
+            if abs(len(left["rows"]) - len(right["rows"])) > 1:
+                continue
+            if left["phrase_index"] == right["phrase_index"]:
+                left_end = left["start"] + len(left["rows"])
+                right_end = right["start"] + len(right["rows"])
+                if max(left["start"], right["start"]) < min(left_end, right_end):
+                    continue
+            rhythm_delta = abs(np.median(left["beat_gaps"]) - np.median(right["beat_gaps"]))
+            if rhythm_delta > .5:
+                diagnostics["rejected"].append({
+                    "left_start": left["start_time"],
+                    "right_start": right["start_time"],
+                    "reason": "rhythm_gap_too_large",
+                    "rhythm_delta": round(float(rhythm_delta), 3),
+                })
+                continue
+            alignment = _motif_alignment(left, right)
+            row = {
+                "left_start": left["start_time"],
+                "right_start": right["start_time"],
+                "left_source_ids": [note.source_id for note in left["rows"]],
+                "right_source_ids": [note.source_id for note in right["rows"]],
+                "edits": alignment.get("edits"),
+                "confidence": alignment.get("confidence"),
+                "transpose": alignment.get("transpose"),
+                "alignment": alignment.get("alignment", []),
+                "reason": alignment.get("reason"),
+            }
+            if not alignment["accepted"]:
+                diagnostics["rejected"].append(row)
+                continue
+            diagnostics["accepted"].append(row)
+            projected = _project_shape(left["rows"], alignment["alignment"], alignment["transpose"])
+            for source, target in alignment["alignment"]:
+                score = alignment["confidence"]
+                candidate = (left["rows"][source].lanes[0], score)
+                note_id = id(left["rows"][source])
+                if note_id not in evidence or candidate[1] > evidence[note_id][1]:
+                    evidence[note_id] = candidate
+                lane = projected.get(target)
+                if lane is None:
+                    continue
+                candidate = (lane, score)
+                note_id = id(right["rows"][target])
+                if note_id not in evidence or candidate[1] > evidence[note_id][1]:
+                    evidence[note_id] = candidate
+    constraints = {note_id: lane for note_id, (lane, _) in evidence.items()}
+    diagnostics.update({
+        "windows_considered": len(windows),
+        "matches_accepted": len(diagnostics["accepted"]),
+        "matches_rejected": len(diagnostics["rejected"]),
+    })
+    return constraints, diagnostics
 
 
 def _constraint_cost(lanes, preferred):
     if preferred is None:
         return 0
     return float(sum(abs(lane - target) for lane, target in zip(lanes, preferred) if target is not None))
+
+
+def _is_phrase_constrained(preferred):
+    """Require full coverage, except one-note local edits in longer phrases."""
+    covered = [index for index, target in enumerate(preferred) if target is not None]
+    contiguous = bool(covered) and covered[-1] - covered[0] + 1 == len(covered)
+    return (len(covered) == len(preferred) or
+            (len(preferred) >= 5 and len(covered) == len(preferred) - 1 and contiguous))
 
 
 def _fingering(rows, previous=None, preferred=None):
@@ -209,7 +388,7 @@ def author_guitar_phrases(notes, tempo):
         current.append(note)
     if current:
         phrases.append(current)
-    motif_constraints = _motif_constraints(result, tempo)
+    motif_constraints, motif_diagnostics = _motif_constraints(phrases, tempo)
     vocabulary = {}
     constrained_vocabulary = {}
     phrase_report = []
@@ -223,7 +402,7 @@ def author_guitar_phrases(notes, tempo):
             previous=None
         signature = _phrase_signature(rows, tempo)
         preferred = [motif_constraints.get(id(note)) for note in rows]
-        constrained_phrase = all(target is not None for target in preferred)
+        constrained_phrase = _is_phrase_constrained(preferred)
         preferred = preferred if constrained_phrase else None
         constraint_key = (signature, tuple(preferred)) if preferred is not None else None
         constrained += constrained_phrase
@@ -283,4 +462,5 @@ def author_guitar_phrases(notes, tempo):
                     "before": contour(sorted(notes, key=lambda n:n.start)), "after": contour(result),
                     "phrases": phrase_report, "short_tails_removed": tails,
                     "motif_constrained_phrases": constrained,
+                    "motif_matching": motif_diagnostics,
                     "notes_added": 0, "notes_removed": 0}

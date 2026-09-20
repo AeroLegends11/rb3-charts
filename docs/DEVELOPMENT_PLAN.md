@@ -43,6 +43,10 @@ a perfect consistency score. Human listening remains the acceptance gate.
 
 The project already has musical events and several repetition mechanisms:
 
+Status update: final Guitar phrase authoring now applies bounded near-match
+motif alignment (including offset/edit tolerance and match diagnostics) before
+assigning final Expert lanes, instead of relying on exact repeated windows only.
+
 - `events.interpret_events`: four-onset pitch-set/rhythm evidence before mapping.
 - `chart.analyze_patterns` and playability: repeated figures influence retention.
 - `chart.stabilize_repeated_phrases`: Band-only four-note templates/projections.
