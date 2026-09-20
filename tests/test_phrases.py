@@ -21,6 +21,15 @@ def test_phrase_restores_distinct_pitches_and_repeated_shape_without_new_attacks
     assert all(abs(n.end-n.start-.065)<1e-9 for n in result)
 
 
+def test_hammer_on_like_phrase_reuses_repeated_fingering_without_new_attacks():
+    notes = [Note(t+i*.125,t+i*.125+.09,(4,),.85,f"{t}-{i}",pitch)
+             for t in (1,3) for i,pitch in enumerate([60,62,64,62,60])]
+    result, report = author_guitar_phrases(notes,grid())
+    assert [n.lanes for n in result[:5]] == [n.lanes for n in result[5:]]
+    assert report["phrases"][1]["reused_fingering"]
+    assert report["notes_added"] == report["notes_removed"] == 0
+
+
 def test_phrase_preserves_long_hold_chord_and_repeat_pitch():
     notes=[Note(1,2,(0,2),.9,"chord",60), Note(2.2,2.8,(0,),.9,"hold",64),
            Note(3,3.07,(4,),.8,"repeat",64)]
@@ -97,6 +106,60 @@ def test_real_rest_allows_new_hand_position():
     notes=[Note(1,1.065,(4,),.9,'a',60),Note(4,4.065,(0,),.9,'b',72)]
     _,report=author_guitar_phrases(notes,grid())
     assert not report['phrases'][1]['joined_previous_phrase']
+    assert report["phrases"][1]["continuity_source"] == "none"
+
+
+def test_short_chord_barrier_preserves_returning_riff_shape():
+    notes = []
+    for offset,prefix,pitches in ((1.0,"a",(60,62,64,65)),(2.5,"b",(60,62,64,65))):
+        for step,pitch in enumerate(pitches):
+            notes.append(Note(offset+step*.25,offset+step*.25+.09,(4,),.9,f"{prefix}-{step}",pitch))
+    notes[4:4] = [
+        Note(2.0,2.12,(0,2),.9,"chord-0",57),
+        Note(2.25,2.37,(1,3),.9,"chord-1",60),
+    ]
+    result,report=author_guitar_phrases(notes,grid())
+    assert [n.lanes for n in result[:4]] == [n.lanes for n in result[6:10]]
+    assert report["phrases"][1]["continuity_source"] == "through_chord"
+    assert report["phrases"][1]["barrier_chords"] == 2
+    assert report["continuity_summary"]["through_chord"] == 1
+
+
+def test_transposed_return_after_chords_reuses_relative_shape():
+    notes = []
+    for offset,prefix,pitches in ((1.0,"a",(60,62,64,65)),(2.25,"b",(67,69,71,72))):
+        for step,pitch in enumerate(pitches):
+            notes.append(Note(offset+step*.25,offset+step*.25+.09,(0,),.9,f"{prefix}-{step}",pitch))
+    notes[4:4] = [Note(2.0,2.1,(0,2),.9,"chord",55)]
+    result,report=author_guitar_phrases(notes,grid())
+    assert [n.lanes for n in result[:4]] == [n.lanes for n in result[5:9]]
+    assert report["phrases"][1]["continuity_source"] == "through_chord"
+    assert report["phrases"][1]["reused_fingering"]
+
+
+def test_short_chord_barrier_does_not_force_strong_variation():
+    notes = []
+    for offset,prefix,pitches in ((1.0,"a",(60,62,64,65)),(2.25,"b",(60,66,67,70))):
+        for step,pitch in enumerate(pitches):
+            notes.append(Note(offset+step*.25,offset+step*.25+.09,(2,),.9,f"{prefix}-{step}",pitch))
+    notes[4:4] = [Note(2.0,2.1,(0,2),.9,"chord",55)]
+    result,report=author_guitar_phrases(notes,grid())
+    assert [n.lanes for n in result[:4]] != [n.lanes for n in result[5:9]]
+    assert report["phrases"][1]["continuity_source"] == "through_chord"
+    assert not report["phrases"][1]["reused_fingering"]
+
+
+def test_long_sustain_before_chord_does_not_fake_nearby_continuity():
+    notes = [
+        Note(1.0,2.9,(0,),.9,"hold",60),
+        Note(3.0,3.1,(0,2),.9,"chord",55),
+        Note(3.25,3.34,(4,),.9,"return-0",60),
+        Note(3.5,3.59,(4,),.9,"return-1",62),
+        Note(3.75,3.84,(4,),.9,"return-2",64),
+    ]
+    _,report=author_guitar_phrases(notes,grid())
+    assert report["phrases"][1]["continuity_source"] == "none"
+    assert not report["phrases"][1]["joined_previous_phrase"]
 
 
 def test_phrase_motif_reuses_transposed_shape_without_pitch_edits():

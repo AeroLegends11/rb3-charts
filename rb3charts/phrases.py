@@ -134,6 +134,33 @@ def _fingering(rows, previous=None):
     return list(reversed(output))
 
 
+def _continuity_anchor(notes, index, start, tempo):
+    if not index:
+        return None, "none", 0
+    beat = tempo.beat_at(start)
+    period = tempo.seconds_at(beat + 1) - start
+    previous = notes[index - 1]
+    previous_time = previous.start if len(previous.lanes) == 1 else previous.end
+    if start - previous_time > period * .75:
+        return None, "none", 0
+    if len(previous.lanes) == 1:
+        return previous, "adjacent_single", 0
+    barrier_chords = 0
+    for cursor in range(index - 1, -1, -1):
+        note = notes[cursor]
+        if cursor < index - 1 and notes[cursor + 1].start - note.end > period * .75:
+            return None, "none", barrier_chords
+        if len(note.lanes) == 1:
+            barrier_start = notes[cursor + 1].start
+            if (barrier_chords
+                    and beat - tempo.beat_at(barrier_start) <= 2
+                    and beat - tempo.beat_at(note.start) <= 2):
+                return note, "through_chord", barrier_chords
+            return None, "none", barrier_chords
+        barrier_chords += 1
+    return None, "none", barrier_chords
+
+
 def author_guitar_phrases(notes, tempo):
     """Sight-reading pass: phrase contour, repeatable fingering, short tails.
 
@@ -165,12 +192,10 @@ def author_guitar_phrases(notes, tempo):
     local_lanes = {}
     motif_assignments = discover_phrase_motifs(phrases, tempo)
     baseline = [replace(n) for n in result]
+    continuity_summary = {"adjacent_single": 0, "through_chord": 0, "none": 0}
     for phrase_index, rows in enumerate(phrases):
         index = indices[id(rows[0])]
-        previous = baseline[index - 1] if index else None
-        period = tempo.seconds_at(tempo.beat_at(rows[0].start) + 1) - rows[0].start
-        if previous is not None and (len(previous.lanes) != 1 or rows[0].start - previous.start > period * .75):
-            previous = None
+        previous, _, _ = _continuity_anchor(baseline, index, rows[0].start, tempo)
         span = baseline[index:index + len(rows)]
         lanes = _fingering(span, previous)
         local_lanes[phrase_index] = lanes
@@ -184,10 +209,8 @@ def author_guitar_phrases(notes, tempo):
         family_lanes[assignment["family_id"]] = local_lanes[canonical]
     for phrase_index, rows in enumerate(phrases):
         index=indices[id(rows[0])]
-        previous=result[index-1] if index else None
-        period=tempo.seconds_at(tempo.beat_at(rows[0].start)+1)-rows[0].start
-        if previous is not None and (len(previous.lanes)!=1 or rows[0].start-previous.start>period*.75):
-            previous=None
+        previous, continuity_source, barrier_chords = _continuity_anchor(result, index, rows[0].start, tempo)
+        continuity_summary[continuity_source] += 1
         root = rows[0].pitch
         signature = (tuple(n.pitch - root for n in rows),
                      tuple(round((tempo.beat_at(b.start) - tempo.beat_at(a.start)) * 12)
@@ -195,7 +218,7 @@ def author_guitar_phrases(notes, tempo):
         reused = signature in vocabulary
         lanes = vocabulary.get(signature)
         shift=0
-        if lanes is not None and previous is not None:
+        if lanes is not None and continuity_source == "adjacent_single" and previous is not None:
             shift=min(range(-min(lanes),5-max(lanes)),key=lambda s:
                       _transition_cost(rows[0].pitch-previous.pitch,previous.lanes[0],lanes[0]+s,
                                        rows[0].start-previous.start)+.01*abs(s))
@@ -220,7 +243,7 @@ def author_guitar_phrases(notes, tempo):
         if lanes is None:
             lanes = local_lanes[phrase_index]
         vocabulary.setdefault(signature,lanes)
-        if previous is not None and previous.pitch == rows[0].pitch and len(previous.lanes) == 1:
+        if continuity_source == "adjacent_single" and previous is not None and previous.pitch == rows[0].pitch and len(previous.lanes) == 1:
             boundary_delta = previous.lanes[0] - lanes[0]
             if all(0 <= lane + boundary_delta <= 4 for lane in lanes):
                 lanes = [lane + boundary_delta for lane in lanes]
@@ -232,6 +255,8 @@ def author_guitar_phrases(notes, tempo):
                               "pitches": [n.pitch for n in rows], "before": before,
                               "after": lanes, "reused_fingering": reused,
                               "boundary_fret_shift":shift,"joined_previous_phrase":previous is not None,
+                              "continuity_source": continuity_source,
+                              "barrier_chords": barrier_chords,
                               "motif_family": motif_info["family_id"] if motif_info else None,
                               "motif_reused": motif_reused,
                               "motif_reason": motif_reason})
@@ -252,5 +277,6 @@ def author_guitar_phrases(notes, tempo):
                 "reversed_pitch_changes": sum((b.pitch-a.pitch)*(b.lanes[0]-a.lanes[0]) < 0 for a,b in pairs)}
     return result, {"method": "phrase-local fingering with whole-sequence ergonomic costs",
                     "before": contour(sorted(notes, key=lambda n:n.start)), "after": contour(result),
+                    "continuity_summary": continuity_summary,
                     "phrases": phrase_report, "short_tails_removed": tails,
                     "notes_added": 0, "notes_removed": 0}
