@@ -45,8 +45,7 @@ class ComparisonWindow(QMainWindow):
         form.addRow("Generated review folder", row); form.addRow("Reference MIDI (automatic)", reference_row); form.addRow("YouTube video (guided)", self.url); layout.addLayout(form)
         note = QLabel("Leave both reference fields blank for automatic Chorus Encore lookup. Only notes.mid is retrieved from its SNG package; audio is not downloaded."); note.setWordWrap(True); layout.addWidget(note)
         actions = QHBoxLayout()
-        self.review_task = QPushButton("Review GitHub correction task"); self.review_task.setEnabled(False); self.review_task.clicked.connect(self._review_task); actions.addWidget(self.review_task)
-        self.send_task = QPushButton("Send task to GitHub Copilot"); self.send_task.setEnabled(False); self.send_task.clicked.connect(self._send_task); actions.addWidget(self.send_task)
+        self.review_task = QPushButton("Open Copilot review worksheet"); self.review_task.setEnabled(False); self.review_task.clicked.connect(self._review_task); actions.addWidget(self.review_task)
         create = QPushButton("Start comparison"); create.clicked.connect(self._create); actions.addWidget(create)
         layout.addLayout(actions)
         self.setCentralWidget(root)
@@ -73,8 +72,9 @@ class ComparisonWindow(QMainWindow):
                 webbrowser.open(Path(result["output"]["html"]).as_uri())
                 reference = result["encore_reference"]
                 self.github_handoff = Path(result["output"]["github_handoff"])
-                self.review_task.setEnabled(True); self.send_task.setEnabled(True)
-                QMessageBox.information(self, "Encore comparison complete", f"Compared against {reference['charter']} chart #{reference['chart_id']}.\n\nReport:\n{result['output']['html']}\n\nA GitHub correction task is ready for review.")
+                self.comparison_html = Path(result["output"]["html"])
+                self.review_task.setEnabled(True)
+                QMessageBox.information(self, "Encore comparison complete", f"Compared against {reference['charter']} chart #{reference['chart_id']}.\n\nReport:\n{result['output']['html']}\n\nComplete the human review worksheet before sending its copied update to Copilot.")
                 return
             result = create_video_comparison(self.folder.text(), self.url.text())
             server, url = start_comparison_server(result)
@@ -86,20 +86,8 @@ class ComparisonWindow(QMainWindow):
         QMessageBox.information(self, "Guided comparison created", "The normal YouTube page and generated review were opened separately. Keep this launcher open while reviewing.")
 
     def _review_task(self):
-        if self.github_handoff:
-            webbrowser.open(self.github_handoff.as_uri())
-
-    def _send_task(self):
-        if not self.github_handoff:
-            return
-        try:
-            from .github_handoff import submit_to_github_copilot
-            issue_url = submit_to_github_copilot(self.github_handoff)
-            self.send_task.setEnabled(False)
-            webbrowser.open(issue_url)
-            QMessageBox.information(self, "GitHub task sent", "The issue was assigned to GitHub Copilot. Its branch and pull request will appear on GitHub.")
-        except Exception as exc:
-            QMessageBox.critical(self, "Could not send GitHub task", str(exc))
+        if getattr(self, "comparison_html", None):
+            webbrowser.open(self.comparison_html.as_uri())
 
 
 def launch():

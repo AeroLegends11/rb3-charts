@@ -41,6 +41,11 @@ def test_chart_comparison_aligns_and_reports_differences(tmp_path):
     assert Path(result["output"]["html"]).is_file()
     assert Path(result["output"]["json"]).is_file()
     assert generated.read_bytes() == generated_hash
+    page = Path(result["output"]["html"]).read_text(encoding="utf-8")
+    assert "Human review → Copilot update" in page
+    assert "Build and copy Copilot review update" in page
+    assert "Highest-priority correction" in page
+    assert str(tmp_path) not in page.split("const REVIEW_CONTEXT=", 1)[1].split(";", 1)[0]
 
 
 def test_output_folder_resolves_midi(tmp_path):

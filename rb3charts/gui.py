@@ -163,14 +163,10 @@ class Window(QMainWindow):
         self.compare_reference.clicked.connect(self.compare_to_encore)
         layout.addWidget(self.compare_reference)
         github_row=QHBoxLayout()
-        self.review_github=QPushButton("Review GitHub correction task")
+        self.review_github=QPushButton("Open Copilot review worksheet")
         self.review_github.setEnabled(False)
         self.review_github.clicked.connect(self.open_github_handoff)
         github_row.addWidget(self.review_github)
-        self.send_github=QPushButton("Send task to GitHub Copilot")
-        self.send_github.setEnabled(False)
-        self.send_github.clicked.connect(self.send_to_github)
-        github_row.addWidget(self.send_github)
         layout.addLayout(github_row)
         self.setStyleSheet('''QMainWindow,QWidget{background:#111a28;color:#e5edf8;font:14px "Segoe UI"}QLabel#heading{font-size:28px;font-weight:700;letter-spacing:3px;color:#6ee7c5}QLabel#subtitle{font-size:18px;color:#b1c2d9}QLabel#hint{color:#a6b6ce;font-size:12px}QLineEdit,QComboBox,QPlainTextEdit{background:#1b293b;border:1px solid #34475e;border-radius:6px;padding:7px}QPushButton{background:#263a52;border:1px solid #435e7a;border-radius:7px;padding:9px 16px}QPushButton:hover{background:#33516e}QPushButton:disabled{color:#697b90}QPushButton#primary{background:#51c9a5;color:#10241e;font-weight:700;font-size:16px;padding:12px}QGroupBox{border:1px solid #34475e;border-radius:8px;margin-top:12px;padding-top:16px}QGroupBox::title{subcontrol-origin:margin;left:12px;padding:0 5px}QProgressBar{background:#23344a;border:0;height:5px}QProgressBar::chunk{background:#6ee7c5}''')
 
@@ -273,24 +269,13 @@ class Window(QMainWindow):
         self.log.appendPlainText(f"Attack precision {summary['attack_precision']:.1%} · recall {summary['attack_recall']:.1%} · F1 {summary['attack_f1']:.1%}")
         self.log.appendPlainText(f"Median timing error {summary.get('median_timing_error_seconds',0)*1000:.0f} ms · exact lanes {summary['exact_lane_rate']:.1%}")
         self.github_handoff_path=Path(result["output"]["github_handoff"])
+        self.comparison_html_path=Path(result["output"]["html"])
         self.log.appendPlainText(f"GitHub correction task ready: {self.github_handoff_path.name}")
         self.review_github.setEnabled(True)
-        self.send_github.setEnabled(True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(result["output"]["html"]))
     def open_github_handoff(self):
-        if self.github_handoff_path:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.github_handoff_path)))
-    def send_to_github(self):
-        if not self.github_handoff_path:return
-        try:
-            from .github_handoff import submit_to_github_copilot
-            issue_url=submit_to_github_copilot(self.github_handoff_path)
-            self.send_github.setEnabled(False)
-            self.status.setText("Correction task sent · GitHub Copilot is starting its pull request")
-            self.log.appendPlainText(f"GitHub task: {issue_url}")
-            QDesktopServices.openUrl(QUrl(issue_url))
-        except Exception as exc:
-            QMessageBox.critical(self,"Could not send GitHub task",str(exc))
+        if getattr(self,"comparison_html_path",None):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.comparison_html_path)))
     def failed(self,error):
         self.status.setText("Generation failed · See details below")
         self.log.appendPlainText(error)

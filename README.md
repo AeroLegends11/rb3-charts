@@ -115,14 +115,13 @@ It downloads byte ranges for the SNG header, file index and `notes.mid` only. It
 does not request or store the reference audio, images or video. The chart MIDI is
 cached under ignored `reference/encore-cache/`.
 
-After an automatic Encore comparison, the app also creates
-`github-handoff.md` in the ignored comparison folder. **Review GitHub correction
-task** opens this privacy-safe summary. **Send task to GitHub Copilot** creates a
-GitHub issue assigned to the coding agent, which starts a branch and pull request.
-The packet contains aggregate scores, input hashes and the highest-error time
-regions; it excludes audio, private local paths and individual reference notes.
-The coding agent starts from the currently checked-out branch recorded in the
-packet, so that branch must exist on the GitHub remote.
+After an automatic Encore comparison, complete the human-review worksheet at the
+bottom of the report. It combines your listening verdict, problem timestamps and
+highest-priority correction with the aggregate comparison measurements. **Build
+and copy Copilot review update** places one path-free text update on the clipboard
+for you to paste into an existing pull request or a new task. This review-first
+step prevents Copilot from acting on automatic measurements before it knows what
+you actually heard and felt while playing the chart.
 
 `reference/catalog.json` pins the provider chart ID, package MD5, chart hash,
 tempo-map hash and per-track hashes. Commit this small catalog with the code so a
