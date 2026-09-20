@@ -140,7 +140,8 @@ def _continuity_anchor(notes, index, start, tempo):
     beat = tempo.beat_at(start)
     period = tempo.seconds_at(beat + 1) - start
     previous = notes[index - 1]
-    if start - previous.end > period * .75:
+    previous_time = previous.start if len(previous.lanes) == 1 else previous.end
+    if start - previous_time > period * .75:
         return None, "none", 0
     if len(previous.lanes) == 1:
         return previous, "adjacent_single", 0
