@@ -22,9 +22,10 @@ def author_chart(notes, instrument, tempo, profile):
     if profile == "band" and instrument in ("guitar", "bass", "keys"):
         notes, reports["reference_conformance"] = conform_expert_to_reference(notes, tempo, instrument)
         audit.capture("reference_conformance", notes)
-    if profile == "band" and instrument == "guitar":
-        notes = refine_band_guitar(notes, tempo)
-        audit.capture("band_refinement", notes)
+    if instrument == "guitar":
+        if profile == "band":
+            notes = refine_band_guitar(notes, tempo)
+            audit.capture("band_refinement", notes)
         notes, reports["pattern_stabilization"] = stabilize_repeated_phrases(notes, tempo, instrument)
         audit.capture("pattern_stabilization", notes)
     if instrument == "guitar":
