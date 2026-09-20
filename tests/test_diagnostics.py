@@ -1,6 +1,7 @@
 from copy import deepcopy
 from dataclasses import asdict
 import json
+import numpy as np
 import pytest
 from rb3charts.authoring import author_chart
 from rb3charts.chart import (enforce_playability, conform_expert_to_reference,
@@ -24,8 +25,9 @@ def test_shared_authoring_preserves_original_pipeline_order(instrument, profile)
                                      phrase_aware=instrument == "guitar")
     if profile == "band" and instrument in ("guitar", "bass", "keys"):
         expected, _ = conform_expert_to_reference(expected, tempo, instrument)
-    if profile == "band" and instrument == "guitar":
-        expected = refine_band_guitar(expected, tempo)
+    if instrument == "guitar":
+        if profile == "band":
+            expected = refine_band_guitar(expected, tempo)
         expected, _ = stabilize_repeated_phrases(expected, tempo, instrument)
     if instrument == "guitar":
         expected, _ = author_guitar_phrases(expected, tempo)
@@ -95,3 +97,25 @@ def test_cached_replay_is_deterministic_and_keeps_full_song_context(tmp_path):
     assert json.loads((source / "analysis/guitar-transcription.json").read_text()) == raw
     with pytest.raises(ValueError):
         replay(source, tmp_path, start=4, end=3)
+
+
+def test_electronic_guitar_authoring_stabilizes_repeated_transposed_riff():
+    tempo = TempoMap(np.arange(0, 20, .5).tolist())
+    notes = []
+    for occurrence, offset in enumerate((0., 2., 4.)):
+        for step, pitch in enumerate((48, 48, 50, 51)):
+            notes.append(Note(offset + step * .25, offset + step * .25 + .065, (step % 3,),
+                              confidence=.8, source_id=f"base-{occurrence}-{step}", pitch=pitch))
+    for step, pitch in enumerate((53, 53, 55, 48)):
+        notes.append(Note(6 + step * .25, 6 + step * .25 + .065, (3,),
+                          confidence=.4 if step == 3 else .8,
+                          source_id=f"shift-{step}", pitch=pitch))
+    notes.append(Note(7.25, 7.315, (4,), confidence=.8, source_id="shift-follow", pitch=53))
+
+    charts, reports, _ = author_chart(notes, "guitar", tempo, "electronic")
+
+    shifted = charts["expert"][-5:-1]
+    assert [note.pitch for note in shifted] == [53, 53, 55, 56]
+    assert [note.lanes[0] for note in shifted] == [1, 1, 2, 3]
+    assert reports["pattern_stabilization"]["transposed_occurrences"] == 1
+    assert reports["pattern_stabilization"]["inferred_notes"] == 1
