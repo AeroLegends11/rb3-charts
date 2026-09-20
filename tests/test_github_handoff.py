@@ -46,9 +46,19 @@ def test_submission_is_idempotent(tmp_path, monkeypatch):
     handoff = create_github_handoff(sample_report(), reference, tmp_path, "Example", "Artist")
     calls = []
     class Completed:
-        returncode = 0; stdout = "https://github.com/example/repo/issues/7\n"; stderr = ""
-    monkeypatch.setattr("rb3charts.github_handoff.subprocess.run", lambda command, **kwargs: calls.append(command) or Completed())
+        returncode = 0; stdout = '{"html_url":"https://github.com/example/repo/issues/7"}\n'; stderr = ""
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        if command[:3] == ["git", "config", "--get"]:
+            result = Completed(); result.stdout = "https://github.com/example/repo.git\n"; return result
+        if command[:2] == ["git", "ls-remote"]:
+            return Completed()
+        return Completed()
+    monkeypatch.setattr("rb3charts.github_handoff.subprocess.run", run)
     assert submit_to_github_copilot(handoff) == "https://github.com/example/repo/issues/7"
     assert submit_to_github_copilot(handoff) == "https://github.com/example/repo/issues/7"
-    assert len(calls) == 1
-    assert "@copilot" in calls[0]
+    api_calls = [call for call in calls if call[0][:2] == ["gh", "api"]]
+    assert len(api_calls) == 1
+    payload = json.loads(api_calls[0][1]["input"])
+    assert payload["assignees"] == ["copilot-swe-agent[bot]"]
+    assert payload["agent_assignment"]["base_branch"]

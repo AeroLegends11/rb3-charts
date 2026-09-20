@@ -121,6 +121,8 @@ task** opens this privacy-safe summary. **Send task to GitHub Copilot** creates 
 GitHub issue assigned to the coding agent, which starts a branch and pull request.
 The packet contains aggregate scores, input hashes and the highest-error time
 regions; it excludes audio, private local paths and individual reference notes.
+The coding agent starts from the currently checked-out branch recorded in the
+packet, so that branch must exist on the GitHub remote.
 
 `reference/catalog.json` pins the provider chart ID, package MD5, chart hash,
 tempo-map hash and per-track hashes. Commit this small catalog with the code so a

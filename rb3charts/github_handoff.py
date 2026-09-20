@@ -23,6 +23,12 @@ def _problem_score(row: dict) -> float:
     return int(row.get("extra_attacks", 0)) + int(row.get("missing_attacks", 0)) + lane_disagreement
 
 
+def _git_value(*arguments: str) -> str:
+    completed = subprocess.run(["git", *arguments], cwd=Path(__file__).resolve().parents[1],
+                               text=True, capture_output=True, check=False)
+    return completed.stdout.strip() if completed.returncode == 0 else ""
+
+
 def create_github_handoff(report: dict, reference: dict, destination: Path | str,
                           title: str, artist: str, region_limit: int = 8) -> Path:
     """Write a report summary suitable for committing or posting to GitHub.
@@ -39,6 +45,7 @@ def create_github_handoff(report: dict, reference: dict, destination: Path | str
     instrument = provenance.get("instrument", "guitar").title()
     difficulty = provenance.get("difficulty", "expert").title()
     issue_title = f"Improve {instrument} chart generation from {artist} - {title} comparison"
+    base_branch = _git_value("branch", "--show-current") or "main"
 
     rows = []
     for row in worst:
@@ -63,6 +70,7 @@ def create_github_handoff(report: dict, reference: dict, destination: Path | str
         f"- Reference chart hash: `{reference.get('chart_hash', 'unknown')}`",
         f"- Reference tempo-map hash: `{reference.get('tempo_map_hash', 'unknown')}`",
         f"- Reference MIDI SHA-256: `{provenance.get('reference_sha256', 'unknown')}`",
+        f"- GitHub base branch: `{base_branch}`",
         f"- Alignment: `{provenance.get('alignment', 'unknown')}`, offset `{provenance.get(f'alignment_offset_{coordinate}s' if coordinate == 'second' else 'alignment_offset_beats', 0):+.4f} {coordinate}s`",
         "", "## Current result", "",
         f"- Attacks: {summary.get('generated_attacks', 0)} generated / {summary.get('reference_attacks', 0)} reference; {summary.get('extra_attacks', 0)} extra and {summary.get('missing_attacks', 0)} missing",
@@ -95,7 +103,7 @@ def create_github_handoff(report: dict, reference: dict, destination: Path | str
     path.write_text("\n".join(lines), encoding="utf-8")
     metadata = {
         "schema": 1, "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "issue_title": issue_title, "body_file": path.name,
+        "issue_title": issue_title, "body_file": path.name, "base_branch": base_branch,
     }
     (folder / "github-handoff.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     return path
@@ -111,15 +119,41 @@ def submit_to_github_copilot(handoff: Path | str, repository: str | None = None)
         if saved.get("issue_url"):
             return str(saved["issue_url"])
     metadata = json.loads((folder / "github-handoff.json").read_text(encoding="utf-8"))
-    command = ["gh", "issue", "create", "--title", metadata["issue_title"],
-               "--body-file", str(handoff_path), "--assignee", "@copilot"]
-    if repository:
-        command += ["--repo", repository]
-    completed = subprocess.run(command, cwd=Path(__file__).resolve().parents[1], text=True,
+    repository = repository or _git_value("config", "--get", "remote.origin.url")
+    if repository.endswith(".git"):
+        repository = repository[:-4]
+    if repository.startswith("git@github.com:"):
+        repository = repository.split(":", 1)[1]
+    elif "github.com/" in repository:
+        repository = repository.split("github.com/", 1)[1]
+    repository = repository.strip("/")
+    if not repository or "/" not in repository:
+        raise RuntimeError("Could not determine the GitHub owner/repository from origin")
+    base_branch = metadata.get("base_branch", "main")
+    published = subprocess.run(["git", "ls-remote", "--exit-code", "--heads", "origin", base_branch],
+                               cwd=Path(__file__).resolve().parents[1], text=True,
                                capture_output=True, check=False)
+    if published.returncode:
+        raise RuntimeError(f"The base branch '{base_branch}' has not been pushed to GitHub yet")
+    payload = {
+        "title": metadata["issue_title"], "body": handoff_path.read_text(encoding="utf-8"),
+        "assignees": ["copilot-swe-agent[bot]"],
+        "agent_assignment": {
+            "target_repo": repository, "base_branch": base_branch,
+            "custom_instructions": "Follow the issue body and repository Copilot instructions. Keep the change scoped and open a pull request.",
+            "custom_agent": "", "model": "",
+        },
+    }
+    command = ["gh", "api", "--method", "POST", "-H", "Accept: application/vnd.github+json",
+               "-H", "X-GitHub-Api-Version: 2022-11-28", f"repos/{repository}/issues", "--input", "-"]
+    completed = subprocess.run(command, cwd=Path(__file__).resolve().parents[1], text=True,
+                               input=json.dumps(payload), capture_output=True, check=False)
     if completed.returncode:
         raise RuntimeError((completed.stderr or completed.stdout or "GitHub issue creation failed").strip())
-    issue_url = completed.stdout.strip().splitlines()[-1]
+    try:
+        issue_url = json.loads(completed.stdout)["html_url"]
+    except (json.JSONDecodeError, KeyError):
+        issue_url = completed.stdout.strip().splitlines()[-1]
     submitted_path.write_text(json.dumps({"schema": 1, "issue_url": issue_url,
                                            "submitted_at": datetime.now().astimezone().isoformat(timespec="seconds")}, indent=2) + "\n", encoding="utf-8")
     return issue_url
