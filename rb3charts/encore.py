@@ -169,4 +169,8 @@ def compare_with_encore(folder: Path | str, output: Path | str = Path("compariso
     provenance_path.write_text(json.dumps(reference, indent=2) + "\n", encoding="utf-8")
     report["encore_reference"] = reference
     report["output"]["encore_reference"] = str(provenance_path)
+    from .github_handoff import create_github_handoff
+    title, artist = metadata_from_run(folder)
+    handoff = create_github_handoff(report, reference, provenance_path.parent, title, artist)
+    report["output"]["github_handoff"] = str(handoff)
     return report

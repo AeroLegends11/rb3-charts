@@ -115,6 +115,13 @@ It downloads byte ranges for the SNG header, file index and `notes.mid` only. It
 does not request or store the reference audio, images or video. The chart MIDI is
 cached under ignored `reference/encore-cache/`.
 
+After an automatic Encore comparison, the app also creates
+`github-handoff.md` in the ignored comparison folder. **Review GitHub correction
+task** opens this privacy-safe summary. **Send task to GitHub Copilot** creates a
+GitHub issue assigned to the coding agent, which starts a branch and pull request.
+The packet contains aggregate scores, input hashes and the highest-error time
+regions; it excludes audio, private local paths and individual reference notes.
+
 `reference/catalog.json` pins the provider chart ID, package MD5, chart hash,
 tempo-map hash and per-track hashes. Commit this small catalog with the code so a
 different workstation or fresh clone resolves the same reference version. The
