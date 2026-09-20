@@ -103,20 +103,35 @@ def _phrase_signature(rows, tempo):
                   for a, b in zip(rows, rows[1:])))
 
 
-def _motif_constraints(phrases, tempo):
+def _motif_constraints(notes, tempo, window=4):
+    ordered = [note for note in sorted(notes, key=lambda note: note.start) if len(note.lanes) == 1]
     repeated = {}
-    for rows in phrases:
-        if len(rows) < 4 or any(len(note.lanes) != 1 for note in rows):
+    for index in range(len(ordered) - window + 1):
+        rows = ordered[index:index + window]
+        gaps = [tempo.beat_at(b.start) - tempo.beat_at(a.start) for a, b in zip(rows, rows[1:])]
+        if any(gap <= 0 or gap > 2 for gap in gaps):
             continue
-        repeated.setdefault(_phrase_signature(rows, tempo), []).append(tuple(note.lanes[0] for note in rows))
-    return {signature: occurrences[0] for signature, occurrences in repeated.items()
-            if len(occurrences) >= 2 and len(set(occurrences)) == 1}
+        signature = (tuple(int(round(b.pitch - a.pitch)) for a, b in zip(rows, rows[1:])),
+                     tuple(round(gap * 4) / 4 for gap in gaps))
+        repeated.setdefault(signature, []).append((index, rows))
+    constraints = {}
+    for occurrences in repeated.values():
+        distinct = []
+        for occurrence in occurrences:
+            if not distinct or occurrence[0] - distinct[-1][0] >= window:
+                distinct.append(occurrence)
+        if len(distinct) < 2:
+            continue
+        for _, rows in distinct:
+            for note in rows:
+                constraints[id(note)] = note.lanes[0]
+    return constraints
 
 
 def _constraint_cost(lanes, preferred):
     if preferred is None:
         return 0
-    return float(sum(abs(lane - target) for lane, target in zip(lanes, preferred)))
+    return float(sum(abs(lane - target) for lane, target in zip(lanes, preferred) if target is not None))
 
 
 def _fingering(rows, previous=None, preferred=None):
@@ -129,8 +144,9 @@ def _fingering(rows, previous=None, preferred=None):
         if previous is None:
             if preferred is None:
                 return options[(5-len(unique))//2]
+            center = np.mean([target for target in preferred if target is not None])
             return min(options, key=lambda lanes: (_constraint_cost(lanes, preferred),
-                                                 abs(np.mean(lanes) - np.mean(preferred))))
+                                                 abs(np.mean(lanes) - center)))
         best=min(options,key=lambda lanes:(_transition_cost(pitches[0]-previous.pitch,
                  previous.lanes[0],lanes[0],rows[0].start-previous.start)
                  + .6 * _constraint_cost(lanes, preferred)))
@@ -141,7 +157,8 @@ def _fingering(rows, previous=None, preferred=None):
     target = np.interp(pitches, unique, np.linspace(0, 4, len(unique)))
     costs = .2 * (np.arange(5) - target[0])**2
     if preferred is not None:
-        costs += .6 * np.abs(np.arange(5) - preferred[0])
+        if preferred[0] is not None:
+            costs += .6 * np.abs(np.arange(5) - preferred[0])
     if previous is not None:
         costs+=np.array([_transition_cost(pitches[0]-previous.pitch,previous.lanes[0],lane,
                                          rows[0].start-previous.start) for lane in range(5)])
@@ -154,7 +171,7 @@ def _fingering(rows, previous=None, preferred=None):
                 matrix[old, new] = (costs[old]
                                     + _transition_cost(interval,old,new,rows[i].start-rows[i-1].start)
                                     + .2 * (new - target[i])**2
-                                    + (.6 * abs(new - preferred[i]) if preferred is not None else 0))
+                                    + (.6 * abs(new - preferred[i]) if preferred is not None and preferred[i] is not None else 0))
         links.append(np.argmin(matrix, axis=0))
         costs = np.min(matrix, axis=0)
     lane = int(np.argmin(costs))
@@ -192,8 +209,9 @@ def author_guitar_phrases(notes, tempo):
         current.append(note)
     if current:
         phrases.append(current)
-    motif_constraints = _motif_constraints(phrases, tempo)
+    motif_constraints = _motif_constraints(result, tempo)
     vocabulary = {}
+    constrained_vocabulary = {}
     phrase_report = []
     indices={id(note):i for i,note in enumerate(result)}
     constrained = 0
@@ -204,10 +222,22 @@ def author_guitar_phrases(notes, tempo):
         if previous is not None and (len(previous.lanes)!=1 or rows[0].start-previous.start>period*.75):
             previous=None
         signature = _phrase_signature(rows, tempo)
-        preferred = motif_constraints.get(signature)
-        constrained += preferred is not None
-        reused = signature in vocabulary
-        lanes = vocabulary.get(signature)
+        preferred = [motif_constraints.get(id(note)) for note in rows]
+        constrained_phrase = all(target is not None for target in preferred)
+        preferred = preferred if constrained_phrase else None
+        constraint_key = (signature, tuple(preferred)) if preferred is not None else None
+        constrained += constrained_phrase
+        lanes = constrained_vocabulary.get(constraint_key) if constraint_key is not None else None
+        reused = lanes is not None
+        if lanes is None:
+            lanes = vocabulary.get(signature)
+            reused = lanes is not None
+        if lanes is not None and preferred is not None and _constraint_cost(lanes, preferred):
+            candidate = _fingering(rows, previous, preferred=preferred)
+            if _constraint_cost(candidate, preferred) < _constraint_cost(lanes, preferred):
+                lanes = candidate
+                reused = False
+                constrained_vocabulary[constraint_key] = lanes
         shift=0
         if lanes is not None and previous is not None:
             shift=min(range(-min(lanes),5-max(lanes)),key=lambda s:
@@ -221,7 +251,10 @@ def author_guitar_phrases(notes, tempo):
                 reused=False
         if lanes is None:
             lanes = _fingering(rows,previous,preferred=preferred)
-            vocabulary.setdefault(signature,lanes)
+            if constraint_key is not None:
+                constrained_vocabulary[constraint_key] = lanes
+            else:
+                vocabulary.setdefault(signature,lanes)
         before = [n.lanes[0] for n in rows]
         for note, lane in zip(rows, lanes):
             note.lanes = (lane,)
@@ -230,7 +263,7 @@ def author_guitar_phrases(notes, tempo):
                               "pitches": [n.pitch for n in rows], "before": before,
                               "after": lanes, "reused_fingering": reused,
                               "boundary_fret_shift":shift,"joined_previous_phrase":previous is not None,
-                              "motif_constrained": preferred is not None})
+                              "motif_constrained": constrained_phrase})
     tails = []
     for i, note in enumerate(result):
         duration = note.end - note.start
