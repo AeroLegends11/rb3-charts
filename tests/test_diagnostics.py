@@ -119,3 +119,20 @@ def test_electronic_guitar_authoring_stabilizes_repeated_transposed_riff():
     assert [note.lanes[0] for note in shifted] == [1, 1, 2, 3]
     assert reports["pattern_stabilization"]["transposed_occurrences"] == 1
     assert reports["pattern_stabilization"]["inferred_notes"] == 1
+
+
+def test_final_electronic_phrase_authoring_keeps_stabilized_repeated_shape():
+    tempo = TempoMap(np.arange(0, 16, .5).tolist())
+    notes = []
+    lane_variants = ((0, 0, 1, 2), (1, 1, 3, 4), (0, 0, 2, 3))
+    for occurrence, (offset, lanes) in enumerate(zip((0., 2., 4.), lane_variants)):
+        for step, (pitch, lane) in enumerate(zip((48, 48, 50, 51), lanes)):
+            notes.append(Note(offset + step * .25, offset + step * .25 + .065, (lane,),
+                              confidence=.8, source_id=f"{occurrence}-{step}", pitch=pitch))
+
+    charts, reports, _ = author_chart(notes, "guitar", tempo, "electronic")
+
+    shapes = [tuple(note.lanes[0] for note in charts["expert"][index:index + 4]) for index in (0, 4, 8)]
+    assert shapes[0] == shapes[1] == shapes[2] == (0, 0, 1, 2)
+    assert reports["pattern_stabilization"]["notes_changed"] > 0
+    assert reports["phrase_authoring"]["motif_constrained_phrases"] == 3

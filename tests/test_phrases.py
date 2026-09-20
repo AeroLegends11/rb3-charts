@@ -97,3 +97,24 @@ def test_real_rest_allows_new_hand_position():
     notes=[Note(1,1.065,(4,),.9,'a',60),Note(4,4.065,(0,),.9,'b',72)]
     _,report=author_guitar_phrases(notes,grid())
     assert not report['phrases'][1]['joined_previous_phrase']
+
+
+def test_motif_constraints_do_not_flatten_strong_variation():
+    notes = []
+    for offset in (1, 4):
+        for step, (pitch, lane) in enumerate(zip((60, 60, 62, 63), (0, 0, 1, 2))):
+            notes.append(Note(offset + step * .125, offset + step * .125 + .11, (lane,), .8,
+                              f"repeat-{offset}-{step}", pitch))
+    for step, (pitch, lane) in enumerate(zip((60, 61, 62, 72), (0, 0, 1, 2))):
+        notes.append(Note(7 + step * .125, 7 + step * .125 + .11, (lane,), .8,
+                          f"variation-{step}", pitch))
+
+    result, report = author_guitar_phrases(notes, grid())
+
+    first = [note.lanes[0] for note in result[:4]]
+    second = [note.lanes[0] for note in result[4:8]]
+    variation = [note.lanes[0] for note in result[8:]]
+    assert first == second == [0, 0, 1, 2]
+    assert variation == [0, 1, 2, 3]
+    assert report["motif_constrained_phrases"] == 2
+    assert not report["phrases"][2]["motif_constrained"]
