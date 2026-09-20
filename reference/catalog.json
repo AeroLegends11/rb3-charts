@@ -3,6 +3,36 @@
   "references": [
     {
       "provider": "chorus-encore",
+      "chart_id": 364822,
+      "title": "Mr. Brightside",
+      "artist": "The Killers",
+      "album": "Hot Fuss",
+      "charter": "Harmonix",
+      "pack": "Rock Band 2 DLC",
+      "icon": "rb2dlc",
+      "md5": "5f17a29f9c327655a5732c6609e6d582",
+      "encoder_version": 0,
+      "chart_hash": "4qIHwfz0ahcnuNEtt6g4rjjLLKxkszE6Ny0cPVQGtFY=",
+      "tempo_map_hash": "4ab357f2bbafe730d26072426aa5f43b",
+      "track_hashes": {
+        "drums.expert": "UZyqAME5mcU2ecsfx1efU9Hf03TXwvwBxuUPe4bIQrk=",
+        "drums.hard": "33SHve1whQ0W8zlwZfCKzd_UCqEEbv87HVgOF_o9c4w=",
+        "drums.medium": "8vY7079NJ4aX_fUdQmwLyxajsszxW5WWSfgk6cV0VwQ=",
+        "drums.easy": "ZTZ1y1yOr3zDakZ6eBrZ7omJvHCRGCXkA3o3I-TKqA4=",
+        "bass.expert": "pIXeyoJEVY6U6wTeqrz826X5apHmkL3SCrNlGk648vE=",
+        "bass.hard": "p40Dd6-XNoo7MdhbAN0giSMUf6u91Dicv3QwdmhDMKs=",
+        "bass.medium": "Ays2zYhxK_kppa9VIBMte3MVo9r4Jic4vdexTj6Ct0Q=",
+        "bass.easy": "A0q2ZCMWvUpg4mklzKWG2D1M-GGVgygoMdsALuY70oA=",
+        "guitar.expert": "t4fgeHZ0PnTlz3MCKDihs1uCDSYwJeX_fqGw_ckar08=",
+        "guitar.hard": "9t6LkZ6X8wlSKm8bSwsSQSaQ4-UaNu9dYB5lfK7Qcak=",
+        "guitar.medium": "qCwGSx0yER9bdj5_FJqyK8zIpM677ioAj3qcb7D_qsw=",
+        "guitar.easy": "ZZOmxlnCOLlvFLqFdvodr15usAJOPEJ6MUEXJK5KriU="
+      },
+      "expert_guitar_notes": 1062,
+      "modified_time": "2024-01-08T06:34:29.000Z"
+    },
+    {
+      "provider": "chorus-encore",
       "chart_id": 364724,
       "title": "My Name Is Jonas",
       "artist": "Weezer",
