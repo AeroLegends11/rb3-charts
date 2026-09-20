@@ -152,8 +152,8 @@ def _continuity_anchor(notes, index, start, tempo):
         if len(note.lanes) == 1:
             barrier_start = notes[cursor + 1].start
             if (barrier_chords
-                    and tempo.beat_at(start) - tempo.beat_at(barrier_start) <= 2
-                    and tempo.beat_at(start) - tempo.beat_at(note.start) <= 2):
+                    and beat - tempo.beat_at(barrier_start) <= 2
+                    and beat - tempo.beat_at(note.start) <= 2):
                 return note, "through_chord", barrier_chords
             return None, "none", barrier_chords
         barrier_chords += 1
