@@ -9,6 +9,7 @@ import json
 import mido
 from pathlib import Path
 from statistics import median
+import subprocess
 
 from .reference import read_five_lane
 
@@ -35,6 +36,15 @@ def _hash(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _revision() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(Path(__file__).resolve().parents[1]), "rev-parse", "--short", "HEAD"],
+            text=True, stderr=subprocess.DEVNULL).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
 
 
 def _chart(path: Path, instrument: str, difficulty: str) -> list[dict]:
@@ -207,6 +217,7 @@ def compare_charts(generated_input: Path | str, reference_input: Path | str,
             "generated_midi": str(generated_path), "generated_sha256": _hash(generated_path),
             "reference_midi": str(reference_path), "reference_sha256": _hash(reference_path),
             "instrument": instrument, "difficulty": difficulty,
+            "software_revision": _revision(),
             f"tolerance_{coordinate}s" if coordinate == "second" else "tolerance_beats": tolerance,
             f"alignment_offset_{coordinate}s" if coordinate == "second" else "alignment_offset_beats": offset,
             "alignment_coordinate": coordinate,
@@ -313,7 +324,7 @@ def _html(report: dict) -> str:
         for row in report["sections"]
     )
     return f"""<!doctype html><html><head><meta charset='utf-8'><title>Chart comparison</title><style>
-body{{font:15px system-ui;background:#10141d;color:#e9edf5;margin:0;padding:32px}}main{{max-width:1100px;margin:auto}}h1{{margin-bottom:8px}}.muted{{color:#aab3c5;overflow-wrap:anywhere}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:24px 0}}.metric{{background:#1a2130;border:1px solid #303a50;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:7px}}.metric span{{font-size:1.45rem;color:#78d8ff}}table{{width:100%;border-collapse:collapse;background:#171d29}}th,td{{padding:9px;border-bottom:1px solid #303a50;text-align:right}}th:first-child,td:first-child{{text-align:left}}code{{color:#b9e7ff}}.worksheet{{margin-top:32px;padding:20px;background:#171d29;border:1px solid #303a50;border-radius:10px}}.questions{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:13px}}label{{display:flex;flex-direction:column;gap:6px;color:#c9d3e5}}select,textarea,button{{font:inherit;color:#eef4ff;background:#222c3e;border:1px solid #52627d;border-radius:7px;padding:9px}}textarea{{min-height:76px;resize:vertical}}button{{cursor:pointer;background:#286c60;font-weight:700}}button:hover{{background:#348878}}#copilot-output{{min-height:280px}}#copy-status{{margin-left:10px;color:#79ddc7}}
+body{{font:15px system-ui;background:#10141d;color:#e9edf5;margin:0;padding:32px}}main{{max-width:1100px;margin:auto}}h1{{margin-bottom:8px}}.muted{{color:#aab3c5;overflow-wrap:anywhere}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:24px 0}}.metric{{background:#1a2130;border:1px solid #303a50;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:7px}}.metric span{{font-size:1.45rem;color:#78d8ff}}table{{width:100%;border-collapse:collapse;background:#171d29}}th,td{{padding:9px;border-bottom:1px solid #303a50;text-align:right}}th:first-child,td:first-child{{text-align:left}}code{{color:#b9e7ff}}.worksheet{{margin-top:32px;padding:20px;background:#171d29;border:1px solid #303a50;border-radius:10px}}.questions{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:13px}}label{{display:flex;flex-direction:column;gap:6px;color:#c9d3e5}}select,textarea,input,button{{font:inherit;color:#eef4ff;background:#222c3e;border:1px solid #52627d;border-radius:7px;padding:9px}}input[type=checkbox]{{width:18px;height:18px;padding:0;accent-color:#50c9a7}}.preservation label{{flex-direction:row;align-items:center}}textarea{{min-height:76px;resize:vertical}}button{{cursor:pointer;background:#286c60;font-weight:700}}button:hover{{background:#348878}}#copilot-output{{min-height:360px}}#copy-status{{margin-left:10px;color:#79ddc7}}
 </style></head><body><main><h1>Chart comparison</h1><p class='muted'>Generated: {escape(p['generated_midi'])}<br>Reference: {escape(p['reference_midi'])}</p><p><b>{escape(p['difficulty'].title())} {escape(p['instrument'].title())}</b> · alignment {p[offset_key]:+.4f} {coordinate}s ({escape(p['alignment'])}) · tolerance ±{p[tolerance_key]} {coordinate}s</p><div class='grid'>{cells}</div><h2>{'Ten-second' if coordinate == 'second' else 'Sixteen-beat'} regions</h2><table><thead><tr><th>{coordinate.title()}s</th><th>Generated</th><th>Reference</th><th>Matched</th><th>Extra</th><th>Missing</th><th>Exact lanes</th></tr></thead><tbody>{rows}</tbody></table>{_review_panel(report)}</main></body></html>"""
 
 
@@ -327,7 +338,9 @@ def _review_context(report: dict) -> dict:
                    reverse=True)[:6]
     return {
         "song": report.get("song", {}),
+        "created_at": report.get("created_at", "unknown"),
         "track": f"{p.get('difficulty', 'expert').title()} {p.get('instrument', 'guitar').title()}",
+        "software_revision": p.get("software_revision", "unknown"),
         "generated_sha256": p.get("generated_sha256", "unknown"),
         "summary": s,
         "coordinate": coordinate,
@@ -353,25 +366,48 @@ def _review_panel(report: dict) -> str:
 <label>Hold notes<select id='human-sustains'><option>Not answered</option><option>Mostly appropriate</option><option>Too many</option><option>Too few</option><option>Too short</option><option>Too long</option><option>Mixed problems</option></select></label>
 <label>Lane/color behavior<select id='human-lanes'><option>Not answered</option><option>Readable and consistent</option><option>Repeated riffs change colors</option><option>Too many random jumps</option><option>Too repetitive or flat</option><option>Mixed problems</option></select></label>
 <label>Most important area<select id='human-area'><option>Not answered</option><option>Instrument selection</option><option>Missing or extra attacks</option><option>Density/playability</option><option>Repeated riff stability</option><option>Lane choices</option><option>Timing</option><option>Hold notes</option></select></label>
+<label>Stable between separate runs?<select id='human-stability'><option>Not tested</option><option>Yes</option><option>No</option><option>Only one run available</option></select></label>
+<label>Attack count generally looks correct?<select id='human-attacks'><option>Not answered</option><option>Yes</option><option>No — too many</option><option>No — too few</option><option>No — both extra and missing</option><option>Varies by section</option></select></label>
+<label>Main problem is pattern/lane choices?<select id='human-pattern-main'><option>Not answered</option><option>Yes</option><option>No</option><option>Partly</option></select></label>
+<label>Result versus the previous iteration<select id='human-change'><option>Not compared</option><option>Better</option><option>Worse</option><option>Mixed</option><option>Unchanged</option></select></label>
 </div>
-<label>What already works well<textarea id='human-good' placeholder='Example: the intro rhythm is recognizable and playable'></textarea></label>
-<label>Problem timestamps and what you hear<textarea id='human-times' placeholder='Example: 00:56 — too many attacks; 01:20 — the same sound happens twice but only one note appears'></textarea></label>
-<label>Highest-priority correction<textarea id='human-priority' placeholder='Describe the one problem Copilot should target first'></textarea></label>
+<h3>3. Sections that look correct</h3>
+<label>Good sections<textarea id='human-good' placeholder='For each: timestamp, section name, and why it works (repeat recognized, transposition recognized, variation preserved, timing correct, or natural hand movement)'></textarea></label>
+<h3>4. Sections that need correction</h3>
+<label>Questionable sections<textarea id='human-times' placeholder='For each: timestamp/name; exact repeat, transposed repeat, slight change, intentional variation, or unrelated; current behavior; expected behavior; lanes/colors; problem type; confidence'></textarea></label>
+<h3>5. Strong variations to preserve</h3>
+<label>Sections that should remain different<textarea id='human-variations' placeholder='Timestamp; related earlier section; what changes musically; why it should stay different; expected behavior'></textarea></label>
+<h3>6. Preservation check</h3>
+<p class='muted'>Check anything an attempted correction changed when it should not have.</p>
+<div class='questions preservation'>
+<label><input id='changed-timing' type='checkbox'> Timing changed</label><label><input id='changed-pitch' type='checkbox'> Pitch changed</label>
+<label><input id='changed-added' type='checkbox'> Notes added</label><label><input id='changed-removed' type='checkbox'> Notes removed</label>
+<label><input id='changed-rests' type='checkbox'> Rests changed</label><label><input id='changed-sources' type='checkbox'> Source IDs changed</label>
+<label><input id='changed-attacks' type='checkbox'> Attack counts changed</label><label><input id='changed-unrelated' type='checkbox'> Unrelated sections changed</label>
+</div>
+<label>Where an unwanted change occurred<textarea id='human-preservation' placeholder='Timestamp and description; write “none observed” if appropriate'></textarea></label>
+<h3>7. Evidence</h3>
+<label>Available evidence<textarea id='human-evidence' placeholder='Screenshots, comparison output, generated report, stage snapshot, or exact timestamp/source-ID range'></textarea></label>
+<h3>8. Priority</h3>
+<div class='questions'><label>Priority 1<input id='human-priority-1' placeholder='Most urgent section/problem'></label><label>Priority 2<input id='human-priority-2' placeholder='Second'></label><label>Priority 3<input id='human-priority-3' placeholder='Third'></label></div>
+<label>Most important correction<textarea id='human-priority' placeholder='Describe the one general problem Copilot should target first'></textarea></label>
 <p><button id='copy-review'>Build and copy Copilot review update</button><span id='copy-status'></span></p>
 <label>Copyable update<textarea id='copilot-output' readonly placeholder='Complete the worksheet, then use the button above'></textarea></label>
 </section>
 <script>
 const REVIEW_CONTEXT=__CONTEXT__;
-const REVIEW_FIELDS=['human-verdict','human-role','human-density','human-patterns','human-timing','human-sustains','human-lanes','human-area','human-good','human-times','human-priority'];
+const REVIEW_FIELDS=['human-verdict','human-role','human-density','human-patterns','human-timing','human-sustains','human-lanes','human-area','human-stability','human-attacks','human-pattern-main','human-change','human-good','human-times','human-variations','changed-timing','changed-pitch','changed-added','changed-removed','changed-rests','changed-sources','changed-attacks','changed-unrelated','human-preservation','human-evidence','human-priority-1','human-priority-2','human-priority-3','human-priority'];
 const REVIEW_KEY='rb3-human-review:'+REVIEW_CONTEXT.generated_sha256;
-function reviewAnswers(){const answer={};REVIEW_FIELDS.forEach(id=>answer[id]=document.getElementById(id).value.trim());return answer}
+function reviewAnswers(){const answer={};REVIEW_FIELDS.forEach(id=>{const el=document.getElementById(id);answer[id]=el.type==='checkbox'?el.checked:el.value.trim()});return answer}
 function persistReview(){localStorage.setItem(REVIEW_KEY,JSON.stringify(reviewAnswers()))}
-function restoreReview(){try{const saved=JSON.parse(localStorage.getItem(REVIEW_KEY)||'{}');REVIEW_FIELDS.forEach(id=>{if(saved[id]!==undefined)document.getElementById(id).value=saved[id]})}catch(e){}}
+function restoreReview(){try{const saved=JSON.parse(localStorage.getItem(REVIEW_KEY)||'{}');REVIEW_FIELDS.forEach(id=>{if(saved[id]!==undefined){const el=document.getElementById(id);if(el.type==='checkbox')el.checked=Boolean(saved[id]);else el.value=saved[id]}})}catch(e){}}
 function pct(value){return value===null||value===undefined?'n/a':(100*Number(value)).toFixed(1)+'%'}
+function metric(summary,name){return summary[name]===null||summary[name]===undefined?'n/a':summary[name]}
+function changedList(a){const labels={'changed-timing':'timing','changed-pitch':'pitch','changed-added':'notes added','changed-removed':'notes removed','changed-rests':'rests','changed-sources':'source IDs','changed-attacks':'attack counts','changed-unrelated':'unrelated sections'};const rows=Object.entries(labels).filter(([id])=>a[id]).map(([,label])=>label);return rows.length?rows.join(', '):'None reported'}
 function buildReview(){
  const a=reviewAnswers(),s=REVIEW_CONTEXT.summary,song=REVIEW_CONTEXT.song||{};
  const regions=REVIEW_CONTEXT.worst_regions.map(r=>`- ${r.start}-${r.end} ${REVIEW_CONTEXT.coordinate}s: ${r.extra} extra, ${r.missing} missing, ${pct(r.exact_lane_rate)} exact lanes`).join('\n');
- return `RB3 Charts human review update\n\nSong: ${song.artist||'Unknown artist'} - ${song.title||'Unknown title'}\nTrack: ${REVIEW_CONTEXT.track}\nResolved chart profile: ${song.chart_profile||'unknown'}\nGenerated MIDI SHA-256: ${REVIEW_CONTEXT.generated_sha256}\n\nAutomatic comparison\n- Attacks: ${s.generated_attacks} generated / ${s.reference_attacks} reference; ${s.extra_attacks} extra and ${s.missing_attacks} missing\n- Precision / recall / F1: ${pct(s.attack_precision)} / ${pct(s.attack_recall)} / ${pct(s.attack_f1)}\n- Exact lanes / relative shape / chord class: ${pct(s.exact_lane_rate)} / ${pct(s.relative_shape_rate)} / ${pct(s.chord_class_rate)}\n- Recurring-pattern coverage: ${pct(s.recurring_pattern_coverage)}\n\nHighest-error regions\n${regions||'- None reported'}\n\nMy listening and playability review\n- Overall verdict: ${a['human-verdict']}\n- Correct musical part: ${a['human-role']}\n- Density/playability: ${a['human-density']}\n- Repeated patterns: ${a['human-patterns']}\n- Timing: ${a['human-timing']}\n- Hold notes: ${a['human-sustains']}\n- Lane/color behavior: ${a['human-lanes']}\n- Most important area: ${a['human-area']}\n- What works well: ${a['human-good']||'Not provided'}\n- Problem timestamps: ${a['human-times']||'Not provided'}\n- Highest-priority correction: ${a['human-priority']||'Not provided'}\n\nPlease target the highest-priority human-observed problem first. Use the automatic comparison as supporting evidence, not as a command to imitate the official chart. Diagnose and change one general subsystem at a time. Do not special-case this song or use reference notes as generation inputs. Preserve real variations, rests, source IDs, attack timing and lower-difficulty ancestry. Report synthetic tests separately from cached replay, listening review and Xbox playtesting.`
+ return `SONG VALIDATION REPORT\n\nSong: ${song.artist||'Unknown artist'} - ${song.title||'Unknown title'}\nChart/profile: ${song.chart_profile||'unknown'}\nInstrument/difficulty: ${REVIEW_CONTEXT.track}\nComparison code revision: ${REVIEW_CONTEXT.software_revision}\nGenerated run SHA-256: ${REVIEW_CONTEXT.generated_sha256}\nDate tested: ${REVIEW_CONTEXT.created_at}\n\n1. OVERALL RESULT\n- Stable between runs: ${a['human-stability']}\n- Timing generally correct: ${a['human-timing']}\n- Attack count generally correct: ${a['human-attacks']}\n- Main problem is pattern/lane choices: ${a['human-pattern-main']}\n- Correct musical part selected: ${a['human-role']}\n- Density/playability: ${a['human-density']}\n- Repeated patterns: ${a['human-patterns']}\n- Hold notes: ${a['human-sustains']}\n- Lane/color behavior: ${a['human-lanes']}\n- Overall verdict: ${a['human-verdict']}\n- Versus previous iteration: ${a['human-change']}\n\n2. COMPARISON METRICS\n- Generated attacks: ${s.generated_attacks}\n- Reference attacks: ${s.reference_attacks}\n- Extra attacks: ${s.extra_attacks}\n- Missing attacks: ${s.missing_attacks}\n- Precision / recall / F1: ${pct(s.attack_precision)} / ${pct(s.attack_recall)} / ${pct(s.attack_f1)}\n- Median timing error: ${metric(s,'median_timing_error_seconds')} seconds\n- P95 timing error: ${metric(s,'p95_timing_error_seconds')} seconds\n- Exact lane agreement: ${pct(s.exact_lane_rate)}\n- Relative-pattern agreement: ${pct(s.relative_shape_rate)}\n- Chord-class agreement: ${pct(s.chord_class_rate)}\n- Recurring-pattern coverage: ${pct(s.recurring_pattern_coverage)}\n- Sustain/hold MAE: ${metric(s,'sustain_mae_seconds')} seconds\n- Collapsed/reversed pitch movements: not measured by this chart-to-chart report; use cached replay diagnostics\n\nHighest-error regions\n${regions||'- None reported'}\n\n3. SECTIONS THAT LOOK CORRECT\n${a['human-good']||'Not provided'}\n\n4. SECTIONS THAT NEED CORRECTION\n${a['human-times']||'Not provided'}\n\n5. STRONG VARIATIONS TO PRESERVE\n${a['human-variations']||'Not provided'}\n\n6. PRESERVATION CHECK\n- Unexpected changes: ${changedList(a)}\n- Details: ${a['human-preservation']||'Not provided'}\n\n7. EVIDENCE\n${a['human-evidence']||'Automatic comparison report and generated chart review'}\n\n8. PRIORITY\n1. ${a['human-priority-1']||'Not provided'}\n2. ${a['human-priority-2']||'Not provided'}\n3. ${a['human-priority-3']||'Not provided'}\n- Most important correction: ${a['human-priority']||'Not provided'}\n- Primary subsystem area: ${a['human-area']}\n\nPlease target the highest-priority human-observed problem first. Use the automatic comparison as supporting evidence, not as a command to imitate the official chart. Diagnose and change one general subsystem at a time. Do not special-case this song or use reference notes as generation inputs. Preserve strong variations, rests, source IDs, attack timing and lower-difficulty ancestry. Report synthetic tests separately from cached replay, listening review and Xbox playtesting.`
 }
 REVIEW_FIELDS.forEach(id=>document.getElementById(id).addEventListener('input',persistReview));restoreReview();
 document.getElementById('copy-review').onclick=async()=>{persistReview();const text=buildReview(),output=document.getElementById('copilot-output'),status=document.getElementById('copy-status');output.value=text;try{await navigator.clipboard.writeText(text);status.textContent='Copied to clipboard'}catch(e){output.focus();output.select();document.execCommand('copy');status.textContent='Selected and copied; press Ctrl+C if needed'}};

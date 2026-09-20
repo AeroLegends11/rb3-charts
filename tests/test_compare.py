@@ -44,7 +44,11 @@ def test_chart_comparison_aligns_and_reports_differences(tmp_path):
     page = Path(result["output"]["html"]).read_text(encoding="utf-8")
     assert "Human review → Copilot update" in page
     assert "Build and copy Copilot review update" in page
-    assert "Highest-priority correction" in page
+    assert "Most important correction" in page
+    assert "Strong variations to preserve" in page
+    assert "Preservation check" in page
+    assert "Priority 1" in page
+    assert result["provenance"]["software_revision"]
     assert str(tmp_path) not in page.split("const REVIEW_CONTEXT=", 1)[1].split(";", 1)[0]
 
 

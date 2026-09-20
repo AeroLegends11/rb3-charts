@@ -123,6 +123,11 @@ for you to paste into an existing pull request or a new task. This review-first
 step prevents Copilot from acting on automatic measurements before it knows what
 you actually heard and felt while playing the chart.
 
+The worksheet follows the song-validation format: overall result, automatically
+filled metrics, correct sections, sections needing correction, strong variations
+to preserve, preservation checks, evidence and three ranked priorities. Answers
+remain in browser storage for that generated MIDI hash while the review is open.
+
 `reference/catalog.json` pins the provider chart ID, package MD5, chart hash,
 tempo-map hash and per-track hashes. Commit this small catalog with the code so a
 different workstation or fresh clone resolves the same reference version. The
