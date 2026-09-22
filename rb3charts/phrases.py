@@ -9,6 +9,7 @@ from .motifs import discover_phrase_motifs, discover_window_motifs
 
 MOTIF_CONSTRAINT_WEIGHT = 2.0
 MAX_INFERRED_CHORD_RATE = .4
+MAX_CHORD_GUIDE_CORRECTION_RATE = .25
 
 
 def select_lead_phrases(source_events):
@@ -331,7 +332,7 @@ def _apply_band_chord_sections(notes, tempo, evidence):
     octave_anchor_rate = float(focus.get("octave_anchors", 0)) / onset_groups
     report["correction_rate"] = round(correction_rate, 4)
     report["octave_anchor_rate"] = round(octave_anchor_rate, 4)
-    if correction_rate > .15 or octave_anchor_rate > .3:
+    if correction_rate > MAX_CHORD_GUIDE_CORRECTION_RATE or octave_anchor_rate > .3:
         return report
     report["gate_passed"] = True
     candidates = sorted(

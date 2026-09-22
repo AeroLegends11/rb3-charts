@@ -100,7 +100,7 @@ def test_band_chord_sections_expand_repeated_fifths_as_power_chords():
         ])
     evidence={
         "candidates":candidates,
-        "focus":{"onset_groups":20,"pitch_corrections":2,"octave_anchors":3},
+        "focus":{"onset_groups":20,"pitch_corrections":4,"octave_anchors":3},
     }
     baseline,_=author_guitar_phrases(notes,grid())
     result,report=author_guitar_phrases(notes,grid(),chord_evidence=evidence)
