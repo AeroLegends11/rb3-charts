@@ -116,6 +116,13 @@ Status update (2026-09-20):
   to exact phrase reuse, whole-phrase motifs and strong-variation rejection.
 - Cached replay now records window matching coverage, rejection counts and a
   capped accepted-match sample in `analysis/phrase-authoring.json`.
+- Band playability now permits four well-spaced attacks per beat even when motif
+  matching has not yet recognized the phrase. The minimum-gap filter still
+  rejects implausibly crowded bursts. On cached held-out Hail to the King
+  evidence this recovered 89 Expert attacks overall and seven attacks in source
+  seconds 4-20; unrelated Joker, Mr. Brightside and Cliffs of Dover replays were
+  retained as density cross-checks. These are automated replay measurements,
+  not listening review or Xbox validation.
 - Whole-song canonical family selection and calibration against broader listening
   examples remain in progress; this does not complete Milestone 3.
 

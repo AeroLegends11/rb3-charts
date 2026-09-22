@@ -501,8 +501,8 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
         per_beat=2
         minimum_gap=beat_period/4
     elif profile=="band" and pitched:
-        per_beat=3
-        minimum_gap=beat_period/6
+        per_beat=4
+        minimum_gap=beat_period/8
     else:
         per_beat=4
         minimum_gap=beat_period/8
@@ -531,11 +531,6 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
     for group in bins.values():
         ranked=sorted(group,key=priority,reverse=True)
         chosen=ranked[:per_beat]
-        # A clearly recurring fast riff may use the fourth sixteenth-note
-        # attack. Isolated candidates do not receive that exception.
-        if profile=="band" and pitched and len(ranked)>per_beat:
-            patterned=next((note for note in ranked[per_beat:] if note.source_id in motif_bonus),None)
-            if patterned is not None:chosen.append(patterned)
         if phrase_aware and instrument=="guitar" and profile=="electronic":
             # Expert repeated figures may contain four real attacks per beat.
             # Preserve supported members rather than replacing the whole rule
@@ -567,7 +562,7 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
         peak=max(peak,right-left)
     report={"before":len(notes),"after":len(result),"removed":len(notes)-len(result),
             "max_attacks_per_beat":per_beat,"minimum_allowed_gap_ms":round(minimum_gap*1000,3),
-            "recurring_riff_fourth_attack_allowed":bool(profile=="band" and pitched),
+            "band_sixteenth_note_attacks_allowed":bool(profile=="band" and pitched),
             "minimum_gap_ms":round(float(gaps.min()*1000),3) if len(gaps) else None,
             "peak_four_second_nps":round(peak/4,3),
             "recurring_pattern_families":len(motif_groups),

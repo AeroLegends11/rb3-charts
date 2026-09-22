@@ -117,7 +117,10 @@ def test_playability_gate_prefers_legitimate_holds():
 
 def test_band_profile_allows_clear_sixteenth_note_part():
     tempo=TempoMap(np.arange(0,8,.5).tolist())
-    notes=[Note(1+i*.125,1+i*.125+.065,(i%5,),source_id=str(i)) for i in range(8)]
+    notes=[
+        Note(1+i*.125,1+i*.125+.065,(i,),source_id=str(i),pitch=pitch)
+        for i,pitch in enumerate((48,55,61,72))
+    ]
     result,report=enforce_playability(notes,"guitar",tempo,"band")
     assert len(result)==len(notes)
     assert report["removed"]==0
@@ -127,7 +130,7 @@ def test_band_profile_reduces_unpatterned_crowding():
     notes=[Note(1+i*.045,1+i*.045+.065,(i%5,),confidence=.8-i*.01,source_id=str(i),pitch=48+i) for i in range(4)]
     result,report=enforce_playability(notes,"guitar",tempo,"band")
     assert len(result)<len(notes)
-    assert report["max_attacks_per_beat"]==3
+    assert report["max_attacks_per_beat"]==4
 
 def test_pitch_specific_reattack_splits_hold_and_preserves_releases():
     from basic_pitch.note_creation import model_frames_to_time,MIDI_OFFSET
