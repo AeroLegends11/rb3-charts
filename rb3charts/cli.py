@@ -43,6 +43,11 @@ def main():
     slakh_mix=sub.add_parser("mix-slakh-guitar",help="Sum aligned Guitar-class Slakh stems")
     slakh_mix.add_argument("track",type=Path)
     slakh_mix.add_argument("output",type=Path)
+    guitar_techs=sub.add_parser("convert-guitar-techs",help="Convert Guitar-TECHS MIDI to structure labels")
+    guitar_techs.add_argument("midi",type=Path)
+    guitar_techs.add_argument("audio",type=Path)
+    guitar_techs.add_argument("output",type=Path)
+    guitar_techs.add_argument("--performer-id",default="P3")
     features=sub.add_parser("extract-structure-features",help="Create model-ready audio features and structure targets")
     features.add_argument("audio",type=Path)
     features.add_argument("labels",type=Path)
@@ -59,6 +64,12 @@ def main():
     prediction.add_argument("output",type=Path)
     prediction.add_argument("--beats",type=Path)
     prediction.add_argument("--device",choices=["auto","cpu","cuda"],default="auto")
+    tabcnn=sub.add_parser("predict-tabcnn",help="Run offline CC BY 4.0 TabCNN pitch/polyphony evaluation")
+    tabcnn.add_argument("checkpoint",type=Path)
+    tabcnn.add_argument("audio",type=Path)
+    tabcnn.add_argument("output",type=Path)
+    tabcnn.add_argument("--attacks",type=Path,help="Optional structure-predictions JSON to sample")
+    tabcnn.add_argument("--device",choices=["auto","cpu","cuda"],default="auto")
     for command in ("generate","batch"):
         p=sub.add_parser(command)
         p.add_argument("source",type=Path)
@@ -123,6 +134,17 @@ def main():
             return 1
         print(json.dumps(report,indent=2))
         return 0
+    if args.command=="convert-guitar-techs":
+        from .training import TrainingDataError, convert_guitar_techs_midi
+        try:
+            report=convert_guitar_techs_midi(
+                args.midi,args.audio,args.output,args.performer_id
+            )
+        except TrainingDataError as exc:
+            print(f"Guitar-TECHS conversion failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["summary"],indent=2))
+        return 0
     if args.command=="extract-structure-features":
         from .training import TrainingDataError, extract_structure_features
         try:
@@ -147,6 +169,17 @@ def main():
             report=predict_structure(args.model,args.audio,args.output,args.beats,args.device)
         except TrainingDataError as exc:
             print(f"Structure inference failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["summary"],indent=2))
+        return 0
+    if args.command=="predict-tabcnn":
+        from .tabcnn import TabCNNError, predict_tabcnn
+        try:
+            report=predict_tabcnn(
+                args.checkpoint,args.audio,args.output,args.attacks,args.device
+            )
+        except TabCNNError as exc:
+            print(f"TabCNN inference failed: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report["summary"],indent=2))
         return 0

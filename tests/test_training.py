@@ -13,6 +13,7 @@ from rb3charts.training import (
     TrainingDataError,
     _onset_metrics,
     convert_guitarset_jams,
+    convert_guitar_techs_midi,
     convert_slakh_track,
     extract_structure_features,
     mix_slakh_guitar_stems,
@@ -98,6 +99,29 @@ def test_guitarset_conversion_treats_same_pitch_on_two_strings_as_one_voice(tmp_
     assert labels["attacks"][0]["note_count"] == 2
     assert labels["attacks"][0]["polyphony"] == 1
     assert labels["attacks"][0]["is_chord"] is False
+
+
+def test_guitar_techs_conversion_preserves_performer_split_and_polyphony(tmp_path):
+    import mido
+
+    midi_path = tmp_path / "midi_01.mid"
+    midi = mido.MidiFile(ticks_per_beat=480)
+    tempo = mido.MidiTrack()
+    tempo.append(mido.MetaMessage("set_tempo", tempo=500000, time=0))
+    midi.tracks.append(tempo)
+    for pitch in (48, 55):
+        track = mido.MidiTrack()
+        track.append(mido.Message("note_on", note=pitch, velocity=90, time=480))
+        track.append(mido.Message("note_off", note=pitch, velocity=0, time=240))
+        midi.tracks.append(track)
+    midi.save(midi_path)
+    audio_path = tmp_path / "micamp_01.wav"
+    sf.write(audio_path, np.zeros(FEATURE_SAMPLE_RATE * 2), FEATURE_SAMPLE_RATE)
+    labels = convert_guitar_techs_midi(midi_path, audio_path, performer_id="P3")
+    assert labels["provenance"]["dataset_id"] == "guitar-techs"
+    assert labels["split_keys"][-1] == "performer:guitar-techs:P3"
+    assert labels["attacks"][0]["pitches"] == [48, 55]
+    assert labels["attacks"][0]["polyphony"] == 2
 
 
 def test_structure_features_align_attacks_polyphony_sustains_and_beats(tmp_path):

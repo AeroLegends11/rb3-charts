@@ -66,11 +66,12 @@ No user song audio is distributed by this project.
 
 ## Learned structure model datasets
 
-The first rights-traceable prototype should use GuitarSet for real guitar
-attacks/chords and Slakh2100-redux for larger aligned multitrack pretraining.
-Both are published under CC BY 4.0. EGSet12 is a useful held-out electric-guitar
-check. RWC Music Database 2.0 is CC BY-NC 4.0 and must remain isolated in a
-noncommercial research experiment rather than being mixed into a permissive
+The rights-traceable prototype uses GuitarSet for real guitar attacks/chords,
+Slakh2100-redux for aligned multitrack examples, and Guitar-TECHS for isolated
+electric-guitar examples. All three are published under CC BY 4.0. EGSet12 is a
+separate CC BY 4.0 held-out electric-guitar check and also publishes an augmented
+TabCNN checkpoint. RWC Music Database 2.0 is CC BY-NC 4.0 and must remain isolated
+in a noncommercial research experiment rather than being mixed into a permissive
 checkpoint.
 
 No verified public dataset teaches Rock Band-specific lane choices, HOPO flags,
@@ -107,6 +108,28 @@ available Band-song evaluations. This aggregate comparison does not expose
 reference sequences to generation and does not establish chord, lane or gameplay
 quality. Learned structure remains offline until calibration and authoring
 integration can be validated without tuning on commercial references.
+
+A Guitar-TECHS pilot added twelve amplifier-microphone excerpts from performer P3
+to training only; the shared performer split key prevents these excerpts from
+being divided across splits. With the prior validation and test sets unchanged,
+untouched test attack F1 improved from 0.7311 to 0.7982 and polyphony accuracy
+from 0.6009 to 0.8194. On held-out EGSet12, attack F1 remained approximately
+unchanged at 0.7994 while polyphony improved from 0.4132 to 0.6737. However, its
+validation-selected attack threshold severely under-detected the 13 held-out
+commercial stems, so it is not approved for generation.
+
+The published EGSet12 TabCNN checkpoint is exposed through an optional offline
+provider that records checkpoint, audio and attack-input hashes plus source,
+license and attribution. On EGSet12, sampling it at structure-model attacks
+measured 0.7184 polyphony accuracy, 0.5987 exact pitch-set agreement and 0.8855
+agreement on at least one pitch. A full replacement experiment reduced
+official-reference chord-class agreement, so this evidence is not applied to
+chart generation. AMT-Tools remains an explicitly optional research dependency,
+not part of the standard installation.
+
+All figures in this section are automated metrics or post-generation evaluation.
+Neither the Guitar-TECHS checkpoint nor TabCNN integration has been listening
+reviewed or Xbox-playtested.
 
 REAPER remains useful for manual chart corrections, but is not required for this
 automated build path. We do not invent a new package format or implement an

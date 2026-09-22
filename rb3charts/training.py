@@ -33,6 +33,18 @@ SLAKH_PROVENANCE = {
     "commercial_use": "allowed",
     "attribution": "Ethan Manilow, Gordon Wichern, Prem Seetharaman, and Jonathan Le Roux",
 }
+GUITAR_TECHS_PROVENANCE = {
+    "dataset_id": "guitar-techs",
+    "dataset_version": "2025-03-28",
+    "source_url": "https://zenodo.org/records/14963133",
+    "audio_license": "CC BY 4.0",
+    "annotation_license": "CC BY 4.0",
+    "commercial_use": "allowed",
+    "attribution": (
+        "Hegel Pedroza Villalobos, Termeh Taheri, Wallace Abreu, "
+        "Ryan M. Corey, and Iran R. Roman"
+    ),
+}
 
 
 class TrainingDataError(ValueError):
@@ -202,7 +214,7 @@ def _read_midi_notes(path, source_id):
                         "source": source_id,
                     })
     if active:
-        raise TrainingDataError(f"Slakh MIDI has unterminated notes: {path}")
+        raise TrainingDataError(f"MIDI has unterminated notes: {path}")
     return notes, midi.ticks_per_beat, absolute_tick, tempo_segments
 
 
@@ -309,6 +321,65 @@ def convert_slakh_track(track_folder, output=None, simultaneous_tolerance=0.03):
             _label_summary(notes, attacks),
             guitar_sources=len(selected),
         ),
+    }
+    if output is not None:
+        save_json(output, result)
+    return result
+
+
+def convert_guitar_techs_midi(
+    midi_path,
+    audio_path,
+    output=None,
+    performer_id="P3",
+    simultaneous_tolerance=0.03,
+):
+    """Convert one Guitar-TECHS excerpt into lane-independent structure labels."""
+    import soundfile as sf
+
+    midi_path = Path(midi_path).resolve()
+    audio_path = Path(audio_path).resolve()
+    if not midi_path.is_file():
+        raise TrainingDataError(f"Guitar-TECHS MIDI does not exist: {midi_path}")
+    if not audio_path.is_file():
+        raise TrainingDataError(f"Guitar-TECHS audio does not exist: {audio_path}")
+    performer_id = str(performer_id).strip()
+    if not performer_id:
+        raise TrainingDataError("Guitar-TECHS conversion requires performer_id")
+    try:
+        duration = float(sf.info(audio_path).duration)
+    except (OSError, RuntimeError) as exc:
+        raise TrainingDataError(f"Cannot read Guitar-TECHS audio: {exc}") from exc
+    rows, ticks_per_beat, max_tick, tempo_segments = _read_midi_notes(
+        midi_path,
+        f"guitar-techs-{performer_id}",
+    )
+    if not rows:
+        raise TrainingDataError("Guitar-TECHS MIDI contains no notes")
+    if max(row["end"] for row in rows) > duration + 0.15:
+        raise TrainingDataError("Guitar-TECHS MIDI extends beyond the aligned audio")
+    composition_hash = _hash_file(midi_path)
+    group_id = f"guitar-techs:{performer_id}:{midi_path.stem}"
+    attacks = _group_attacks(rows, simultaneous_tolerance)
+    result = {
+        "schema": "rb3charts-structure-labels",
+        "schema_version": STRUCTURE_LABEL_VERSION,
+        "source_format": "guitar-techs-midi",
+        "source_annotation": midi_path.name,
+        "source_annotation_sha256": composition_hash,
+        "source_files": [{"path": midi_path.name, "sha256": composition_hash}],
+        "provenance": GUITAR_TECHS_PROVENANCE,
+        "group_id": group_id,
+        "split_keys": [group_id, f"performer:guitar-techs:{performer_id}"],
+        "performer_id": performer_id,
+        "simultaneous_tolerance_seconds": simultaneous_tolerance,
+        "alignment_tolerance_seconds": 0.1,
+        "duration": duration,
+        "targets": ["attack", "polyphony", "sustain"],
+        "notes": rows,
+        "attacks": attacks,
+        "beats": _midi_beats(ticks_per_beat, max_tick, tempo_segments),
+        "summary": _label_summary(rows, attacks),
     }
     if output is not None:
         save_json(output, result)

@@ -199,3 +199,27 @@ Status update (2026-09-22):
   applies the same local-peak suppression as inference. Earlier checkpoints lack
   this manifest linkage and are retained only as historical evaluation evidence;
   they are not loadable by the current inference command.
+- Added CC BY 4.0 Guitar-TECHS conversion with performer-disjoint split keys.
+  Twelve amplifier-microphone excerpts from performer P3 were added to training
+  only, leaving the existing 13-item validation and 13-item test sets unchanged.
+  Relative to the preceding 20-epoch checkpoint, untouched test attack F1 rose
+  from 0.7311 to 0.7982 and matched-attack polyphony accuracy rose from 0.6009 to
+  0.8194.
+- On the separate CC BY 4.0 EGSet12 electric-guitar evaluation, the same
+  checkpoint measured 0.7994 attack F1 and 0.6737 polyphony accuracy. Attack F1
+  was effectively unchanged from the preceding checkpoint's 0.8013, while
+  polyphony improved from 0.4132. This supports further offline polyphony work,
+  not runtime adoption.
+- Added an offline provider for the CC BY 4.0 augmented TabCNN checkpoint
+  published with EGSet12. Sampling TabCNN at independently predicted attacks
+  measured 0.7184 polyphony accuracy, 0.5987 exact pitch-set agreement and
+  0.8855 agreement on at least one pitch on EGSet12. Replacing the current pitch
+  evidence wholesale was rejected because a Jonas replay slightly improved
+  attack F1 but reduced official-reference chord-class agreement.
+- The Guitar-TECHS checkpoint's validation-selected 0.725 attack threshold
+  transferred poorly to 13 held-out commercial guitar stems: predicted/chart
+  density ratios ranged from 0.029 to 0.729, including 0.376 on Jonas. Thresholded
+  attack integration is therefore still rejected. No learned output is wired
+  into normal generation.
+- These are automated structure and post-generation comparison measurements.
+  The new checkpoint has not received listening review or Xbox playtesting.

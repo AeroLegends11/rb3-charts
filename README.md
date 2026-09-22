@@ -77,9 +77,11 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-guitarset 'C:\Path\To\annotation.jams' 'C:\Path\To\labels.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-slakh 'C:\Path\To\Track00001' 'C:\Path\To\labels.json'
+.\.venv\Scripts\python.exe -m rb3charts.cli convert-guitar-techs 'C:\Path\To\midi.mid' 'C:\Path\To\micamp.wav' 'C:\Path\To\labels.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli extract-structure-features 'C:\Path\To\audio.wav' 'C:\Path\To\labels.json' 'C:\Path\To\features.npz'
 .\.venv\Scripts\python.exe -m rb3charts.cli train-structure-baseline 'C:\Path\To\feature-index.json' 'C:\Path\To\baseline.pt' --device cuda
 .\.venv\Scripts\python.exe -m rb3charts.cli predict-structure 'C:\Path\To\baseline.pt' 'C:\Path\To\guitar.wav' 'C:\Path\To\predictions.json' --beats 'C:\Path\To\tempo.json'
+.\.venv\Scripts\python.exe -m rb3charts.cli predict-tabcnn 'C:\Path\To\TabCNN.pt' 'C:\Path\To\guitar.wav' 'C:\Path\To\tabcnn.json' --attacks 'C:\Path\To\structure-predictions.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli demo --compile
 .\.venv\Scripts\python.exe -m pytest -q
 ```
@@ -117,6 +119,10 @@ MIDI, preserves source identities, combines simultaneous guitar sources into
 polyphonic attacks, and derives beat times from the MIDI tempo map. Use the
 duplicate-free Slakh2100-redux splits; do not train from its `omitted` directory.
 
+`convert-guitar-techs` converts synchronized six-string MIDI from the CC BY 4.0
+Guitar-TECHS corpus. Its labels retain the performer identity as an authoritative
+split key; all excerpts by one player must remain in the same data split.
+
 `extract-structure-features` writes fixed-reference 128-bin log-mel audio,
 128 positive spectral-change bins, source-time frame positions, variable-tempo
 beat phase, and aligned attack, polyphony, and sustain targets. The compressed
@@ -142,6 +148,14 @@ auditable attack/polyphony predictions plus the complete ranked set of local
 attack candidates. It does not alter a transcription or generated chart.
 Supplying a generation run's `analysis/tempo.json` reproduces beat-phase
 conditioning; without it the model uses audio features alone.
+
+`predict-tabcnn` evaluates the CC BY 4.0 augmented TabCNN checkpoint published
+with EGSet12. It writes string/fret, pitch and polyphony evidence and can sample
+that evidence at independently predicted structure attacks. The command is
+offline-only, records model/audio/input hashes and attribution, and never alters
+a generated chart. It requires the upstream AMT-Tools package from
+`robust-guitar-tabs/code`; that research dependency is intentionally not part of
+the ordinary RB3 Charts installation.
 
 Supplied stems must use the same start time and length as the original audio and
 be named `guitar.wav`, `bass.wav`, `drums.wav`, and optionally `piano.wav`. They
