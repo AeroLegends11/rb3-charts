@@ -1,6 +1,10 @@
 import numpy as np
 from rb3charts.model import Note, TempoMap
-from rb3charts.phrases import author_guitar_phrases, select_lead_phrases
+from rb3charts.phrases import (
+    _preserve_supported_lane_span,
+    author_guitar_phrases,
+    select_lead_phrases,
+)
 from rb3charts.chart import enforce_playability, reductions
 
 
@@ -86,6 +90,19 @@ def test_expert_gate_preserves_supported_fast_riff_but_not_unrelated_burst():
     burst=[Note(1+i*.045,1+i*.045+.04,(i%5,),.5,str(i),40+i*7) for i in range(7)]
     filtered,_=enforce_playability(burst,"guitar",grid(),"electronic",phrase_aware=True)
     assert len(filtered)<len(burst)
+
+
+def test_phrase_fingering_preserves_repeated_supported_lane_span():
+    pitches = (48, 55, 60, 67) * 8
+    rows = [
+        Note(i * .125, i * .125 + .065, (lane,), pitch=pitch, source_id=str(i))
+        for i, (pitch, lane) in enumerate(zip(pitches, (0, 1, 3, 4) * 8))
+    ]
+
+    lanes, changed = _preserve_supported_lane_span(rows, [1, 1, 2, 3] * 8)
+
+    assert changed
+    assert lanes == [0, 1, 3, 4] * 8
 
 
 def test_empty_phrase_inputs():

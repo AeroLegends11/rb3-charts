@@ -123,6 +123,16 @@ Status update (2026-09-20):
   seconds 4-20; unrelated Joker, Mr. Brightside and Cliffs of Dover replays were
   retained as density cross-checks. These are automated replay measurements,
   not listening review or Xbox validation.
+- Three user-supplied screenshots of the held-out official Hail to the King
+  Expert chart showed that its rapid intro uses broad five-lane single-note
+  motion rather than lead-guitar power chords. They were used only to identify
+  an aggregate contour mismatch, never as generation input. The final phrase
+  pass had collapsed an already pitch-ordered five-lane mapping into three
+  middle lanes. Long rapid phrases now retain a broad incoming mapping only
+  when both boundary lanes recur and pitch/lane agreement is strong. The Hail
+  intro regained all five lanes; Joker was unchanged, and Mr. Brightside and
+  Cliffs of Dover remained bounded cross-checks. Human listening is still the
+  acceptance gate.
 - Whole-song canonical family selection and calibration against broader listening
   examples remain in progress; this does not complete Milestone 3.
 

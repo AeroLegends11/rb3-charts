@@ -108,6 +108,28 @@ def _constraint_cost(lanes, preferred):
     )
 
 
+def _preserve_supported_lane_span(rows, lanes):
+    incoming = [note.lanes[0] for note in rows]
+    duration = rows[-1].start - rows[0].start
+    if (
+        len(rows) < 32
+        or duration <= 0
+        or len(rows) / duration < 5
+        or len(set(lanes)) < 2
+    ):
+        return lanes, False
+    incoming_min, incoming_max = min(incoming), max(incoming)
+    authored_min, authored_max = min(lanes), max(lanes)
+    if incoming_max - incoming_min < 3 or authored_max - authored_min >= incoming_max - incoming_min:
+        return lanes, False
+    edge_support = min(incoming.count(incoming_min), incoming.count(incoming_max))
+    pitches = np.asarray([note.pitch for note in rows], dtype=float)
+    correlation = np.corrcoef(pitches, np.asarray(incoming, dtype=float))[0, 1]
+    if edge_support < 2 or not np.isfinite(correlation) or correlation < .8:
+        return lanes, False
+    return incoming, incoming != lanes
+
+
 def _fingering(rows, previous=None, preferred=None):
     pitches = [note.pitch for note in rows]
     unique = sorted(set(pitches))
@@ -476,6 +498,7 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
     baseline = [replace(n) for n in result]
     continuity_summary = {"adjacent_single": 0, "through_chord": 0, "none": 0}
     pitch_anchor_changes = 0
+    supported_span_preservations = 0
     for phrase_index, rows in enumerate(phrases):
         index = indices[id(rows[0])]
         previous, _, _ = _continuity_anchor(baseline, index, rows[0].start, tempo)
@@ -563,6 +586,8 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
                 if lanes[note_index] != anchor:
                     lanes[note_index] = anchor
                     pitch_anchor_changes += 1
+        lanes, span_preserved = _preserve_supported_lane_span(rows, lanes)
+        supported_span_preservations += int(span_preserved)
         before = [n.lanes[0] for n in rows]
         for note, lane in zip(rows, lanes):
             note.lanes = (lane,)
@@ -576,6 +601,7 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
                               "motif_family": motif_info["family_id"] if motif_info else None,
                               "motif_reused": motif_reused,
                               "motif_reason": motif_reason,
+                              "supported_span_preserved": span_preserved,
                               "window_motif_constrained": window_constrained})
     for (phrase_index, note_index), closure in low_confidence_closures.items():
         _, source_phrase, source_first, source_next, _, target_first = closure
@@ -608,6 +634,7 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
                     "before": contour(sorted(notes, key=lambda n:n.start)), "after": contour(result),
                     "continuity_summary": continuity_summary,
                     "pitch_anchor_changes": pitch_anchor_changes,
+                    "supported_span_preservations": supported_span_preservations,
                     "phrases": phrase_report, "short_tails_removed": tails,
                     "window_motif_matching": window_diagnostics,
                     "window_motif_constrained_phrases": sum(
