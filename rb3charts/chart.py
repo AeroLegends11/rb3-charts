@@ -7,6 +7,7 @@ from .model import Note
 
 ELECTRONIC_SUSTAIN_SECONDS = 0.09
 BAND_SUSTAIN_SECONDS = 0.22
+BAND_GUITAR_SUSTAIN_SECONDS = 0.35
 
 def _reference_style(key):
     path=Path(__file__).resolve().parents[1]/"reference"/"style-profile.json"
@@ -47,7 +48,13 @@ def map_pitched(events, instrument, style="range", sustain_threshold=None):
             for fraction in (.2,.4,.6,.8):
                 boundaries.append(pitches[int(np.searchsorted(cumulative,cumulative[-1]*fraction,side="left"))])
             mapping={p:int(np.searchsorted(boundaries,p,side="left")) for p in pitches}
-    sustain_threshold=sustain_threshold if sustain_threshold is not None else (ELECTRONIC_SUSTAIN_SECONDS if style=="electronic_lead" else BAND_SUSTAIN_SECONDS)
+    sustain_threshold = sustain_threshold if sustain_threshold is not None else (
+        ELECTRONIC_SUSTAIN_SECONDS
+        if style == "electronic_lead"
+        else BAND_GUITAR_SUSTAIN_SECONDS
+        if instrument == "guitar"
+        else BAND_SUSTAIN_SECONDS
+    )
     groups = []
     for event in events:
         if groups and event["start"]-groups[-1][0]["start"] <= 0.030:
@@ -65,6 +72,8 @@ def map_pitched(events, instrument, style="range", sustain_threshold=None):
         lanes = tuple(sorted(set(mapping[e["pitch"]] for e in group)))
         start = min(e["start"] for e in group)
         end = min(e["end"] for e in group)
+        if instrument == "guitar" and any(e.get("lead_focus_corrected") for e in group):
+            end = start + 0.065
         # Preserve brief audible electronic decays. Only normalize events too
         # short to draw or play as a meaningful sustain.
         if end-start < sustain_threshold:
@@ -497,7 +506,13 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
     else:
         per_beat=4
         minimum_gap=beat_period/8
-    sustain_threshold=ELECTRONIC_SUSTAIN_SECONDS if profile=="electronic" else BAND_SUSTAIN_SECONDS
+    sustain_threshold = (
+        ELECTRONIC_SUSTAIN_SECONDS
+        if profile == "electronic"
+        else BAND_GUITAR_SUSTAIN_SECONDS
+        if instrument == "guitar"
+        else BAND_SUSTAIN_SECONDS
+    )
     _,motif_groups=_motif_groups(notes,tempo,instrument)
     motif_bonus={}
     for _,_,occurrences in motif_groups:

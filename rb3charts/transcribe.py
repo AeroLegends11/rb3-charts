@@ -149,7 +149,7 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
             chosen["source_id"]="+".join(event["source_id"] for event in group)
             if guide is not None and chosen["pitch"]!=guide and (abs(chosen["pitch"]-guide)<=5 or abs(abs(chosen["pitch"]-guide)-12)<=1):
                 chosen["pitch"]=guide
-                chosen["_lead_focus_corrected"]=True
+                chosen["lead_focus_corrected"]=True
                 report["pitch_corrections"]+=1
             selected.append(chosen)
             report["groups_resolved"]+=1
@@ -160,7 +160,7 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
             correct=(delta<=3) or (chosen["confidence"]<.55 and delta<=5) or (chosen["confidence"]<.56 and abs(delta-12)<=1)
             if correct and delta:
                 chosen["pitch"]=guide
-                chosen["_lead_focus_corrected"]=True
+                chosen["lead_focus_corrected"]=True
                 report["pitch_corrections"]+=1
         selected.append(chosen)
     # Consolidate two estimates of the same attack after harmonic correction.
@@ -169,7 +169,7 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
     min_gap=float(np.clip((beat_period or .45)/4.8,.075,.095))
     result=[]
     for event in sorted(selected,key=lambda row:(row["start"],row["pitch"])):
-        corrected_overlap=(result and (event.get("_lead_focus_corrected") or result[-1].get("_lead_focus_corrected")) and
+        corrected_overlap=(result and (event.get("lead_focus_corrected") or result[-1].get("lead_focus_corrected")) and
                            event["start"]<result[-1]["end"]-.02 and event["start"]-result[-1]["start"]<.12)
         duplicate=(result and event["pitch"]==result[-1]["pitch"] and
                    (event["start"]-result[-1]["start"]<min_gap or corrected_overlap))
@@ -179,7 +179,6 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
             report["rapid_duplicates_removed"]+=1
             continue
         result.append(event)
-    for event in result:event.pop("_lead_focus_corrected",None)
     report["retained"]=len(result)
     return result,report
 

@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import numpy as np
+from .chart import BAND_GUITAR_SUSTAIN_SECONDS
 
 
 LABELS={"close_enough":"Close enough to review","review_closely":"Review closely","needs_work":"Needs work"}
@@ -43,7 +44,13 @@ def assess_chart(charts,patterns,playability,profile,missing=()):
         attacks=len(notes)
         lane_counts=pattern.get("lane_counts",{})
         lane_coverage=sum(int(count)>0 for count in lane_counts.values())
-        sustain_threshold=.09 if profile=="electronic" else .22
+        sustain_threshold = (
+            .09
+            if profile == "electronic"
+            else BAND_GUITAR_SUSTAIN_SECONDS
+            if name == "guitar"
+            else .22
+        )
         hold_ratio=sum(note.end-note.start>=sustain_threshold for note in notes)/max(1,attacks)
         removed_ratio=gate.get("removed",0)/max(1,gate.get("before",attacks))
         chord_ratio=sum(len(note.lanes)>1 for note in notes)/max(1,attacks) if name!="drums" else 0

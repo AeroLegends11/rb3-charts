@@ -39,6 +39,14 @@ def test_phrase_preserves_long_hold_chord_and_repeat_pitch():
     assert result[1].lanes == result[2].lanes
 
 
+def test_phrase_removes_partial_short_guitar_sustain():
+    result,report=author_guitar_phrases(
+        [Note(1,1.3,(1,),.8,"short-hold",60)],grid()
+    )
+    assert np.isclose(result[0].end-result[0].start,.065)
+    assert report["short_tails_removed"][0]["source_id"]=="short-hold"
+
+
 def test_sequence_fingering_can_handle_more_than_five_pitches_without_out_of_range():
     notes=[Note(1+i*.125,1+i*.125+.065,(1,),.9,str(i),p)
            for i,p in enumerate([60,62,64,65,67,69,71,72,71,69,67,65,64,62,60])]
@@ -100,21 +108,20 @@ def test_band_chord_sections_expand_repeated_fifths_as_power_chords():
         ])
     evidence={
         "candidates":candidates,
-        "focus":{"onset_groups":20,"pitch_corrections":4,"octave_anchors":3},
+        "focus":{"onset_groups":20,"pitch_corrections":9,"octave_anchors":12},
     }
     baseline,_=author_guitar_phrases(notes,grid())
     result,report=author_guitar_phrases(notes,grid(),chord_evidence=evidence)
-    assert sum(len(note.lanes)>1 for note in result)==3
+    assert sum(len(note.lanes)>1 for note in result)==7
     assert any(len(note.lanes)==1 for note in result)
     assert all(note.lanes[1]-note.lanes[0]==2 for note in result if len(note.lanes)==2)
     assert [(note.start,note.end,note.source_id,note.pitch) for note in result]==[
         (note.start,note.end,note.source_id,note.pitch) for note in baseline
     ]
-    assert report["chord_sections"]["notes_changed"]==3
-    assert report["chord_sections"]["chord_budget"]==4
+    assert report["chord_sections"]["notes_changed"]==7
 
 
-def test_band_chord_sections_preserve_existing_voicings_and_cap_inference():
+def test_band_chord_sections_preserve_existing_voicings():
     notes=[
         Note(1+i*.25,1+i*.25+.09,(0,4) if i==0 else (2,),.8,f"note-{i}",60)
         for i in range(10)
@@ -134,11 +141,11 @@ def test_band_chord_sections_preserve_existing_voicings_and_cap_inference():
         }
     )
     assert result[0].lanes==(0,4)
-    assert sum(len(note.lanes)>1 for note in result)==4
-    assert report["chord_sections"]["notes_changed"]==3
+    assert sum(len(note.lanes)>1 for note in result)==9
+    assert report["chord_sections"]["notes_changed"]==8
 
 
-def test_band_chord_sections_reject_unstable_guide_and_sparse_evidence():
+def test_band_chord_sections_reject_sparse_evidence_independent_of_guide_stability():
     notes=[
         Note(1+i*.25,1+i*.25+.09,(2,),.8,f"note-{i}",60+i%2)
         for i in range(5)
@@ -165,7 +172,7 @@ def test_band_chord_sections_reject_unstable_guide_and_sparse_evidence():
     )
     assert all(len(note.lanes)==1 for note in sparse+unstable)
     assert sparse_report["chord_sections"]["candidate_seeds"]==2
-    assert not unstable_report["chord_sections"]["gate_passed"]
+    assert unstable_report["chord_sections"]["gate_passed"]
 
 
 def test_voice_rejects_weak_isolated_register_spike_but_keeps_strong_jump():

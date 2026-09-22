@@ -5,11 +5,10 @@ It never creates an audio event or replaces a detected pitch with a fret number.
 """
 from dataclasses import replace
 import numpy as np
+from .chart import BAND_GUITAR_SUSTAIN_SECONDS
 from .motifs import discover_phrase_motifs, discover_window_motifs
 
 MOTIF_CONSTRAINT_WEIGHT = 2.0
-MAX_INFERRED_CHORD_RATE = .4
-MAX_CHORD_GUIDE_CORRECTION_RATE = .25
 
 
 def select_lead_phrases(source_events):
@@ -318,7 +317,6 @@ def _apply_band_chord_sections(notes, tempo, evidence):
         "gate_passed": False,
         "candidate_seeds": 0,
         "candidate_notes": 0,
-        "chord_budget": 0,
         "notes_changed": 0,
         "regions": [],
     }
@@ -332,8 +330,6 @@ def _apply_band_chord_sections(notes, tempo, evidence):
     octave_anchor_rate = float(focus.get("octave_anchors", 0)) / onset_groups
     report["correction_rate"] = round(correction_rate, 4)
     report["octave_anchor_rate"] = round(octave_anchor_rate, 4)
-    if correction_rate > MAX_CHORD_GUIDE_CORRECTION_RATE or octave_anchor_rate > .3:
-        return report
     report["gate_passed"] = True
     candidates = sorted(
         (dict(event) for event in evidence.get("candidates", ()) if event.get("accepted", True)),
@@ -417,18 +413,11 @@ def _apply_band_chord_sections(notes, tempo, evidence):
                 continue
             proposals[index] = (pitch_counts[note.pitch], note.confidence, -note.start, index)
         region_proposals.append((region, list(proposals.values())))
-    existing_chords = sum(len(note.lanes) > 1 for note in notes)
-    chord_budget = max(0, int(np.ceil(len(notes) * MAX_INFERRED_CHORD_RATE)) - existing_chords)
     report["candidate_notes"] = sum(len(proposals) for _, proposals in region_proposals)
-    report["chord_budget"] = chord_budget
     changed = []
+    changed_indices = set()
     for region, proposals in region_proposals:
-        existing_region_chords = sum(len(notes[index].lanes) > 1 for index in region)
-        region_budget = max(
-            0,
-            int(np.ceil(len(region) * MAX_INFERRED_CHORD_RATE)) - existing_region_chords,
-        )
-        selected = sorted(proposals, reverse=True)[:min(region_budget, chord_budget - len(changed))]
+        selected = sorted(proposals, reverse=True)
         selected.sort(key=lambda row: notes[row[-1]].start)
         runs = []
         for proposal in selected:
@@ -444,12 +433,13 @@ def _apply_band_chord_sections(notes, tempo, evidence):
             if len(run) < 3:
                 continue
             for _, _, _, index in run:
+                if index in changed_indices:
+                    continue
                 note = notes[index]
                 root = note.lanes[0]
                 note.lanes = (root, root + 2) if root <= 2 else (root - 2, root)
                 changed.append(note)
-        if len(changed) >= chord_budget:
-            break
+                changed_indices.add(index)
     if not changed:
         return report
     report["notes_changed"] = len(changed)
@@ -600,7 +590,7 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
     tails = []
     for i, note in enumerate(result):
         duration = note.end - note.start
-        if .065 < duration < .22:
+        if .065 < duration < BAND_GUITAR_SUSTAIN_SECONDS:
             end = note.start + .065
             if i + 1 < len(result):
                 end = min(end, result[i + 1].start - .015)

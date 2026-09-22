@@ -157,6 +157,19 @@ def test_band_mapping_turns_brief_articulation_into_tap():
     note=map_pitched(events,"guitar","range")[0]
     assert note.end-note.start==pytest.approx(.065)
 
+
+def test_band_guitar_mapping_turns_short_sustain_into_tap():
+    events=[{"start":1.0,"end":1.32,"pitch":55,"confidence":.8,"source_id":"guitar-1"}]
+    note=map_pitched(events,"guitar","range")[0]
+    assert note.end-note.start==pytest.approx(.065)
+
+
+def test_band_guitar_mapping_drops_sustain_from_lead_corrected_pitch():
+    events=[{"start":1.0,"end":1.8,"pitch":55,"confidence":.8,
+             "source_id":"guitar-1","lead_focus_corrected":True}]
+    note=map_pitched(events,"guitar","range")[0]
+    assert note.end-note.start==pytest.approx(.065)
+
 def test_band_mapping_uses_common_register_despite_high_outlier():
     events=[]
     for index,pitch in enumerate([48,48,48,50,51,53,55,58,60,87]):
@@ -346,6 +359,7 @@ def test_band_guitar_lead_focus_uses_monophonic_guide_for_weak_harmonics():
     ]
     result,report=_focus_band_guitar_candidates(events,times,midi,voiced,.375)
     assert [event["pitch"] for event in result]==[48,48,48]
+    assert result[1]["lead_focus_corrected"] is True
     assert report["pitch_corrections"]==1
     assert report["groups_resolved"]==1
 
