@@ -531,6 +531,12 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
     for group in bins.values():
         ranked=sorted(group,key=priority,reverse=True)
         chosen=ranked[:per_beat]
+        if phrase_aware and instrument=="guitar" and profile=="band":
+            # Fast picked or hammer-on figures may carry six supported attacks
+            # per beat. Require recurring-riff evidence for every attack beyond
+            # the ordinary four-note Band allowance.
+            chosen.extend(note for note in ranked[per_beat:]
+                          if note.source_id in motif_bonus and len(chosen)<6)
         if phrase_aware and instrument=="guitar" and profile=="electronic":
             # Expert repeated figures may contain four real attacks per beat.
             # Preserve supported members rather than replacing the whole rule
@@ -571,7 +577,11 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
             "holds":sum(n.end-n.start>=sustain_threshold for n in result),
             "longest_hold_seconds":round(max((n.end-n.start for n in result),default=0),3)}
     report["phrase_aware_guitar"]=bool(phrase_aware and instrument=="guitar")
-    report["supported_phrase_attacks_per_beat"]=4 if phrase_aware and instrument=="guitar" else per_beat
+    report["supported_phrase_attacks_per_beat"]=(
+        6 if phrase_aware and instrument=="guitar" and profile=="band"
+        else 4 if phrase_aware and instrument=="guitar"
+        else per_beat
+    )
     return result,report
 
 def reductions(expert, instrument, tempo):

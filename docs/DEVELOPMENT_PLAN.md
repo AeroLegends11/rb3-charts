@@ -118,22 +118,27 @@ Status update (2026-09-20):
   capped accepted-match sample in `analysis/phrase-authoring.json`.
 - Band playability now permits four well-spaced attacks per beat even when motif
   matching has not yet recognized the phrase. The minimum-gap filter still
-  rejects implausibly crowded bursts. On cached held-out Hail to the King
-  evidence this recovered 89 Expert attacks overall and seven attacks in source
-  seconds 4-20; unrelated Joker, Mr. Brightside and Cliffs of Dover replays were
-  retained as density cross-checks. These are automated replay measurements,
-  not listening review or Xbox validation.
+  rejects implausibly crowded bursts. A bounded phrase-aware exception retains
+  up to six attacks per beat only when recurring-riff evidence supports each
+  attack above the ordinary four. On cached held-out Hail to the King evidence,
+  the combined density changes recovered 118 Expert attacks overall and nine
+  attacks in the opening phrase.
 - Three user-supplied screenshots of the held-out official Hail to the King
   Expert chart showed that its rapid intro uses broad five-lane single-note
   motion rather than lead-guitar power chords. They were used only to identify
   an aggregate contour mismatch, never as generation input. The final phrase
   pass had collapsed an already pitch-ordered five-lane mapping into three
   middle lanes. Long rapid phrases now retain a broad incoming mapping only
-  when both boundary lanes recur and pitch/lane agreement is strong. Repeated
-  pitches use their majority supported lane rather than inheriting note-level
-  mapping noise. The Hail intro regained all five lanes with one lane per
-  recurring pitch; Joker was unchanged, and Mr. Brightside and Cliffs of Dover
-  remained bounded cross-checks. Human listening is still the acceptance gate.
+  when both boundary lanes recur, pitch/lane correlation is strong and at least
+  85% of local pitch changes move in the same lane direction. Repeated pitches
+  use their majority supported lane rather than inheriting note-level mapping
+  noise, and later window closure cannot overwrite that stronger evidence.
+  A cached replay over all 13 discovered held-out songs rejected a looser version
+  that increased contour reversals, then accepted the direction-gated version.
+  Hail's collapsed/reversed changes improved from 86/21 to 50/10 and Cliffs of
+  Dover improved from 109/8 to 70/7. These are automated replay measurements,
+  not listening review or Xbox validation; human review remains the acceptance
+  gate.
 - Whole-song canonical family selection and calibration against broader listening
   examples remain in progress; this does not complete Milestone 3.
 

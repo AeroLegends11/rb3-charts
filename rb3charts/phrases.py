@@ -114,13 +114,12 @@ def _preserve_supported_lane_span(rows, lanes):
     if (
         len(rows) < 32
         or duration <= 0
-        or len(rows) / duration < 5
+        or len(rows) / duration < 4
         or len(set(lanes)) < 2
     ):
         return lanes, False
     incoming_min, incoming_max = min(incoming), max(incoming)
-    authored_min, authored_max = min(lanes), max(lanes)
-    if incoming_max - incoming_min < 3 or authored_max - authored_min >= incoming_max - incoming_min:
+    if incoming_max - incoming_min < 3:
         return lanes, False
     edge_support = min(incoming.count(incoming_min), incoming.count(incoming_max))
     pitches = np.asarray([note.pitch for note in rows], dtype=float)
@@ -138,6 +137,15 @@ def _preserve_supported_lane_span(rows, lanes):
         for note in rows
     ]
     if max(stable) - min(stable) < 3:
+        return lanes, False
+    directions = [
+        (right.pitch - left.pitch) * (right_lane - left_lane)
+        for left, right, left_lane, right_lane in zip(rows, rows[1:], stable, stable[1:])
+        if right.pitch != left.pitch
+    ]
+    agreement = sum(direction > 0 for direction in directions) / max(1, len(directions))
+    reversals = sum(direction < 0 for direction in directions) / max(1, len(directions))
+    if agreement < .85 or reversals > .08:
         return lanes, False
     return stable, stable != lanes
 
@@ -616,6 +624,8 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
                               "supported_span_preserved": span_preserved,
                               "window_motif_constrained": window_constrained})
     for (phrase_index, note_index), closure in low_confidence_closures.items():
+        if phrase_report[phrase_index]["supported_span_preserved"]:
+            continue
         _, source_phrase, source_first, source_next, _, target_first = closure
         shift = (
             phrases[phrase_index][target_first].lanes[0]

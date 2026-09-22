@@ -92,6 +92,20 @@ def test_expert_gate_preserves_supported_fast_riff_but_not_unrelated_burst():
     assert len(filtered)<len(burst)
 
 
+def test_band_gate_preserves_supported_six_attack_picking():
+    notes = [
+        Note(1+i/12,1+i/12+.065,(i%5,),.8,str(i),(60,62,64,65,67,69)[i%6])
+        for i in range(24)
+    ]
+
+    ordinary,_ = enforce_playability(notes,"guitar",grid(),"band")
+    supported,report = enforce_playability(notes,"guitar",grid(),"band",phrase_aware=True)
+
+    assert len(supported) > len(ordinary)
+    assert len(supported) == len(notes)
+    assert report["supported_phrase_attacks_per_beat"] == 6
+
+
 def test_phrase_fingering_preserves_repeated_supported_lane_span():
     pitches = (48, 55, 60, 67) * 8
     incoming = list((0, 1, 3, 4) * 8)
@@ -105,6 +119,51 @@ def test_phrase_fingering_preserves_repeated_supported_lane_span():
 
     assert changed
     assert lanes == [0, 1, 3, 4] * 8
+
+
+def test_phrase_authoring_keeps_supported_pitch_lanes_consistent():
+    pitches = (48, 55, 60, 67) * 8
+    incoming = list((0, 1, 3, 4) * 8)
+    incoming[4] = 1
+    notes = [
+        Note(i * .125, i * .125 + .065, (lane,), pitch=pitch, source_id=str(i))
+        for i, (pitch, lane) in enumerate(zip(pitches, incoming))
+    ]
+
+    result,report = author_guitar_phrases(notes,grid())
+
+    assert report["supported_span_preservations"] == 1
+    assert all(
+        len({note.lanes for note in result if note.pitch == pitch}) == 1
+        for pitch in set(pitches)
+    )
+
+
+def test_phrase_authoring_stabilizes_broad_four_note_per_second_run():
+    pitches = (48, 55, 60, 67) * 8
+    notes = [
+        Note(i * .25, i * .25 + .065, (lane,), pitch=pitch, source_id=str(i))
+        for i, (pitch, lane) in enumerate(zip(pitches, (0, 1, 3, 4) * 8))
+    ]
+
+    result,report = author_guitar_phrases(notes,grid())
+
+    assert report["supported_span_preservations"] == 1
+    assert len({note.lanes[0] for note in result}) == 4
+
+
+def test_phrase_span_rejects_locally_reversed_mapping():
+    pitches = (48, 55, 60, 67) * 8
+    rows = [
+        Note(i * .125, i * .125 + .065, (lane,), pitch=pitch, source_id=str(i))
+        for i, (pitch, lane) in enumerate(zip(pitches, (0, 2, 1, 4) * 8))
+    ]
+    authored = [1, 1, 2, 3] * 8
+
+    lanes,changed = _preserve_supported_lane_span(rows, authored)
+
+    assert not changed
+    assert lanes == authored
 
 
 def test_empty_phrase_inputs():
