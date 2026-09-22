@@ -5,7 +5,10 @@ It never creates an audio event or replaces a detected pitch with a fret number.
 """
 from dataclasses import replace
 import numpy as np
-from .motifs import discover_phrase_motifs
+from .motifs import discover_phrase_motifs, discover_window_motifs
+
+MOTIF_CONSTRAINT_WEIGHT = 2.0
+MAX_INFERRED_CHORD_RATE = .4
 
 
 def select_lead_phrases(source_events):
@@ -97,7 +100,15 @@ def _transition_cost(interval, old, new, gap):
     return musical+ergonomic
 
 
-def _fingering(rows, previous=None):
+def _constraint_cost(lanes, preferred):
+    if preferred is None:
+        return 0.0
+    return float(
+        sum(abs(lane - target) for lane, target in zip(lanes, preferred) if target is not None)
+    )
+
+
+def _fingering(rows, previous=None, preferred=None):
     pitches = [note.pitch for note in rows]
     unique = sorted(set(pitches))
     if len(unique) <= 5:
@@ -105,15 +116,33 @@ def _fingering(rows, previous=None):
         # pitch elsewhere cannot flatten this riff into a single color.
         options=[[offset+unique.index(pitch) for pitch in pitches] for offset in range(6-len(unique))]
         if previous is None:
-            return options[(5-len(unique))//2]
-        best=min(options,key=lambda lanes:_transition_cost(pitches[0]-previous.pitch,
-                 previous.lanes[0],lanes[0],rows[0].start-previous.start))
-        if _transition_cost(pitches[0]-previous.pitch,previous.lanes[0],best[0],rows[0].start-previous.start)<5:
-            return best
+            if preferred is not None:
+                best = min(
+                    options,
+                    key=lambda lanes: (
+                        _constraint_cost(lanes, preferred),
+                        abs(np.mean(lanes) - 2),
+                    ),
+                )
+                if _constraint_cost(best, preferred) == 0:
+                    return best
+            else:
+                return options[(5-len(unique))//2]
+        else:
+            best=min(options,key=lambda lanes:(
+                     _transition_cost(pitches[0]-previous.pitch,
+                                      previous.lanes[0],lanes[0],rows[0].start-previous.start)
+                     + MOTIF_CONSTRAINT_WEIGHT * _constraint_cost(lanes, preferred)))
+            if (_transition_cost(pitches[0]-previous.pitch,previous.lanes[0],
+                                 best[0],rows[0].start-previous.start)<5
+                    and (preferred is None or _constraint_cost(best, preferred) == 0)):
+                return best
         # No rigid pitch dictionary joins this boundary naturally. Let the
         # sequence optimizer preserve the incoming note and choose a later reset.
     target = np.interp(pitches, unique, np.linspace(0, 4, len(unique)))
     costs = .2 * (np.arange(5) - target[0])**2
+    if preferred is not None and preferred[0] is not None:
+        costs += MOTIF_CONSTRAINT_WEIGHT * np.abs(np.arange(5) - preferred[0])
     if previous is not None:
         costs+=np.array([_transition_cost(pitches[0]-previous.pitch,previous.lanes[0],lane,
                                          rows[0].start-previous.start) for lane in range(5)])
@@ -123,7 +152,13 @@ def _fingering(rows, previous=None):
         matrix = np.zeros((5, 5))
         for old in range(5):
             for new in range(5):
-                matrix[old, new] = costs[old] + _transition_cost(interval,old,new,rows[i].start-rows[i-1].start) + .2 * (new - target[i])**2
+                matrix[old, new] = (
+                    costs[old]
+                    + _transition_cost(interval,old,new,rows[i].start-rows[i-1].start)
+                    + .2 * (new - target[i])**2
+                    + (MOTIF_CONSTRAINT_WEIGHT * abs(new - preferred[i])
+                       if preferred is not None and preferred[i] is not None else 0)
+                )
         links.append(np.argmin(matrix, axis=0))
         costs = np.min(matrix, axis=0)
     lane = int(np.argmin(costs))
@@ -132,6 +167,121 @@ def _fingering(rows, previous=None):
         lane = int(link[lane])
         output.append(lane)
     return list(reversed(output))
+
+
+def _window_lane_constraints(local_lanes, matches, phrases, tempo):
+    proposals = {}
+    closure_proposals = {}
+    for match in matches:
+        left_rank = (
+            match["left_quality"],
+            match["left_stop"] - match["left_start"],
+            -match["left_time"],
+        )
+        right_rank = (
+            match["right_quality"],
+            match["right_stop"] - match["right_start"],
+            -match["right_time"],
+        )
+        if left_rank >= right_rank:
+            source_phrase = match["left_phrase"]
+            source_start = match["left_start"]
+            target_phrase = match["right_phrase"]
+            target_start = match["right_start"]
+            alignment = match["alignment"]
+            quality = match["left_quality"]
+        else:
+            source_phrase = match["right_phrase"]
+            source_start = match["right_start"]
+            target_phrase = match["left_phrase"]
+            target_start = match["left_start"]
+            alignment = tuple((right, left) for left, right in match["alignment"])
+            quality = match["right_quality"]
+        source = [
+            local_lanes[source_phrase][source_start + source_index]
+            for source_index, _ in alignment
+        ]
+        target = [
+            local_lanes[target_phrase][target_start + target_index]
+            for _, target_index in alignment
+        ]
+        shifts = range(-min(source), 5 - max(source))
+        shift = min(
+            shifts,
+            key=lambda value: (
+                sum(abs(lane + value - expected) for lane, expected in zip(source, target)),
+                abs(value),
+            ),
+        )
+        weight = len(alignment) * quality / (1 + match["score"])
+        for lane, (_, target_index) in zip(source, alignment):
+            key = (target_phrase, target_start + target_index)
+            projected = lane + shift
+            proposals.setdefault(key, {}).setdefault(projected, 0.0)
+            proposals[key][projected] += weight
+        source_offsets = [source_index for source_index, _ in alignment]
+        target_offsets = [target_index for _, target_index in alignment]
+        if (
+            len(alignment) == 4
+            and source_offsets == list(range(source_offsets[0], source_offsets[0] + len(alignment)))
+            and target_offsets == list(range(target_offsets[0], target_offsets[0] + len(alignment)))
+        ):
+            source_first = source_start + source_offsets[0]
+            source_previous = source_start + source_offsets[-1]
+            source_next = source_previous + 1
+            target_previous = target_start + target_offsets[-1]
+            target_next = target_previous + 1
+            source_rows = phrases[source_phrase]
+            target_rows = phrases[target_phrase]
+            if source_next < len(source_rows) and target_next < len(target_rows):
+                source_note = source_rows[source_next]
+                target_note = target_rows[target_next]
+                source_gap = (
+                    tempo.beat_at(source_note.start)
+                    - tempo.beat_at(source_rows[source_previous].start)
+                )
+                target_gap = (
+                    tempo.beat_at(target_note.start)
+                    - tempo.beat_at(target_rows[target_previous].start)
+                )
+                if (
+                    source_first == 0
+                    and source_next == 4
+                    and source_next == len(source_rows) - 1
+                    and target_start + target_offsets[0] == 0
+                    and target_next == 4
+                    and abs(source_note.pitch - source_rows[source_first].pitch) <= 1
+                    and target_note.confidence < .55
+                    and source_note.confidence >= target_note.confidence + .04
+                    and abs(source_gap - target_gap) <= .2
+                ):
+                    projected = local_lanes[source_phrase][source_next] + shift
+                    if 0 <= projected <= 4:
+                        key = (target_phrase, target_next)
+                        closure_proposals.setdefault(key, []).append(
+                            (weight, source_phrase, source_first, source_next, target_phrase, target_start)
+                        )
+    constraints = {}
+    for key, lanes in proposals.items():
+        local = local_lanes[key[0]][key[1]]
+        constraints[key] = min(
+            lanes,
+            key=lambda lane: (-lanes[lane], abs(lane - local), lane),
+        )
+    closures = {
+        key: max(rows, key=lambda row: (row[0], -row[1], -row[2]))
+        for key, rows in closure_proposals.items()
+    }
+    return constraints, closures
+
+
+def _has_contiguous_constraints(preferred, minimum=3):
+    run = 0
+    for target in preferred:
+        run = run + 1 if target is not None else 0
+        if run >= minimum:
+            return True
+    return False
 
 
 def _continuity_anchor(notes, index, start, tempo):
@@ -161,7 +311,164 @@ def _continuity_anchor(notes, index, start, tempo):
     return None, "none", barrier_chords
 
 
-def author_guitar_phrases(notes, tempo):
+def _apply_band_chord_sections(notes, tempo, evidence):
+    report = {
+        "method": "bounded fifth-evidence sections with repeated root power-chord attacks",
+        "gate_passed": False,
+        "candidate_seeds": 0,
+        "candidate_notes": 0,
+        "chord_budget": 0,
+        "notes_changed": 0,
+        "regions": [],
+    }
+    if not notes or not evidence:
+        return report
+    focus = evidence.get("focus") or {}
+    onset_groups = int(focus.get("onset_groups", 0))
+    if onset_groups <= 0:
+        return report
+    correction_rate = float(focus.get("pitch_corrections", 0)) / onset_groups
+    octave_anchor_rate = float(focus.get("octave_anchors", 0)) / onset_groups
+    report["correction_rate"] = round(correction_rate, 4)
+    report["octave_anchor_rate"] = round(octave_anchor_rate, 4)
+    if correction_rate > .15 or octave_anchor_rate > .3:
+        return report
+    report["gate_passed"] = True
+    candidates = sorted(
+        (dict(event) for event in evidence.get("candidates", ()) if event.get("accepted", True)),
+        key=lambda event: (event["start"], event["pitch"]),
+    )
+    groups = []
+    for event in candidates:
+        if groups and event["start"] - groups[-1][0]["start"] <= .045:
+            groups[-1].append(event)
+        else:
+            groups.append([event])
+    seed_beats = []
+    for group in groups:
+        supported = False
+        for index, left in enumerate(group):
+            for right in group[index + 1:]:
+                interval = abs(int(left["pitch"]) - int(right["pitch"]))
+                ratio = min(left["confidence"], right["confidence"]) / max(
+                    left["confidence"], right["confidence"]
+                )
+                onset = min(
+                    float(left.get("model_onset_strength") or 0),
+                    float(right.get("model_onset_strength") or 0),
+                )
+                if interval in (5, 7) and ratio >= .5 and onset >= .5:
+                    supported = True
+                    break
+            if supported:
+                break
+        if supported:
+            seed_beats.append(tempo.beat_at(group[0]["start"]))
+    report["candidate_seeds"] = len(seed_beats)
+    if len(seed_beats) < 3:
+        return report
+    seed_beats.sort()
+    clusters = []
+    cursor = 0
+    while cursor < len(seed_beats):
+        cluster = [seed_beats[cursor]]
+        stop = cursor + 1
+        while (
+            stop < len(seed_beats)
+            and seed_beats[stop] - cluster[-1] <= 10
+            and seed_beats[stop] - cluster[0] <= 16
+        ):
+            cluster.append(seed_beats[stop])
+            stop += 1
+        clusters.append(cluster)
+        cursor = stop if len(cluster) >= 3 else cursor + 1
+    beats = [tempo.beat_at(note.start) for note in notes]
+    region_proposals = []
+    regions = []
+    for cluster in clusters:
+        if len(cluster) < 3:
+            continue
+        region_indices = [
+            index for index, beat in enumerate(beats)
+            if cluster[0] <= beat <= cluster[-1]
+        ]
+        contiguous = []
+        for index in region_indices:
+            if contiguous and beats[index] - beats[contiguous[-1]] > 2.25:
+                if len(contiguous) >= 4:
+                    regions.append(contiguous)
+                contiguous = []
+            contiguous.append(index)
+        if len(contiguous) >= 4:
+            regions.append(contiguous)
+    for region in regions:
+        pitch_counts = {}
+        for index in region:
+            pitch = notes[index].pitch
+            pitch_counts[pitch] = pitch_counts.get(pitch, 0) + 1
+        pitch_limit = float(np.quantile([notes[index].pitch for index in region], .6))
+        proposals = {}
+        for index in region:
+            note = notes[index]
+            if (len(note.lanes) != 1
+                    or pitch_counts[note.pitch] < 3
+                    or note.pitch > pitch_limit):
+                continue
+            proposals[index] = (pitch_counts[note.pitch], note.confidence, -note.start, index)
+        region_proposals.append((region, list(proposals.values())))
+    existing_chords = sum(len(note.lanes) > 1 for note in notes)
+    chord_budget = max(0, int(np.ceil(len(notes) * MAX_INFERRED_CHORD_RATE)) - existing_chords)
+    report["candidate_notes"] = sum(len(proposals) for _, proposals in region_proposals)
+    report["chord_budget"] = chord_budget
+    changed = []
+    for region, proposals in region_proposals:
+        existing_region_chords = sum(len(notes[index].lanes) > 1 for index in region)
+        region_budget = max(
+            0,
+            int(np.ceil(len(region) * MAX_INFERRED_CHORD_RATE)) - existing_region_chords,
+        )
+        selected = sorted(proposals, reverse=True)[:min(region_budget, chord_budget - len(changed))]
+        selected.sort(key=lambda row: notes[row[-1]].start)
+        runs = []
+        for proposal in selected:
+            note = notes[proposal[-1]]
+            if (
+                runs
+                and tempo.beat_at(note.start) - tempo.beat_at(notes[runs[-1][-1][-1]].start) <= 2.25
+            ):
+                runs[-1].append(proposal)
+            else:
+                runs.append([proposal])
+        for run in runs:
+            if len(run) < 3:
+                continue
+            for _, _, _, index in run:
+                note = notes[index]
+                root = note.lanes[0]
+                note.lanes = (root, root + 2) if root <= 2 else (root - 2, root)
+                changed.append(note)
+        if len(changed) >= chord_budget:
+            break
+    if not changed:
+        return report
+    report["notes_changed"] = len(changed)
+    changed_regions = []
+    for note in sorted(changed, key=lambda row: row.start):
+        if (
+            not changed_regions
+            or tempo.beat_at(note.start) - tempo.beat_at(changed_regions[-1][-1].start) > 2.25
+        ):
+            changed_regions.append([note])
+        else:
+            changed_regions[-1].append(note)
+    report["regions"] = [
+        {"start": region[0].start, "end": region[-1].end, "notes": len(region)}
+        for region in changed_regions
+    ]
+    return report
+
+
+def author_guitar_phrases(notes, tempo, chord_evidence=None):
     """Sight-reading pass: phrase contour, repeatable fingering, short tails.
 
     Preserve event identity, pitch, attack timing and count. Chords are barriers
@@ -191,6 +498,7 @@ def author_guitar_phrases(notes, tempo):
     indices={id(note):i for i,note in enumerate(result)}
     local_lanes = {}
     motif_assignments = discover_phrase_motifs(phrases, tempo)
+    window_matches, window_diagnostics = discover_window_motifs(phrases, tempo)
     baseline = [replace(n) for n in result]
     continuity_summary = {"adjacent_single": 0, "through_chord": 0, "none": 0}
     for phrase_index, rows in enumerate(phrases):
@@ -201,6 +509,9 @@ def author_guitar_phrases(notes, tempo):
         local_lanes[phrase_index] = lanes
         for note, lane in zip(span, lanes):
             note.lanes = (lane,)
+    window_constraints, low_confidence_closures = _window_lane_constraints(
+        local_lanes, window_matches, phrases, tempo
+    )
     family_lanes = {}
     for phrase_index, assignment in motif_assignments.items():
         canonical = assignment["canonical_phrase"]
@@ -229,6 +540,13 @@ def author_guitar_phrases(notes, tempo):
         motif_info = motif_assignments.get(phrase_index)
         motif_reused = False
         motif_reason = "not_matched"
+        preferred = [
+            window_constraints.get((phrase_index, note_index))
+            for note_index in range(len(rows))
+        ]
+        window_constrained = _has_contiguous_constraints(preferred)
+        if not window_constrained:
+            preferred = None
         if motif_info is not None and previous is None:
             motif_reason = motif_info["reason"]
             canonical = family_lanes.get(motif_info["family_id"])
@@ -240,12 +558,20 @@ def author_guitar_phrases(notes, tempo):
                 if projected != local_lanes[phrase_index]:
                     motif_reused = True
                 lanes = projected
+        if preferred is not None and not reused and motif_info is None:
+            candidate = _fingering(rows, previous, preferred)
+            if lanes is None or _constraint_cost(candidate, preferred) < _constraint_cost(lanes, preferred):
+                lanes = candidate
+                reused = False
+                motif_reused = False
         if lanes is None:
-            lanes = local_lanes[phrase_index]
+            lanes = _fingering(rows, previous, preferred)
         vocabulary.setdefault(signature,lanes)
         if continuity_source == "adjacent_single" and previous is not None and previous.pitch == rows[0].pitch and len(previous.lanes) == 1:
             boundary_delta = previous.lanes[0] - lanes[0]
-            if all(0 <= lane + boundary_delta <= 4 for lane in lanes):
+            shifted = [lane + boundary_delta for lane in lanes]
+            if (all(0 <= lane <= 4 for lane in shifted)
+                    and _constraint_cost(shifted, preferred) <= _constraint_cost(lanes, preferred)):
                 lanes = [lane + boundary_delta for lane in lanes]
         before = [n.lanes[0] for n in rows]
         for note, lane in zip(rows, lanes):
@@ -259,7 +585,17 @@ def author_guitar_phrases(notes, tempo):
                               "barrier_chords": barrier_chords,
                               "motif_family": motif_info["family_id"] if motif_info else None,
                               "motif_reused": motif_reused,
-                              "motif_reason": motif_reason})
+                              "motif_reason": motif_reason,
+                              "window_motif_constrained": window_constrained})
+    for (phrase_index, note_index), closure in low_confidence_closures.items():
+        _, source_phrase, source_first, source_next, _, target_first = closure
+        shift = (
+            phrases[phrase_index][target_first].lanes[0]
+            - phrases[source_phrase][source_first].lanes[0]
+        )
+        lane = int(np.clip(phrases[source_phrase][source_next].lanes[0] + shift, 0, 4))
+        phrases[phrase_index][note_index].lanes = (lane,)
+        phrase_report[phrase_index]["after"][note_index] = lane
     tails = []
     for i, note in enumerate(result):
         duration = note.end - note.start
@@ -275,8 +611,17 @@ def author_guitar_phrases(notes, tempo):
                  if len(a.lanes) == len(b.lanes) == 1 and b.start - a.start < .8]
         return {"collapsed_pitch_changes": sum(a.pitch != b.pitch and a.lanes == b.lanes for a,b in pairs),
                 "reversed_pitch_changes": sum((b.pitch-a.pitch)*(b.lanes[0]-a.lanes[0]) < 0 for a,b in pairs)}
-    return result, {"method": "phrase-local fingering with whole-sequence ergonomic costs",
+    chord_sections = _apply_band_chord_sections(result, tempo, chord_evidence)
+    for phrase, rows in zip(phrase_report, phrases):
+        phrase["final_lanes"] = [list(note.lanes) for note in rows]
+    return result, {"method": "phrase-local fingering with whole-sequence ergonomic costs and bounded motif windows",
                     "before": contour(sorted(notes, key=lambda n:n.start)), "after": contour(result),
                     "continuity_summary": continuity_summary,
                     "phrases": phrase_report, "short_tails_removed": tails,
+                    "window_motif_matching": window_diagnostics,
+                    "window_motif_constrained_phrases": sum(
+                        phrase["window_motif_constrained"] for phrase in phrase_report
+                    ),
+                    "window_motif_low_confidence_closures": len(low_confidence_closures),
+                    "chord_sections": chord_sections,
                     "notes_added": 0, "notes_removed": 0}

@@ -1,4 +1,5 @@
 import argparse
+import json
 from pathlib import Path
 import sys
 from .model import Options
@@ -30,6 +31,34 @@ def main():
     reference=sub.add_parser("analyze-reference",help="Learn style statistics from finished Rock Band MIDI charts")
     reference.add_argument("folder",type=Path)
     reference.add_argument("--output",type=Path,default=Path("reference")/"style-profile.json")
+    dataset=sub.add_parser("validate-dataset",help="Validate a rights-traceable training dataset manifest")
+    dataset.add_argument("manifest",type=Path)
+    dataset.add_argument("--verify-hashes",action="store_true",help="Read every audio/annotation file and verify SHA-256")
+    guitarset=sub.add_parser("convert-guitarset",help="Convert GuitarSet JAMS to lane-independent structure labels")
+    guitarset.add_argument("annotation",type=Path)
+    guitarset.add_argument("output",type=Path)
+    slakh=sub.add_parser("convert-slakh",help="Convert one Slakh track to lane-independent structure labels")
+    slakh.add_argument("track",type=Path)
+    slakh.add_argument("output",type=Path)
+    slakh_mix=sub.add_parser("mix-slakh-guitar",help="Sum aligned Guitar-class Slakh stems")
+    slakh_mix.add_argument("track",type=Path)
+    slakh_mix.add_argument("output",type=Path)
+    features=sub.add_parser("extract-structure-features",help="Create model-ready audio features and structure targets")
+    features.add_argument("audio",type=Path)
+    features.add_argument("labels",type=Path)
+    features.add_argument("output",type=Path)
+    training=sub.add_parser("train-structure-baseline",help="Train the first attack/polyphony/sustain baseline")
+    training.add_argument("index",type=Path)
+    training.add_argument("output",type=Path)
+    training.add_argument("--epochs",type=int,default=1)
+    training.add_argument("--device",choices=["auto","cpu","cuda"],default="auto")
+    training.add_argument("--seed",type=int,default=1337)
+    prediction=sub.add_parser("predict-structure",help="Run lane-independent model evaluation without changing charts")
+    prediction.add_argument("model",type=Path)
+    prediction.add_argument("audio",type=Path)
+    prediction.add_argument("output",type=Path)
+    prediction.add_argument("--beats",type=Path)
+    prediction.add_argument("--device",choices=["auto","cpu","cuda"],default="auto")
     for command in ("generate","batch"):
         p=sub.add_parser(command)
         p.add_argument("source",type=Path)
@@ -53,12 +82,75 @@ def main():
     if args.command in (None,"gui"):
         from .gui import launch
         return launch()
-    from .pipeline import generate,batch,package_existing,replay_cached
     if args.command=="analyze-reference":
         from .reference import analyze_reference_corpus
         report=analyze_reference_corpus(args.folder,args.output)
         print(f"Analyzed {report['analyzed_files']}/{report['midi_files']} reference charts -> {args.output}")
         return 1 if report["failed_files"] else 0
+    if args.command=="validate-dataset":
+        from .datasets import DatasetManifestError, validate_dataset_manifest
+        try:
+            report=validate_dataset_manifest(args.manifest,args.verify_hashes)
+        except DatasetManifestError as exc:
+            print(f"Dataset manifest is invalid: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report,indent=2))
+        return 0
+    if args.command=="convert-guitarset":
+        from .training import TrainingDataError, convert_guitarset_jams
+        try:
+            report=convert_guitarset_jams(args.annotation,args.output)
+        except TrainingDataError as exc:
+            print(f"GuitarSet conversion failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["summary"],indent=2))
+        return 0
+    if args.command=="convert-slakh":
+        from .training import TrainingDataError, convert_slakh_track
+        try:
+            report=convert_slakh_track(args.track,args.output)
+        except TrainingDataError as exc:
+            print(f"Slakh conversion failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["summary"],indent=2))
+        return 0
+    if args.command=="mix-slakh-guitar":
+        from .training import TrainingDataError, mix_slakh_guitar_stems
+        try:
+            report=mix_slakh_guitar_stems(args.track,args.output)
+        except TrainingDataError as exc:
+            print(f"Slakh guitar mixing failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report,indent=2))
+        return 0
+    if args.command=="extract-structure-features":
+        from .training import TrainingDataError, extract_structure_features
+        try:
+            report=extract_structure_features(args.audio,args.labels,args.output)
+        except TrainingDataError as exc:
+            print(f"Structure feature extraction failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report,indent=2))
+        return 0
+    if args.command=="train-structure-baseline":
+        from .training import TrainingDataError, train_structure_baseline
+        try:
+            report=train_structure_baseline(args.index,args.output,args.epochs,args.device,args.seed)
+        except TrainingDataError as exc:
+            print(f"Structure baseline training failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report,indent=2))
+        return 0
+    if args.command=="predict-structure":
+        from .training import TrainingDataError, predict_structure
+        try:
+            report=predict_structure(args.model,args.audio,args.output,args.beats,args.device)
+        except TrainingDataError as exc:
+            print(f"Structure inference failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["summary"],indent=2))
+        return 0
+    from .pipeline import generate,batch,package_existing,replay_cached
     if args.command=="package":
         result=package_existing(args.folder,onyx=args.onyx)
     elif args.command=="replay":

@@ -3,7 +3,7 @@ from typing import NamedTuple
 import numpy as np
 
 
-MOTIF_VERSION = 1
+MOTIF_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,14 @@ class MotifMatch(NamedTuple):
     score: float
     transposition: int
     alignment: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True)
+class MotifWindow:
+    phrase_index: int
+    start_index: int
+    stop_index: int
+    occurrence: MotifOccurrence
 
 
 def _contour(values):
@@ -120,6 +128,210 @@ def match_occurrences(a, b, max_insertions=1):
         int(round(b.root_pitch - a.root_pitch)),
         alignment,
     )
+
+
+def _window_candidate_keys(window):
+    pitches = window.occurrence.relative_pitches
+    beats = window.occurrence.beat_offsets
+    representations = [(pitches, beats)]
+    if len(pitches) > 3:
+        representations.extend(
+            (
+                pitches[:index] + pitches[index + 1:],
+                beats[:index] + beats[index + 1:],
+            )
+            for index in range(len(pitches))
+        )
+    keys = set()
+    for values, offsets in representations:
+        contour = _contour(values)
+        contours = [contour]
+        if len(values) == 5:
+            contours.extend(
+                contour[:index] + (None,) + contour[index + 1:]
+                for index in range(len(contour))
+            )
+        span = max(values) - min(values)
+        endpoint = values[-1] - values[0]
+        gaps = tuple(b - a for a, b in zip(offsets, offsets[1:]))
+        for pitch_offset in (0, 2):
+            span_bucket = (span + pitch_offset) // 4
+            endpoint_bucket = (endpoint + pitch_offset) // 4
+            for rhythm_offset in (0, 2):
+                rhythm = tuple((gap + rhythm_offset) // 4 for gap in gaps)
+                for candidate_contour in contours:
+                    keys.add((
+                        len(values),
+                        candidate_contour,
+                        pitch_offset,
+                        span_bucket,
+                        endpoint_bucket,
+                        rhythm_offset,
+                        rhythm,
+                    ))
+    return keys
+
+
+def discover_window_motifs(phrases, tempo, min_window=3, max_window=5):
+    """Find bounded repeated figures inside phrases of unequal length."""
+    windows = []
+    for phrase_index, notes in enumerate(phrases):
+        for start in range(max(0, len(notes) - min_window + 1)):
+            for stop in range(start + min_window, min(len(notes), start + max_window) + 1):
+                occurrence = phrase_occurrence(phrase_index, notes[start:stop], tempo)
+                if occurrence is None:
+                    continue
+                gaps = tuple(
+                    b - a for a, b in zip(occurrence.beat_offsets, occurrence.beat_offsets[1:])
+                )
+                if any(gap <= 0 or gap > 24 for gap in gaps):
+                    continue
+                windows.append(MotifWindow(phrase_index, start, stop, occurrence))
+
+    candidate_index = {}
+    candidate_pairs = set()
+    for index, window in enumerate(windows):
+        keys = _window_candidate_keys(window)
+        for key in keys:
+            candidate_pairs.update((old_index, index) for old_index in candidate_index.get(key, ()))
+        for key in keys:
+            candidate_index.setdefault(key, []).append(index)
+
+    rejection_counts = {}
+    candidates = {}
+    comparisons = 0
+    full_occurrences = {
+        phrase_index: phrase_occurrence(phrase_index, notes, tempo)
+        for phrase_index, notes in enumerate(phrases)
+    }
+    full_matches = {}
+    for left_index, right_index in sorted(candidate_pairs):
+        left, right = windows[left_index], windows[right_index]
+        left_length = left.stop_index - left.start_index
+        left_gaps = tuple(
+            b - a
+            for a, b in zip(left.occurrence.beat_offsets, left.occurrence.beat_offsets[1:])
+        )
+        right_length = right.stop_index - right.start_index
+        if abs(left_length - right_length) > 1:
+            continue
+        if left.phrase_index == right.phrase_index:
+            if max(left.start_index, right.start_index) < min(left.stop_index, right.stop_index):
+                continue
+        right_gaps = tuple(
+            b - a
+            for a, b in zip(right.occurrence.beat_offsets, right.occurrence.beat_offsets[1:])
+        )
+        if abs(float(np.median(left_gaps)) - float(np.median(right_gaps))) > 6:
+            continue
+        comparisons += 1
+        match = match_occurrences(left.occurrence, right.occurrence)
+        if not match.matched:
+            rejection_counts[match.reason] = rejection_counts.get(match.reason, 0) + 1
+            continue
+        contour_pairs = list(zip(match.alignment, match.alignment[1:]))
+        contour_hits = sum(
+            (
+                0 if left.occurrence.relative_pitches[after_left]
+                == left.occurrence.relative_pitches[before_left]
+                else int(np.sign(
+                    left.occurrence.relative_pitches[after_left]
+                    - left.occurrence.relative_pitches[before_left]
+                ))
+            )
+            == (
+                0 if right.occurrence.relative_pitches[after_right]
+                == right.occurrence.relative_pitches[before_right]
+                else int(np.sign(
+                    right.occurrence.relative_pitches[after_right]
+                    - right.occurrence.relative_pitches[before_right]
+                ))
+            )
+            for ((before_left, before_right), (after_left, after_right))
+            in contour_pairs
+        )
+        contour_agreement = contour_hits / max(1, len(contour_pairs))
+        phrase_pair = tuple(sorted((left.phrase_index, right.phrase_index)))
+        if left.phrase_index != right.phrase_index:
+            if phrase_pair not in full_matches:
+                full_left = full_occurrences[left.phrase_index]
+                full_right = full_occurrences[right.phrase_index]
+                full_matches[phrase_pair] = (
+                    match_occurrences(full_left, full_right)
+                    if full_left is not None and full_right is not None else None
+                )
+            full_match = full_matches[phrase_pair]
+            if full_match is not None:
+                if full_match.reason == "strong_variation" and len(match.alignment) < 4:
+                    rejection_counts["strong_phrase_variation"] = (
+                        rejection_counts.get("strong_phrase_variation", 0) + 1
+                    )
+                    continue
+        row = {
+            "left_phrase": left.phrase_index,
+            "left_start": left.start_index,
+            "left_stop": left.stop_index,
+            "left_time": left.occurrence.start,
+            "left_quality": left.occurrence.quality,
+            "left_source_ids": left.occurrence.source_ids,
+            "right_phrase": right.phrase_index,
+            "right_start": right.start_index,
+            "right_stop": right.stop_index,
+            "right_time": right.occurrence.start,
+            "right_quality": right.occurrence.quality,
+            "right_source_ids": right.occurrence.source_ids,
+            "alignment": match.alignment,
+            "contour_agreement": contour_agreement,
+            "score": match.score,
+            "transposition": match.transposition,
+            "reason": match.reason,
+        }
+        candidates.setdefault(phrase_pair, []).append(row)
+
+    accepted = []
+    for rows in candidates.values():
+        kept = []
+        for row in sorted(
+            rows,
+            key=lambda item: (
+                -item["contour_agreement"],
+                -len(item["alignment"]),
+                item["score"],
+                -(item["left_stop"] - item["left_start"]
+                  + item["right_stop"] - item["right_start"]),
+                item["left_time"],
+                item["right_time"],
+            ),
+        ):
+            duplicate = any(
+                max(row["left_start"], old["left_start"])
+                < min(row["left_stop"], old["left_stop"])
+                and max(row["right_start"], old["right_start"])
+                < min(row["right_stop"], old["right_stop"])
+                for old in kept
+            )
+            if not duplicate:
+                kept.append(row)
+        accepted.extend(kept)
+    accepted.sort(
+        key=lambda row: (
+            row["left_time"],
+            row["right_time"],
+            row["left_start"],
+            row["right_start"],
+        )
+    )
+    accepted_limit = 250
+    return accepted, {
+        "version": MOTIF_VERSION,
+        "window_size": [min_window, max_window],
+        "windows_considered": len(windows),
+        "candidate_comparisons": comparisons,
+        "matches_accepted": len(accepted),
+        "rejection_counts": rejection_counts,
+        "accepted": accepted[:accepted_limit],
+        "accepted_truncated": max(0, len(accepted) - accepted_limit),
+    }
 
 
 def discover_phrase_motifs(phrases, tempo):

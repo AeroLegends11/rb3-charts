@@ -85,6 +85,89 @@ def test_empty_phrase_inputs():
     assert select_lead_phrases([])[0]==[]
 
 
+def test_band_chord_sections_expand_repeated_fifths_as_power_chords():
+    notes=[
+        Note(1+i*.25,1+i*.25+.09,(2,),.8,f"note-{i}",60 if i in (0,2,4) else 64)
+        for i in range(8)
+    ]
+    candidates=[]
+    for index,start in enumerate((1.0,1.75,2.5)):
+        candidates.extend([
+            {"start":start,"end":start+.1,"pitch":48,"confidence":.7,
+             "model_onset_strength":.7,"source_id":f"low-{index}","accepted":True},
+            {"start":start,"end":start+.1,"pitch":55,"confidence":.5,
+             "model_onset_strength":.65,"source_id":f"high-{index}","accepted":True},
+        ])
+    evidence={
+        "candidates":candidates,
+        "focus":{"onset_groups":20,"pitch_corrections":2,"octave_anchors":3},
+    }
+    baseline,_=author_guitar_phrases(notes,grid())
+    result,report=author_guitar_phrases(notes,grid(),chord_evidence=evidence)
+    assert sum(len(note.lanes)>1 for note in result)==3
+    assert any(len(note.lanes)==1 for note in result)
+    assert all(note.lanes[1]-note.lanes[0]==2 for note in result if len(note.lanes)==2)
+    assert [(note.start,note.end,note.source_id,note.pitch) for note in result]==[
+        (note.start,note.end,note.source_id,note.pitch) for note in baseline
+    ]
+    assert report["chord_sections"]["notes_changed"]==3
+    assert report["chord_sections"]["chord_budget"]==4
+
+
+def test_band_chord_sections_preserve_existing_voicings_and_cap_inference():
+    notes=[
+        Note(1+i*.25,1+i*.25+.09,(0,4) if i==0 else (2,),.8,f"note-{i}",60)
+        for i in range(10)
+    ]
+    candidates=[]
+    for index,start in enumerate((1.0,2.0,3.0)):
+        candidates.extend([
+            {"start":start,"end":start+.1,"pitch":48,"confidence":.7,
+             "model_onset_strength":.7,"source_id":f"low-{index}","accepted":True},
+            {"start":start,"end":start+.1,"pitch":55,"confidence":.5,
+             "model_onset_strength":.65,"source_id":f"high-{index}","accepted":True},
+        ])
+    result,report=author_guitar_phrases(
+        notes,grid(),chord_evidence={
+            "candidates":candidates,
+            "focus":{"onset_groups":20,"pitch_corrections":2,"octave_anchors":3},
+        }
+    )
+    assert result[0].lanes==(0,4)
+    assert sum(len(note.lanes)>1 for note in result)==4
+    assert report["chord_sections"]["notes_changed"]==3
+
+
+def test_band_chord_sections_reject_unstable_guide_and_sparse_evidence():
+    notes=[
+        Note(1+i*.25,1+i*.25+.09,(2,),.8,f"note-{i}",60+i%2)
+        for i in range(5)
+    ]
+    candidates=[]
+    for index,start in enumerate((1.0,1.5)):
+        candidates.extend([
+            {"start":start,"end":start+.1,"pitch":48,"confidence":.7,
+             "model_onset_strength":.7,"source_id":f"low-{index}","accepted":True},
+            {"start":start,"end":start+.1,"pitch":55,"confidence":.5,
+             "model_onset_strength":.65,"source_id":f"high-{index}","accepted":True},
+        ])
+    sparse, sparse_report=author_guitar_phrases(
+        notes,grid(),chord_evidence={
+            "candidates":candidates,
+            "focus":{"onset_groups":20,"pitch_corrections":2,"octave_anchors":3},
+        }
+    )
+    unstable, unstable_report=author_guitar_phrases(
+        notes,grid(),chord_evidence={
+            "candidates":candidates*2,
+            "focus":{"onset_groups":10,"pitch_corrections":3,"octave_anchors":6},
+        }
+    )
+    assert all(len(note.lanes)==1 for note in sparse+unstable)
+    assert sparse_report["chord_sections"]["candidate_seeds"]==2
+    assert not unstable_report["chord_sections"]["gate_passed"]
+
+
 def test_voice_rejects_weak_isolated_register_spike_but_keeps_strong_jump():
     events=[event(1,60,.8,"other"),event(1.2,48,.41,"other"),event(1.4,62,.8,"other")]
     result,report=select_lead_phrases([events])
@@ -171,6 +254,56 @@ def test_phrase_motif_reuses_transposed_shape_without_pitch_edits():
     assert [n.pitch for n in result]==[n.pitch for n in notes]
     assert [n.lanes for n in result[:4]]==[n.lanes for n in result[4:]]
     assert report["phrases"][0]["motif_family"]==report["phrases"][1]["motif_family"]
+
+
+def test_window_motif_extends_weak_root_return_after_four_matched_notes():
+    notes=[]
+    for offset,prefix,pitches,confidences in (
+        (1.0,"clear",(47,47,54,51,47),(.8,.8,.8,.8,.65)),
+        (4.0,"weak",(46,46,53,50,51),(.8,.8,.8,.8,.5)),
+    ):
+        for step,(pitch,confidence) in enumerate(zip(pitches,confidences)):
+            notes.append(Note(
+                offset+step*.25,offset+step*.25+.09,(2,),confidence,
+                f"{prefix}-{step}",pitch,
+            ))
+    result,report=author_guitar_phrases(notes,grid())
+    assert [note.lanes for note in result[:5]]==[note.lanes for note in result[5:]]
+    assert report["window_motif_low_confidence_closures"]>=1
+
+
+def test_phrase_motif_constrains_related_windows_inside_unequal_phrases():
+    notes = []
+    phrases = (
+        (1.0, (47, 47, 54, 51, 47), "opening"),
+        (4.0, (46, 46, 54, 49, 51, 51, 44, 44, 51, 47, 46, 54, 42), "long"),
+    )
+    for offset, pitches, prefix in phrases:
+        for step, pitch in enumerate(pitches):
+            notes.append(
+                Note(
+                    offset + step * .125,
+                    offset + step * .125 + .065,
+                    (4,),
+                    .7,
+                    f"{prefix}-{step}",
+                    pitch,
+                )
+            )
+
+    result, report = author_guitar_phrases(notes, grid())
+
+    opening = [note.lanes[0] for note in result[:4]]
+    related = [note.lanes[0] for note in result[5:9]]
+    assert [b - a for a, b in zip(opening, opening[1:])] == [
+        b - a for a, b in zip(related, related[1:])
+    ]
+    assert report["window_motif_matching"]["matches_accepted"] > 0
+    assert report["phrases"][1]["window_motif_constrained"]
+    assert all(
+        len(phrase["after"]) == len(phrase["source_ids"])
+        for phrase in report["phrases"]
+    )
 
 
 def test_phrase_motif_keeps_strong_variation_and_rhythm_only_coincidence_distinct():

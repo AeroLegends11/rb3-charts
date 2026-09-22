@@ -64,6 +64,50 @@ personal, noncommercial authoring workspace. Do not redistribute bundled models
 or external tools without reviewing their licenses and supplying required notices.
 No user song audio is distributed by this project.
 
+## Learned structure model datasets
+
+The first rights-traceable prototype should use GuitarSet for real guitar
+attacks/chords and Slakh2100-redux for larger aligned multitrack pretraining.
+Both are published under CC BY 4.0. EGSet12 is a useful held-out electric-guitar
+check. RWC Music Database 2.0 is CC BY-NC 4.0 and must remain isolated in a
+noncommercial research experiment rather than being mixed into a permissive
+checkpoint.
+
+No verified public dataset teaches Rock Band-specific lane choices, HOPO flags,
+difficulty reductions, overdrive, fills, or venue events. The learned component
+therefore targets lane-independent attacks, polyphony, sustains, and sections;
+deterministic authoring remains responsible for controller gameplay. Official
+Rock Band charts remain local post-generation evaluation evidence, not training
+labels or runtime inputs.
+
+Every training corpus requires a validated item-level manifest containing source
+and version, separate audio/annotation licenses, attribution, commercial-use
+status, relative file paths and hashes. Splits are artist-disjoint to expose
+memorization rather than reporting it as generalization. Feature-index schema 2
+cryptographically links each derived artifact to one manifest item and verifies
+audio, annotation lineage, split, and license provenance before training.
+
+GuitarSet evaluation additionally keeps both performer identities and musical
+progressions disjoint. Feature extraction uses a fixed full-scale dB reference,
+not per-file peak normalization, so offline training and later streamed inference
+can reproduce the same scale. Validation selects an attack threshold; final test
+metrics reuse that threshold without calibration.
+
+The first acoustic checkpoint must not be applied directly to commercial full
+mixes. A held-out local probe showed severe under-detection and zero predicted
+chords on most songs. Full-mix inference is therefore rejected; electric/full-band
+evaluation must use an aligned separated guitar stem or a model trained for the
+mixture domain. Local commercial recordings are evaluation evidence only.
+
+The electric-guitar prototype adds positive spectral-change bins to fixed-reference
+log-mel features. Cleared validation thresholds still transferred poorly to local
+commercial guitar stems, but ranking attack candidates at the existing generated
+chart's density improved aggregate official-reference attack F1 on six of seven
+available Band-song evaluations. This aggregate comparison does not expose
+reference sequences to generation and does not establish chord, lane or gameplay
+quality. Learned structure remains offline until calibration and authoring
+integration can be validated without tuning on commercial references.
+
 REAPER remains useful for manual chart corrections, but is not required for this
 automated build path. We do not invent a new package format or implement an
 alternative Magma validator. See README for omitted features and limitations.

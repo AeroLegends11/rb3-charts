@@ -107,6 +107,18 @@ Files likely affected: a new `motifs.py`, `phrases.py`, the relevant Guitar path
 of `chart.py`, `pipeline.py`, optional model/schema types and focused tests.
 `transcribe.py` should retain raw evidence; MIDI/export should not need changes.
 
+Status update (2026-09-20):
+
+- Added versioned whole-phrase relative-motif discovery and canonical fingering
+  reuse without changing source pitches, attacks or timing.
+- Added indexed 3-5-note window matching for related figures embedded in unequal
+  phrases. Accepted windows act as bounded final-authoring constraints and defer
+  to exact phrase reuse, whole-phrase motifs and strong-variation rejection.
+- Cached replay now records window matching coverage, rejection counts and a
+  capped accepted-match sample in `analysis/phrase-authoring.json`.
+- Whole-song canonical family selection and calibration against broader listening
+  examples remain in progress; this does not complete Milestone 3.
+
 ## 4. Review and anomaly tools
 
 After motif metrics are trustworthy, annotate the existing preview with low
@@ -132,3 +144,58 @@ before changing access or power settings. Remote access is not configured by
 this repository setup. Subscription changes, API billing and purchases remain
 user decisions; the shared conversation's pricing claims were not adopted as
 verified requirements. No additional provider is needed to use this repository.
+
+## 7. Learned lane-independent structure
+
+Prototype an optional model for attack, polyphony, sustain and section evidence,
+then retain deterministic Expert fingering and difficulty reductions. Training
+data must have item-level audio and annotation provenance, explicit license and
+commercial-use status, hashes, and artist-disjoint splits. Official/reference
+charts remain post-generation evaluation evidence only.
+
+Status update (2026-09-22):
+
+- Added a versioned dataset-manifest validator with separate audio/annotation
+  licenses, attribution, commercial-use status, file hashes and path checks.
+- Artist leakage across train, validation and test splits is rejected.
+- Added GuitarSet JAMS conversion into lane-independent note, attack, polyphony,
+  sustain and beat labels without adding a JAMS runtime dependency.
+- Added deterministic log-mel, beat-phase and frame-target extraction with source
+  hashes and versioned feature parameters.
+- Added Slakh2100-redux conversion that selects rendered Guitar-class source MIDI,
+  preserves stem provenance, groups polyphony and derives the variable tempo map.
+- Added a deterministic CUDA-capable convolutional baseline with separate attack,
+  polyphony and sustain heads, group-disjoint feature indexes, checkpoint
+  provenance and validation metrics.
+- GuitarSet artifacts now carry both progression and performer split keys.
+  Validation threshold calibration is separate from untouched test evaluation.
+- A local CC BY 4.0 pilot used 160 training, 10 validation and 10 test recordings
+  with both progressions and performers disjoint. At a 50 ms onset tolerance, the
+  untouched acoustic-guitar test measured 0.368 precision, 0.401 recall and 0.384
+  F1; polyphony accuracy was 0.900. These are automated structure metrics, not
+  listening review, RB lane agreement or Xbox playability.
+- Direct application to 13 readable commercial full mixes was rejected as a
+  domain mismatch: most songs produced very few predicted attacks and no chord
+  attacks. Newly separated guitar stems showed the same failure, so runtime
+  integration is rejected. Those local songs remain evaluation-only.
+- Positive spectral-change features raised the BabySlakh untouched-test attack
+  F1 from 0.136 to 0.507. A combined GuitarSet and BabySlakh checkpoint measured
+  0.437 F1 and 0.601 polyphony accuracy on its disjoint untouched test. Both
+  checkpoints still under-detected held-out commercial guitar stems at their
+  cleared validation thresholds, so direct thresholded integration remains
+  rejected.
+- A ranking-only evaluation selected each model's highest-scoring stem peaks at
+  the existing generated chart's attack count; it did not use the reference
+  attack count. Across seven local commercial songs with official evaluation
+  references, macro attack F1 increased from 0.6889 for existing charts to
+  0.7071 for ranked model peaks, improving or tying six songs and regressing one.
+  This is evidence that onset ranking transfers better than calibration. It is
+  not evidence of lane, chord, sustain, listening-review or Xbox quality, and
+  reference notes remain evaluation-only. No learned output is wired into
+  generation.
+- Feature-index schema 2 now requires every feature item to link to a
+  hash-verified dataset-manifest item. Training rejects mismatched audio,
+  annotation lineage, split, or licensing provenance. Threshold calibration now
+  applies the same local-peak suppression as inference. Earlier checkpoints lack
+  this manifest linkage and are retained only as historical evaluation evidence;
+  they are not loadable by the current inference command.

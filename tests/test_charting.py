@@ -412,6 +412,7 @@ def test_band_guitar_voice_filter_keeps_coherent_high_run():
     assert [event["pitch"] for event in result]==[48,48,60,62,64,48]
     assert report["sequential_outliers_removed"]==0
 
+
 def test_hard_wraps_quick_green_orange_jump_inward():
     tempo=TempoMap(np.arange(0,8,.5).tolist())
     expert=[Note(1,1.065,(0,),source_id="low",pitch=48),Note(1.25,1.315,(4,),source_id="high",pitch=60)]

@@ -74,6 +74,12 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli batch 'C:\Music\To Chart'
 .\.venv\Scripts\python.exe -m rb3charts.cli package 'C:\Path\To\Reviewed_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli replay 'C:\Path\To\Existing_Output'
+.\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
+.\.venv\Scripts\python.exe -m rb3charts.cli convert-guitarset 'C:\Path\To\annotation.jams' 'C:\Path\To\labels.json'
+.\.venv\Scripts\python.exe -m rb3charts.cli convert-slakh 'C:\Path\To\Track00001' 'C:\Path\To\labels.json'
+.\.venv\Scripts\python.exe -m rb3charts.cli extract-structure-features 'C:\Path\To\audio.wav' 'C:\Path\To\labels.json' 'C:\Path\To\features.npz'
+.\.venv\Scripts\python.exe -m rb3charts.cli train-structure-baseline 'C:\Path\To\feature-index.json' 'C:\Path\To\baseline.pt' --device cuda
+.\.venv\Scripts\python.exe -m rb3charts.cli predict-structure 'C:\Path\To\baseline.pt' 'C:\Path\To\guitar.wav' 'C:\Path\To\predictions.json' --beats 'C:\Path\To\tempo.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli demo --compile
 .\.venv\Scripts\python.exe -m pytest -q
 ```
@@ -92,6 +98,50 @@ Useful options:
 - `--stems 'C:\Music\MyStems'` to reuse properly aligned stems
 - `--confidence 0.45` to omit more uncertain notes
 - `--onyx 'C:\Tools\onyx.exe'` to select another Onyx CLI
+
+Structure-model training datasets use an item-level JSON manifest. Each item
+records relative audio and annotation paths, SHA-256 hashes, song and artist IDs,
+and its train/validation/test split. Dataset metadata records audio and annotation
+licenses separately, attribution, source/version, and whether commercial use is
+allowed, noncommercial, or unknown. `validate-dataset` rejects missing files,
+path traversal, duplicate songs/files, malformed hashes, and artists crossing
+splits; `--verify-hashes` also reads and verifies every file.
+
+`convert-guitarset` extracts note attacks, pitches, polyphony, sustain endpoints,
+and beat positions from GuitarSet JAMS annotations. Its output deliberately has
+no Rock Band lanes or reference-chart sequence: those remain the responsibility
+of deterministic authoring after the learned structure stage.
+
+`convert-slakh` reads `metadata.yaml`, selects only rendered Guitar-class source
+MIDI, preserves source identities, combines simultaneous guitar sources into
+polyphonic attacks, and derives beat times from the MIDI tempo map. Use the
+duplicate-free Slakh2100-redux splits; do not train from its `omitted` directory.
+
+`extract-structure-features` writes fixed-reference 128-bin log-mel audio,
+128 positive spectral-change bins, source-time frame positions, variable-tempo
+beat phase, and aligned attack, polyphony, and sustain targets. The compressed
+artifact includes audio/label hashes and fixed feature parameters so training
+runs can reject stale or incompatible caches.
+
+`train-structure-baseline` trains a small convolutional network with separate
+attack, polyphony, and sustain heads. Its feature index requires relative artifact
+paths, explicit train/validation/test splits, a `group_id`, and a validated
+dataset-manifest reference for every item. Training verifies source file hashes,
+converted-label lineage, dataset licensing metadata, and manifest splits before
+reading features. Authoritative artifact split keys prevent either a musical
+progression or performer identity from crossing splits. Validation calibrates
+the attack threshold after applying the same local-peak suppression used by
+inference; the untouched test split uses that threshold without retuning.
+Checkpoints retain manifest and feature hashes, the feature configuration, seed,
+runtime versions, loss history, attack metrics, and polyphony accuracy. This
+baseline is an engineering measurement, not yet a chart-quality claim or runtime
+model.
+
+`predict-structure` performs offline, lane-independent evaluation and writes
+auditable attack/polyphony predictions plus the complete ranked set of local
+attack candidates. It does not alter a transcription or generated chart.
+Supplying a generation run's `analysis/tempo.json` reproduces beat-phase
+conditioning; without it the model uses audio features alone.
 
 Supplied stems must use the same start time and length as the original audio and
 be named `guitar.wav`, `bass.wav`, `drums.wav`, and optionally `piano.wav`. They

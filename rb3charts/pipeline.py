@@ -174,6 +174,7 @@ def generate(options: Options, progress=print):
             ordered.insert(0,"drums")
         for instrument in ordered:
             log(f"Generating {instrument} Expert chart")
+            chord_evidence=None
             stem=stems.get("piano" if instrument=="keys" else instrument)
             if resolved_profile=="electronic" and instrument in ("guitar","bass"):
                 role_sources=("other","piano","guitar") if instrument=="guitar" else ("bass","other")
@@ -213,7 +214,12 @@ def generate(options: Options, progress=print):
                                 tempo=tempo,analysis_folder=folder/"analysis")
                     if resolved_profile=="band" and instrument=="guitar":
                         log("Selecting the lead-guitar contour from ambiguous pitched candidates")
+                        chord_candidates=[dict(event) for event in raw]
                         raw,lead_focus[instrument]=band_guitar_lead_events(stem,raw,60/tempo.bpm)
+                        chord_evidence={
+                            "candidates":chord_candidates,
+                            "focus":lead_focus[instrument],
+                        }
                         focus=lead_focus[instrument]
                         warnings.append(
                             f"Guitar lead focus resolved {focus.get('groups_resolved',0)} ambiguous onset groups "
@@ -249,7 +255,15 @@ def generate(options: Options, progress=print):
                 notes,pattern_stabilization[instrument]=stabilize_repeated_phrases(notes,tempo,instrument)
                 _record_stage_snapshot(stage_snapshots,instrument,"after_stabilize_repeated_phrases",notes)
             if instrument=="guitar":
-                notes,phrase_authoring[instrument]=author_guitar_phrases(notes,tempo)
+                notes,phrase_authoring[instrument]=author_guitar_phrases(
+                    notes,tempo,chord_evidence=chord_evidence
+                )
+                changed=phrase_authoring[instrument]["chord_sections"]["notes_changed"]
+                if changed:
+                    warnings.append(
+                        f"Guitar phrase authoring inferred {changed} power-chord attacks "
+                        "inside repeated, source-supported texture sections."
+                    )
                 _record_stage_snapshot(stage_snapshots,instrument,"after_author_guitar_phrases",notes)
             removed=playability[instrument]["removed"]
             if removed:
@@ -441,6 +455,7 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
     stage_snapshots={}
     warnings=[]
     for instrument in ordered:
+        chord_evidence=None
         if instrument=="drums":
             if instrument not in previous_charts:
                 warnings.append("drums: prior chart unavailable in replay source; instrument omitted")
@@ -468,6 +483,25 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
                 continue
             raw=json.loads(transcription_path.read_text(encoding="utf-8"))
             consumed_inputs.add(transcription_path)
+            if resolved_profile=="band" and instrument=="guitar":
+                report_paths=sorted(analysis_source.glob("guitar-*-events.json"))
+                candidate_groups=_load_accepted_event_groups(analysis_source,instrument)
+                focus_path=analysis_source/"lead-focus.json"
+                focus_payload=json.loads(focus_path.read_text(encoding="utf-8")) if focus_path.is_file() else {}
+                focus_report=focus_payload.get("guitar",{})
+                if candidate_groups and focus_report:
+                    chord_evidence={
+                        "candidates":[event for group in candidate_groups for event in group],
+                        "focus":focus_report,
+                    }
+                    lead_focus[instrument]=focus_report
+                    consumed_inputs.update(report_paths)
+                    consumed_inputs.add(focus_path)
+                else:
+                    warnings.append(
+                        "Guitar chord-section evidence unavailable in cached replay; "
+                        "section texture authoring was skipped."
+                    )
             save_json(analysis_folder/f"{instrument}-transcription.json",raw)
         notes=map_pitched(raw,instrument,
                           "electronic_lead" if resolved_profile=="electronic" and instrument=="guitar" else "range",
@@ -493,7 +527,15 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
             notes,pattern_stabilization[instrument]=stabilize_repeated_phrases(notes,tempo,instrument)
             _record_stage_snapshot(stage_snapshots,instrument,"after_stabilize_repeated_phrases",notes)
         if instrument=="guitar":
-            notes,phrase_authoring[instrument]=author_guitar_phrases(notes,tempo)
+            notes,phrase_authoring[instrument]=author_guitar_phrases(
+                notes,tempo,chord_evidence=chord_evidence
+            )
+            changed=phrase_authoring[instrument]["chord_sections"]["notes_changed"]
+            if changed:
+                warnings.append(
+                    f"Guitar phrase authoring inferred {changed} power-chord attacks "
+                    "inside repeated, source-supported texture sections."
+                )
             _record_stage_snapshot(stage_snapshots,instrument,"after_author_guitar_phrases",notes)
         charts[instrument]=reductions(notes,instrument,tempo)
         if instrument=="guitar":
