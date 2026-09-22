@@ -129,10 +129,11 @@ Status update (2026-09-20):
   an aggregate contour mismatch, never as generation input. The final phrase
   pass had collapsed an already pitch-ordered five-lane mapping into three
   middle lanes. Long rapid phrases now retain a broad incoming mapping only
-  when both boundary lanes recur and pitch/lane agreement is strong. The Hail
-  intro regained all five lanes; Joker was unchanged, and Mr. Brightside and
-  Cliffs of Dover remained bounded cross-checks. Human listening is still the
-  acceptance gate.
+  when both boundary lanes recur and pitch/lane agreement is strong. Repeated
+  pitches use their majority supported lane rather than inheriting note-level
+  mapping noise. The Hail intro regained all five lanes with one lane per
+  recurring pitch; Joker was unchanged, and Mr. Brightside and Cliffs of Dover
+  remained bounded cross-checks. Human listening is still the acceptance gate.
 - Whole-song canonical family selection and calibration against broader listening
   examples remain in progress; this does not complete Milestone 3.
 

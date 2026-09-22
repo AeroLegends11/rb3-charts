@@ -127,7 +127,19 @@ def _preserve_supported_lane_span(rows, lanes):
     correlation = np.corrcoef(pitches, np.asarray(incoming, dtype=float))[0, 1]
     if edge_support < 2 or not np.isfinite(correlation) or correlation < .8:
         return lanes, False
-    return incoming, incoming != lanes
+    pitch_lanes = {}
+    for note, lane in zip(rows, incoming):
+        pitch_lanes.setdefault(note.pitch, []).append(lane)
+    stable = [
+        max(set(pitch_lanes[note.pitch]), key=lambda lane: (
+            pitch_lanes[note.pitch].count(lane),
+            -lane,
+        ))
+        for note in rows
+    ]
+    if max(stable) - min(stable) < 3:
+        return lanes, False
+    return stable, stable != lanes
 
 
 def _fingering(rows, previous=None, preferred=None):

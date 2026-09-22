@@ -94,9 +94,11 @@ def test_expert_gate_preserves_supported_fast_riff_but_not_unrelated_burst():
 
 def test_phrase_fingering_preserves_repeated_supported_lane_span():
     pitches = (48, 55, 60, 67) * 8
+    incoming = list((0, 1, 3, 4) * 8)
+    incoming[4] = 1
     rows = [
         Note(i * .125, i * .125 + .065, (lane,), pitch=pitch, source_id=str(i))
-        for i, (pitch, lane) in enumerate(zip(pitches, (0, 1, 3, 4) * 8))
+        for i, (pitch, lane) in enumerate(zip(pitches, incoming))
     ]
 
     lanes, changed = _preserve_supported_lane_span(rows, [1, 1, 2, 3] * 8)
