@@ -380,23 +380,49 @@ def _apply_band_chord_sections(notes, tempo, evidence):
         clusters.append(cluster)
         cursor = stop if len(cluster) >= 3 else cursor + 1
     proposals = set()
+    support_indices = set()
     for cluster in clusters:
         if len(cluster) < 3:
             continue
         for seed_time, _ in cluster:
             candidates = [
                 index for index, note in enumerate(notes)
-                if len(note.lanes) == 1 and abs(note.start - seed_time) <= .075
+                if abs(note.start - seed_time) <= .075
             ]
             if candidates:
-                proposals.add(min(candidates, key=lambda index: abs(notes[index].start - seed_time)))
+                index = min(candidates, key=lambda row: abs(notes[row].start - seed_time))
+                support_indices.add(index)
+                if len(notes[index].lanes) == 1:
+                    proposals.add(index)
     report["candidate_notes"] = len(proposals)
     changed = []
-    for index in sorted(proposals):
-        note = notes[index]
-        root = note.lanes[0]
-        note.lanes = (root, root + 2) if root <= 2 else (root - 2, root)
-        changed.append(note)
+    runs = []
+    for index in sorted(support_indices):
+        if (
+            runs
+            and tempo.beat_at(notes[index].start)
+            - tempo.beat_at(notes[runs[-1][-1]].start) <= 2.25
+        ):
+            runs[-1].append(index)
+        else:
+            runs.append([index])
+    for run in runs:
+        if len(run) < 3:
+            continue
+        pitch_counts = {
+            pitch: sum(notes[index].pitch == pitch for index in run)
+            for pitch in {notes[index].pitch for index in run}
+        }
+        repeated_roots = {
+            pitch for pitch, count in pitch_counts.items() if count >= 3
+        }
+        for index in run:
+            if index not in proposals or notes[index].pitch not in repeated_roots:
+                continue
+            note = notes[index]
+            root = note.lanes[0]
+            note.lanes = (root, root + 2) if root <= 2 else (root - 2, root)
+            changed.append(note)
     if not changed:
         return report
     report["notes_changed"] = len(changed)
@@ -435,7 +461,7 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
             beat = tempo.beat_at(note.start)
             period = tempo.seconds_at(beat + 1) - tempo.seconds_at(beat)
             rest = note.start - current[-1].end
-            if rest > period * .75 or beat - tempo.beat_at(current[0].start) >= 8:
+            if rest > period * .75:
                 phrases.append(current)
                 current = []
         current.append(note)
@@ -449,6 +475,7 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
     window_matches, window_diagnostics = discover_window_motifs(phrases, tempo)
     baseline = [replace(n) for n in result]
     continuity_summary = {"adjacent_single": 0, "through_chord": 0, "none": 0}
+    pitch_anchor_changes = 0
     for phrase_index, rows in enumerate(phrases):
         index = indices[id(rows[0])]
         previous, _, _ = _continuity_anchor(baseline, index, rows[0].start, tempo)
@@ -521,6 +548,21 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
             if (all(0 <= lane <= 4 for lane in shifted)
                     and _constraint_cost(shifted, preferred) <= _constraint_cost(lanes, preferred)):
                 lanes = [lane + boundary_delta for lane in lanes]
+        for pitch in {note.pitch for note in rows}:
+            pitch_indices = [i for i, note in enumerate(rows) if note.pitch == pitch]
+            if len(pitch_indices) < 4:
+                continue
+            counts = {
+                lane: sum(lanes[index] == lane for index in pitch_indices)
+                for lane in set(lanes[index] for index in pitch_indices)
+            }
+            anchor = max(counts, key=lambda lane: (counts[lane], -lane))
+            if counts[anchor] / len(pitch_indices) < .6:
+                continue
+            for note_index in pitch_indices:
+                if lanes[note_index] != anchor:
+                    lanes[note_index] = anchor
+                    pitch_anchor_changes += 1
         before = [n.lanes[0] for n in rows]
         for note, lane in zip(rows, lanes):
             note.lanes = (lane,)
@@ -565,6 +607,7 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
     return result, {"method": "phrase-local fingering with whole-sequence ergonomic costs and bounded motif windows",
                     "before": contour(sorted(notes, key=lambda n:n.start)), "after": contour(result),
                     "continuity_summary": continuity_summary,
+                    "pitch_anchor_changes": pitch_anchor_changes,
                     "phrases": phrase_report, "short_tails_removed": tails,
                     "window_motif_matching": window_diagnostics,
                     "window_motif_constrained_phrases": sum(

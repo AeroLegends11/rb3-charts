@@ -95,7 +95,7 @@ def test_empty_phrase_inputs():
 
 def test_band_chord_sections_expand_repeated_fifths_as_power_chords():
     notes=[
-        Note(1+i*.25,1+i*.25+.09,(2,),.8,f"note-{i}",60 if i in (0,2,4) else 64)
+        Note(1+i*.25,1+i*.25+.09,(2,),.8,f"note-{i}",60 if i in (0,3,6) else 64)
         for i in range(8)
     ]
     candidates=[]
@@ -183,13 +183,14 @@ def test_voice_rejects_weak_isolated_register_spike_but_keeps_strong_jump():
     assert len(select_lead_phrases([events])[0])==3
 
 
-def test_artificial_phrase_boundary_does_not_recolor_repeated_pitch():
+def test_continuous_riff_does_not_split_or_recolor_repeated_pitch():
     pitches=[60,62,64,65]*4+[65,64,62,60]*2
     notes=[Note(1+i*.25,1+i*.25+.065,(1,),.8,str(i),p) for i,p in enumerate(pitches)]
     result,report=author_guitar_phrases(notes,grid())
     assert result[15].pitch==result[16].pitch
     assert result[15].lanes==result[16].lanes
-    assert report['phrases'][1]['joined_previous_phrase']
+    assert len({note.lanes for note in result if note.pitch==60})==1
+    assert len(report["phrases"])==1
 
 
 def test_real_rest_allows_new_hand_position():
