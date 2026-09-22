@@ -118,6 +118,16 @@ unchanged at 0.7994 while polyphony improved from 0.4132 to 0.6737. However, its
 validation-selected attack threshold severely under-detected the 13 held-out
 commercial stems, so it is not approved for generation.
 
+A follow-up evaluated 56 P1/P2 Guitar-TECHS chord drills. The converter now
+repairs source MIDI notes that remain active at end-of-track only when explicitly
+enabled and records the repair count in label provenance; seven files required
+that repair. Strummed strings also required the dataset's 100 ms alignment scale
+instead of the general 30 ms simultaneity window. On the unchanged cleared test,
+neither all 56 recordings nor a performer-balanced 12-recording subset surpassed
+the P3 checkpoint. The existing checkpoint retained the strongest attack F1
+(0.7982) and single-note-versus-chord F1 (0.5397), so the chord-drill checkpoints
+were rejected and are not runtime inputs.
+
 The published EGSet12 TabCNN checkpoint is exposed through an optional offline
 provider that records checkpoint, audio and attack-input hashes plus source,
 license and attribution. On EGSet12, sampling it at structure-model attacks

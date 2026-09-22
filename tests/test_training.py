@@ -124,6 +124,25 @@ def test_guitar_techs_conversion_preserves_performer_split_and_polyphony(tmp_pat
     assert labels["attacks"][0]["polyphony"] == 2
 
 
+def test_guitar_techs_conversion_closes_unterminated_note_at_track_end(tmp_path):
+    import mido
+
+    midi_path = tmp_path / "unterminated.mid"
+    midi = mido.MidiFile(ticks_per_beat=480)
+    track = mido.MidiTrack()
+    track.append(mido.Message("note_on", note=48, velocity=90, time=0))
+    track.append(mido.MetaMessage("end_of_track", time=480))
+    midi.tracks.append(track)
+    midi.save(midi_path)
+    audio_path = tmp_path / "audio.wav"
+    sf.write(audio_path, np.zeros(FEATURE_SAMPLE_RATE), FEATURE_SAMPLE_RATE)
+
+    labels = convert_guitar_techs_midi(midi_path, audio_path, performer_id="P1")
+
+    assert labels["notes"][0]["end"] == 0.5
+    assert labels["annotation_repairs"]["unterminated_notes_closed_at_track_end"] == 1
+
+
 def test_structure_features_align_attacks_polyphony_sustains_and_beats(tmp_path):
     annotation = _annotation(tmp_path)
     labels_path = tmp_path / "labels.json"

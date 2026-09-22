@@ -221,5 +221,14 @@ Status update (2026-09-22):
   density ratios ranged from 0.029 to 0.729, including 0.376 on Jonas. Thresholded
   attack integration is therefore still rejected. No learned output is wired
   into normal generation.
+- Evaluated 56 additional Guitar-TECHS P1/P2 chord recordings as cleared
+  training data. Seven source MIDI files omitted final note-off events; conversion
+  now closes those notes at the authoritative track end and records the repair
+  count in label provenance. A 30 ms attack-grouping window incorrectly split
+  performed strums, while 100 ms grouping recovered the intended full voicings.
+  Neither the full expansion nor a performer-balanced 12-recording subset
+  generalized: the best existing P3 checkpoint retained higher untouched-test
+  attack and single-versus-chord metrics. These chord-drill checkpoints are
+  rejected, remain offline research artifacts and are not used by generation.
 - These are automated structure and post-generation comparison measurements.
   The new checkpoint has not received listening review or Xbox playtesting.

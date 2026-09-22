@@ -179,7 +179,7 @@ def convert_guitarset_jams(path, output=None, simultaneous_tolerance=0.03):
     return result
 
 
-def _read_midi_notes(path, source_id):
+def _read_midi_notes(path, source_id, close_unterminated=False, diagnostics=None):
     import mido
 
     midi = mido.MidiFile(path)
@@ -213,8 +213,24 @@ def _read_midi_notes(path, source_id):
                         "source_id": f"{source_id}-{note_order}",
                         "source": source_id,
                     })
-    if active:
+    if active and not close_unterminated:
         raise TrainingDataError(f"MIDI has unterminated notes: {path}")
+    closed = 0
+    for (_, pitch), starts in active.items():
+        for start, note_order in starts:
+            if elapsed <= start:
+                continue
+            notes.append({
+                "start": start,
+                "end": elapsed,
+                "pitch": int(pitch),
+                "source_id": f"{source_id}-{note_order}",
+                "source": source_id,
+            })
+            closed += 1
+    if diagnostics is not None:
+        diagnostics["unterminated_notes_closed_at_track_end"] = closed
+    notes.sort(key=lambda row: (row["start"], row["pitch"], row["source_id"]))
     return notes, midi.ticks_per_beat, absolute_tick, tempo_segments
 
 
@@ -350,9 +366,12 @@ def convert_guitar_techs_midi(
         duration = float(sf.info(audio_path).duration)
     except (OSError, RuntimeError) as exc:
         raise TrainingDataError(f"Cannot read Guitar-TECHS audio: {exc}") from exc
+    annotation_repairs = {}
     rows, ticks_per_beat, max_tick, tempo_segments = _read_midi_notes(
         midi_path,
         f"guitar-techs-{performer_id}",
+        close_unterminated=True,
+        diagnostics=annotation_repairs,
     )
     if not rows:
         raise TrainingDataError("Guitar-TECHS MIDI contains no notes")
@@ -374,6 +393,7 @@ def convert_guitar_techs_midi(
         "performer_id": performer_id,
         "simultaneous_tolerance_seconds": simultaneous_tolerance,
         "alignment_tolerance_seconds": 0.1,
+        "annotation_repairs": annotation_repairs,
         "duration": duration,
         "targets": ["attack", "polyphony", "sustain"],
         "notes": rows,
