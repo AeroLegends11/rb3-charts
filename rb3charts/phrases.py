@@ -313,7 +313,7 @@ def _continuity_anchor(notes, index, start, tempo):
 
 def _apply_band_chord_sections(notes, tempo, evidence):
     report = {
-        "method": "bounded fifth-evidence sections with repeated root power-chord attacks",
+        "method": "repeated fifth-evidence sections with locally matched power-chord attacks",
         "gate_passed": False,
         "candidate_seeds": 0,
         "candidate_notes": 0,
@@ -341,7 +341,7 @@ def _apply_band_chord_sections(notes, tempo, evidence):
             groups[-1].append(event)
         else:
             groups.append([event])
-    seed_beats = []
+    seed_rows = []
     for group in groups:
         supported = False
         for index, left in enumerate(group):
@@ -360,86 +360,43 @@ def _apply_band_chord_sections(notes, tempo, evidence):
             if supported:
                 break
         if supported:
-            seed_beats.append(tempo.beat_at(group[0]["start"]))
-    report["candidate_seeds"] = len(seed_beats)
-    if len(seed_beats) < 3:
+            seed_rows.append((group[0]["start"], tempo.beat_at(group[0]["start"])))
+    report["candidate_seeds"] = len(seed_rows)
+    if len(seed_rows) < 3:
         return report
-    seed_beats.sort()
+    seed_rows.sort(key=lambda row: row[1])
     clusters = []
     cursor = 0
-    while cursor < len(seed_beats):
-        cluster = [seed_beats[cursor]]
+    while cursor < len(seed_rows):
+        cluster = [seed_rows[cursor]]
         stop = cursor + 1
         while (
-            stop < len(seed_beats)
-            and seed_beats[stop] - cluster[-1] <= 10
-            and seed_beats[stop] - cluster[0] <= 16
+            stop < len(seed_rows)
+            and seed_rows[stop][1] - cluster[-1][1] <= 10
+            and seed_rows[stop][1] - cluster[0][1] <= 16
         ):
-            cluster.append(seed_beats[stop])
+            cluster.append(seed_rows[stop])
             stop += 1
         clusters.append(cluster)
         cursor = stop if len(cluster) >= 3 else cursor + 1
-    beats = [tempo.beat_at(note.start) for note in notes]
-    region_proposals = []
-    regions = []
+    proposals = set()
     for cluster in clusters:
         if len(cluster) < 3:
             continue
-        region_indices = [
-            index for index, beat in enumerate(beats)
-            if cluster[0] <= beat <= cluster[-1]
-        ]
-        contiguous = []
-        for index in region_indices:
-            if contiguous and beats[index] - beats[contiguous[-1]] > 2.25:
-                if len(contiguous) >= 4:
-                    regions.append(contiguous)
-                contiguous = []
-            contiguous.append(index)
-        if len(contiguous) >= 4:
-            regions.append(contiguous)
-    for region in regions:
-        pitch_counts = {}
-        for index in region:
-            pitch = notes[index].pitch
-            pitch_counts[pitch] = pitch_counts.get(pitch, 0) + 1
-        pitch_limit = float(np.quantile([notes[index].pitch for index in region], .6))
-        proposals = {}
-        for index in region:
-            note = notes[index]
-            if (len(note.lanes) != 1
-                    or pitch_counts[note.pitch] < 3
-                    or note.pitch > pitch_limit):
-                continue
-            proposals[index] = (pitch_counts[note.pitch], note.confidence, -note.start, index)
-        region_proposals.append((region, list(proposals.values())))
-    report["candidate_notes"] = sum(len(proposals) for _, proposals in region_proposals)
+        for seed_time, _ in cluster:
+            candidates = [
+                index for index, note in enumerate(notes)
+                if len(note.lanes) == 1 and abs(note.start - seed_time) <= .075
+            ]
+            if candidates:
+                proposals.add(min(candidates, key=lambda index: abs(notes[index].start - seed_time)))
+    report["candidate_notes"] = len(proposals)
     changed = []
-    changed_indices = set()
-    for region, proposals in region_proposals:
-        selected = sorted(proposals, reverse=True)
-        selected.sort(key=lambda row: notes[row[-1]].start)
-        runs = []
-        for proposal in selected:
-            note = notes[proposal[-1]]
-            if (
-                runs
-                and tempo.beat_at(note.start) - tempo.beat_at(notes[runs[-1][-1][-1]].start) <= 2.25
-            ):
-                runs[-1].append(proposal)
-            else:
-                runs.append([proposal])
-        for run in runs:
-            if len(run) < 3:
-                continue
-            for _, _, _, index in run:
-                if index in changed_indices:
-                    continue
-                note = notes[index]
-                root = note.lanes[0]
-                note.lanes = (root, root + 2) if root <= 2 else (root - 2, root)
-                changed.append(note)
-                changed_indices.add(index)
+    for index in sorted(proposals):
+        note = notes[index]
+        root = note.lanes[0]
+        note.lanes = (root, root + 2) if root <= 2 else (root - 2, root)
+        changed.append(note)
     if not changed:
         return report
     report["notes_changed"] = len(changed)

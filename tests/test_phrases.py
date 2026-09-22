@@ -112,13 +112,13 @@ def test_band_chord_sections_expand_repeated_fifths_as_power_chords():
     }
     baseline,_=author_guitar_phrases(notes,grid())
     result,report=author_guitar_phrases(notes,grid(),chord_evidence=evidence)
-    assert sum(len(note.lanes)>1 for note in result)==7
+    assert sum(len(note.lanes)>1 for note in result)==3
     assert any(len(note.lanes)==1 for note in result)
     assert all(note.lanes[1]-note.lanes[0]==2 for note in result if len(note.lanes)==2)
     assert [(note.start,note.end,note.source_id,note.pitch) for note in result]==[
         (note.start,note.end,note.source_id,note.pitch) for note in baseline
     ]
-    assert report["chord_sections"]["notes_changed"]==7
+    assert report["chord_sections"]["notes_changed"]==3
 
 
 def test_band_chord_sections_preserve_existing_voicings():
@@ -141,8 +141,8 @@ def test_band_chord_sections_preserve_existing_voicings():
         }
     )
     assert result[0].lanes==(0,4)
-    assert sum(len(note.lanes)>1 for note in result)==9
-    assert report["chord_sections"]["notes_changed"]==8
+    assert sum(len(note.lanes)>1 for note in result)==3
+    assert report["chord_sections"]["notes_changed"]==2
 
 
 def test_band_chord_sections_reject_sparse_evidence_independent_of_guide_stability():
