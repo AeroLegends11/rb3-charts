@@ -144,6 +144,11 @@ Status update (2026-09-20):
   gate.
 - Whole-song canonical family selection and calibration against broader listening
   examples remain in progress; this does not complete Milestone 3.
+- Added non-destructive Band-guitar voice-continuity diagnostics over overlapping
+  eight-beat windows. The frozen 14-song baseline contains many mixed-register
+  windows without a dominant evidence cluster, so confidence-only register
+  selection is not enabled; additional lane-independent source evidence is
+  required before phrase-level voice tracking can alter notes.
 
 ## 4. Review and anomaly tools
 

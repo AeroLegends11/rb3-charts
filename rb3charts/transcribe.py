@@ -218,6 +218,70 @@ def band_guitar_lead_events(path,events,beat_period=None):
     report["retained"]=len(focused)
     return focused,report
 
+
+def analyze_band_guitar_voice(events,tempo):
+    """Describe mixed-register guitar regions without changing selected events."""
+    rows=sorted((dict(event) for event in events),key=lambda event:(event["start"],event["pitch"]))
+    if len(rows)<8:
+        return {"window_beats":8,"stride_beats":4,"windows_considered":0,
+                "mixed_register_windows":0,"candidate_windows":0,"windows":[]}
+    first=int(np.floor(tempo.beat_at(rows[0]["start"])/4)*4)
+    last=float(tempo.beat_at(rows[-1]["start"]))
+    windows=[]
+    considered=0
+    for start_beat in np.arange(first,last+1,4):
+        stop_beat=start_beat+8
+        group=[event for event in rows
+               if start_beat<=tempo.beat_at(event["start"])<stop_beat]
+        if len(group)<8:
+            continue
+        considered+=1
+        pitches=np.asarray([event["pitch"] for event in group],dtype=float)
+        weights=np.asarray([max(.01,float(event.get("confidence",0))) for event in group])
+        centers=np.asarray([np.quantile(pitches,.25),np.quantile(pitches,.75)],dtype=float)
+        for _ in range(8):
+            labels=np.argmin(abs(pitches[:,None]-centers[None,:]),axis=1)
+            updated=np.asarray([
+                np.average(pitches[labels==label],weights=weights[labels==label])
+                if np.any(labels==label) else centers[label]
+                for label in range(2)
+            ])
+            if np.allclose(updated,centers):
+                break
+            centers=updated
+        order=np.argsort(centers)
+        low_label,high_label=int(order[0]),int(order[1])
+        separation=float(centers[high_label]-centers[low_label])
+        masses=np.asarray([weights[labels==label].sum() for label in range(2)])
+        dominant_label=int(np.argmax(masses))
+        dominant_share=float(masses[dominant_label]/max(.01,masses.sum()))
+        switches=int(np.sum(labels[1:]!=labels[:-1]))
+        if separation<12 or switches<3:
+            continue
+        windows.append({
+            "start_beat":round(float(start_beat),3),
+            "end_beat":round(float(stop_beat),3),
+            "start_seconds":round(float(tempo.seconds_at(start_beat)),3),
+            "end_seconds":round(float(tempo.seconds_at(stop_beat)),3),
+            "events":len(group),
+            "register_centers":[round(float(centers[low_label]),3),round(float(centers[high_label]),3)],
+            "register_separation":round(separation,3),
+            "dominant_register":"lower" if dominant_label==low_label else "upper",
+            "dominant_evidence_share":round(dominant_share,4),
+            "register_switches":switches,
+            "weak_event_ratio":round(sum(event.get("confidence",0)<.65 for event in group)/len(group),4),
+            "candidate_for_tracking":dominant_share>=.58,
+        })
+    return {
+        "window_beats":8,
+        "stride_beats":4,
+        "windows_considered":considered,
+        "mixed_register_windows":len(windows),
+        "candidate_windows":sum(window["candidate_for_tracking"] for window in windows),
+        "windows":windows,
+    }
+
+
 def electronic_lead_events(source_events, beat_period=None):
     """Choose a playable lead line from synth, piano and guitar candidates.
 

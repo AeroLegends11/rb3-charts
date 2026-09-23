@@ -46,6 +46,11 @@ reuses cached analysis and writes a new timestamped output folder.
   - chord/hold rates
   - repeated phrase absolute-lane vs relative-shape agreement
   - motif coverage and false-lock rate
+- `analysis/guitar-voice-continuity.json`
+  - overlapping eight-beat mixed-register windows
+  - confidence-weighted register centers and evidence dominance
+  - register-switch counts and weak-event ratios
+  - diagnostic candidate flags only; no notes are removed or repitched
 
 ## Coverage and false-lock caveat
 

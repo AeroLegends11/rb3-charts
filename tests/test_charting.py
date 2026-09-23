@@ -4,7 +4,7 @@ from rb3charts.model import Note,TempoMap
 from rb3charts.chart import reductions,map_pitched,clean,enforce_playability,analyze_patterns,refine_band_guitar,conform_expert_to_reference,stabilize_repeated_phrases
 from rb3charts.midi import write_midi,note_times
 from rb3charts.validate import validate
-from rb3charts.transcribe import electronic_lead_events,electronic_bass_events,_refine_pitched_articulations,_focus_band_guitar_candidates,_filter_sequential_lead_outliers
+from rb3charts.transcribe import analyze_band_guitar_voice,electronic_lead_events,electronic_bass_events,_refine_pitched_articulations,_focus_band_guitar_candidates,_filter_sequential_lead_outliers
 
 def test_tempo_map_roundtrip_drifting_and_pickups():
     tempo=TempoMap([0.7,1.2,1.69,2.17,2.8,3.4])
@@ -428,6 +428,21 @@ def test_band_guitar_voice_filter_keeps_coherent_high_run():
     result,report=_filter_sequential_lead_outliers(events,.375)
     assert [event["pitch"] for event in result]==[48,48,60,62,64,48]
     assert report["sequential_outliers_removed"]==0
+
+
+def test_band_guitar_voice_analysis_flags_dominant_mixed_register_window():
+    tempo=TempoMap(np.arange(0,24,.5).tolist())
+    events=[]
+    for index,pitch in enumerate((48,72,50,74,52,76,53,77,55,79,57,81)):
+        confidence=.78 if pitch>=70 else .42
+        events.append({"start":1+index*.2,"end":1+index*.2+.08,"pitch":pitch,
+                       "confidence":confidence,"source_id":str(index),"source":"guitar"})
+
+    report=analyze_band_guitar_voice(events,tempo)
+
+    assert report["mixed_register_windows"]>=1
+    assert report["candidate_windows"]>=1
+    assert report["windows"][0]["dominant_register"]=="upper"
 
 
 def test_hard_wraps_quick_green_orange_jump_inward():

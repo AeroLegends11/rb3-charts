@@ -46,6 +46,7 @@ def test_cached_replay_writes_provenance_snapshots_and_metrics(tmp_path, monkeyp
     assert result["analysis_mode"]=="cached_replay"
     assert (replay_folder/"analysis"/"replay-provenance.json").is_file()
     assert (replay_folder/"analysis"/"guitar-stage-snapshots.json").is_file()
+    assert (replay_folder/"analysis"/"guitar-voice-continuity.json").is_file()
     assert (replay_folder/"analysis"/"regression-metrics.json").is_file()
     metadata=json.loads((replay_folder/"metadata"/"song.json").read_text(encoding="utf-8"))
     result_json=json.loads((replay_folder/"result.json").read_text(encoding="utf-8"))

@@ -8,7 +8,7 @@ import traceback
 from .model import Options, save_json
 from .audio import decode, fingerprint, separate, read_mono, write_padded_audio, detect_chart_profile
 from .timing import analyze_tempo
-from .transcribe import pitched, neural_drums, import_gm_drums, electronic_bass_events, band_guitar_lead_events
+from .transcribe import analyze_band_guitar_voice, pitched, neural_drums, import_gm_drums, electronic_bass_events, band_guitar_lead_events
 from .chart import BAND_GUITAR_SUSTAIN_SECONDS, map_pitched, clean, reductions, overdrive, align_drum_activations, enforce_playability, analyze_patterns, refine_band_guitar, conform_expert_to_reference, stabilize_repeated_phrases
 from .midi import write_midi
 from .validate import validate, report_text
@@ -226,6 +226,9 @@ def generate(options: Options, progress=print):
                             f"and removed {focus.get('sequential_outliers_removed',0)} unsupported sequential pitch spikes."
                         )
                 save_json(folder/"analysis"/f"{instrument}-transcription.json",raw)
+                if resolved_profile=="band" and instrument=="guitar":
+                    save_json(folder/"analysis"/"guitar-voice-continuity.json",
+                              analyze_band_guitar_voice(raw,tempo))
                 notes=map_pitched(raw,instrument,
                                   "electronic_lead" if resolved_profile=="electronic" and instrument=="guitar" else "range",
                                   0.09 if resolved_profile=="electronic" and instrument!="guitar"
@@ -506,6 +509,9 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
                         "section texture authoring was skipped."
                     )
             save_json(analysis_folder/f"{instrument}-transcription.json",raw)
+        if resolved_profile=="band" and instrument=="guitar":
+            save_json(analysis_folder/"guitar-voice-continuity.json",
+                      analyze_band_guitar_voice(raw,tempo))
         notes=map_pitched(raw,instrument,
                           "electronic_lead" if resolved_profile=="electronic" and instrument=="guitar" else "range",
                           0.09 if resolved_profile=="electronic" and instrument!="guitar"
