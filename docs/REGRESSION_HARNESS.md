@@ -53,3 +53,21 @@ Coverage uses an explicit denominator (eligible motif windows), so labeling
 nothing cannot appear perfectly consistent. False-lock rate is measured over
 detected motif windows and captures motif matches that fail both absolute-lane
 and relative-shape checks.
+
+## Corpus comparison
+
+Compare two replay roots after running the same cached songs through baseline
+and candidate authoring:
+
+```powershell
+.\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays `
+  'C:\Path\To\Baseline_Replays' `
+  'C:\Path\To\Candidate_Replays' `
+  --output 'output\replay-benchmark.json'
+```
+
+Runs are matched by artist and title metadata. The JSON report includes
+per-song and macro guitar attack counts, chord/hold rates, peak four-second
+density, lane coverage, and collapsed/reversed pitch-motion counts. Unmatched
+runs are listed separately. These automated measurements support broad
+regression decisions; they do not replace listening review or Xbox playtesting.

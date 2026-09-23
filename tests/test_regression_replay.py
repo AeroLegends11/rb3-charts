@@ -9,7 +9,7 @@ from rb3charts.chart import enforce_playability, map_pitched, reductions, stabil
 from rb3charts.model import Note, TempoMap
 from rb3charts.phrases import author_guitar_phrases
 from rb3charts.pipeline import replay_cached
-from rb3charts.regression import compute_regression_metrics, stage_entry
+from rb3charts.regression import benchmark_replays, compute_regression_metrics, stage_entry
 
 
 def grid():
@@ -59,6 +59,38 @@ def test_cached_replay_requires_event_reports_for_electronic_roles(tmp_path):
     (source/"analysis"/"guitar-guitar-events.json").unlink()
     with pytest.raises(FileNotFoundError):
         replay_cached(source,output=tmp_path/"output",progress=lambda _:None,compile=False)
+
+
+def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
+    def write_run(root,lanes):
+        (root/"metadata").mkdir(parents=True)
+        (root/"analysis").mkdir()
+        (root/"metadata"/"song.json").write_text(
+            json.dumps({"artist":"RB3 Charts","title":"Benchmark Demo"}),encoding="utf-8"
+        )
+        notes=[
+            {"source_id":str(index),"start":index*.2,"end":index*.2+.065,
+             "lanes":[lane],"pitch":pitch}
+            for index,(lane,pitch) in enumerate(zip(lanes,(48,50,52)))
+        ]
+        (root/"analysis"/"guitar-stage-snapshots.json").write_text(
+            json.dumps({"instrument":"guitar","stages":[{"stage":"final","notes":notes}]}),
+            encoding="utf-8",
+        )
+
+    write_run(tmp_path/"baseline"/"run",(0,1,2))
+    write_run(tmp_path/"candidate"/"run",(0,0,2))
+
+    report=benchmark_replays(
+        tmp_path/"baseline",tmp_path/"candidate",tmp_path/"benchmark.json"
+    )
+
+    assert report["songs_matched"]==1
+    assert report["macro"]["delta"]["attacks"]==0
+    assert report["macro"]["delta"]["collapsed_pitch_changes"]==1
+    assert report["macro"]["baseline"]["lane_coverage"]==[0,1,2]
+    assert report["macro"]["candidate"]["assessment_status_counts"]=={"missing":1}
+    assert (tmp_path/"benchmark.json").is_file()
 
 
 def test_repeated_four_note_runs_metric_coverage():

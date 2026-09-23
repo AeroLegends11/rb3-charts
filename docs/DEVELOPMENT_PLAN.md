@@ -49,6 +49,9 @@ Status update (2026-09-19):
 - Added additive guitar stage snapshots in
   `analysis/guitar-stage-snapshots.json`.
 - Added replay-time `analysis/regression-metrics.json` plus concise log summary.
+- Added `benchmark-replays` corpus comparison with per-song and macro attack,
+  density, chord/hold, lane-coverage and contour metrics. This is an automated
+  regression gate only; listening review and Xbox playtesting remain separate.
 - Added synthetic regression fixtures/tests for repeated runs, transposed
   returns, strong near-variation, missing rests/attacks, chord boundaries,
   rhythm-only coincidences, late transposition confirmation behavior, variable

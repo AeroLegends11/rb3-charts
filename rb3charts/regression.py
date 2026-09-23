@@ -4,6 +4,7 @@ from collections import defaultdict
 from importlib import metadata as importlib_metadata
 from pathlib import Path
 import hashlib
+import json
 import platform
 import subprocess
 
@@ -221,6 +222,122 @@ def summarize_metrics(metrics: dict):
     errors = [item["mean_timing_error_ms"] for item in transitions if item["mean_timing_error_ms"] is not None]
     timing = float(np.mean(errors)) if errors else 0.0
     return f"Regression metrics: {len(transitions)} transitions, mean attack retention {retention:.3f}, mean matched timing error {timing:.2f} ms."
+
+
+def _benchmark_runs(root: Path):
+    runs={}
+    for metadata_path in sorted(Path(root).rglob("metadata/song.json")):
+        metadata=json.loads(metadata_path.read_text(encoding="utf-8"))
+        key=(
+            str(metadata.get("artist","")).strip().casefold(),
+            str(metadata.get("title","")).strip().casefold(),
+        )
+        folder=metadata_path.parents[1]
+        if (folder/"analysis"/"guitar-stage-snapshots.json").is_file():
+            runs[key]=(folder,metadata)
+    return runs
+
+
+def _benchmark_stage_metrics(folder: Path):
+    payload=json.loads(
+        (folder/"analysis"/"guitar-stage-snapshots.json").read_text(encoding="utf-8")
+    )
+    stages=[stage for stage in payload.get("stages",[]) if "notes" in stage]
+    if not stages:
+        raise ValueError(f"No guitar note stages in {folder}")
+    notes=_snapshots_to_notes(stages[-1]["notes"])
+    shape=_shape_metrics(notes)
+    shape["chords"]=sum(len(note.lanes)>1 for note in notes)
+    shape["holds"]=sum(note.end-note.start>=.22 for note in notes)
+    starts=np.asarray(sorted(note.start for note in notes),dtype=float)
+    peak=0
+    right=0
+    for left,start in enumerate(starts):
+        right=max(right,left)
+        while right<len(starts) and starts[right]<start+4:
+            right+=1
+        peak=max(peak,right-left)
+    shape.update({
+        "lane_coverage":sorted({lane for note in notes for lane in note.lanes}),
+        "peak_four_second_nps":round(peak/4,3),
+    })
+    assessment_path=folder/"analysis"/"quality-assessment.json"
+    shape["assessment_status"]=(
+        json.loads(assessment_path.read_text(encoding="utf-8")).get("status")
+        if assessment_path.is_file() else None
+    )
+    return shape
+
+
+def benchmark_replays(baseline_root: Path, candidate_root: Path, output: Path):
+    baseline=_benchmark_runs(Path(baseline_root))
+    candidate=_benchmark_runs(Path(candidate_root))
+    shared=sorted(set(baseline)&set(candidate))
+    if not shared:
+        raise ValueError("No matching replay songs with guitar stage snapshots")
+    songs=[]
+    total_keys=("attacks","single_notes","chords","holds",
+                "collapsed_pitch_changes","reversed_pitch_changes")
+    totals={
+        "baseline":{key:0 for key in total_keys},
+        "candidate":{key:0 for key in total_keys},
+    }
+    densities={"baseline":[],"candidate":[]}
+    lanes={"baseline":set(),"candidate":set()}
+    statuses={"baseline":defaultdict(int),"candidate":defaultdict(int)}
+    for key in shared:
+        baseline_folder,metadata=baseline[key]
+        candidate_folder,_=candidate[key]
+        before=_benchmark_stage_metrics(baseline_folder)
+        after=_benchmark_stage_metrics(candidate_folder)
+        for metric in total_keys:
+            totals["baseline"][metric]+=before[metric]
+            totals["candidate"][metric]+=after[metric]
+        for label,metrics in (("baseline",before),("candidate",after)):
+            densities[label].append(metrics["peak_four_second_nps"])
+            lanes[label].update(metrics["lane_coverage"])
+            statuses[label][metrics["assessment_status"] or "missing"]+=1
+        songs.append({
+            "artist":metadata.get("artist",""),
+            "title":metadata.get("title",""),
+            "baseline_folder":str(baseline_folder.resolve()),
+            "candidate_folder":str(candidate_folder.resolve()),
+            "baseline":before,
+            "candidate":after,
+            "delta":{
+                metric:round(after[metric]-before[metric],4)
+                for metric in before if isinstance(before[metric],(int,float))
+            },
+        })
+    for label in ("baseline","candidate"):
+        total_attacks=max(1,totals[label]["attacks"])
+        totals[label].update({
+            "chord_rate":round(totals[label]["chords"]/total_attacks,4),
+            "hold_rate":round(totals[label]["holds"]/total_attacks,4),
+            "mean_peak_four_second_nps":round(float(np.mean(densities[label])),3),
+            "max_peak_four_second_nps":round(float(np.max(densities[label])),3),
+            "lane_coverage":sorted(lanes[label]),
+            "assessment_status_counts":dict(sorted(statuses[label].items())),
+        })
+    delta={
+        key:round(totals["candidate"][key]-totals["baseline"][key],4)
+        for key in totals["baseline"]
+        if isinstance(totals["baseline"][key],(int,float))
+    }
+    report={
+        "schema_version":1,
+        "baseline_root":str(Path(baseline_root).resolve()),
+        "candidate_root":str(Path(candidate_root).resolve()),
+        "songs_matched":len(shared),
+        "baseline_only":[{"artist":key[0],"title":key[1]} for key in sorted(set(baseline)-set(candidate))],
+        "candidate_only":[{"artist":key[0],"title":key[1]} for key in sorted(set(candidate)-set(baseline))],
+        "macro":{"baseline":totals["baseline"],"candidate":totals["candidate"],"delta":delta},
+        "songs":songs,
+    }
+    output=Path(output)
+    output.parent.mkdir(parents=True,exist_ok=True)
+    output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+    return report
 
 
 def hash_file(path: Path):

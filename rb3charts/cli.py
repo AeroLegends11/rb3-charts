@@ -28,6 +28,10 @@ def main():
     replay.add_argument("--output",type=Path,default=None,help="Destination root for the replay run folder")
     replay.add_argument("--onyx",type=Path)
     replay.add_argument("--compile",action="store_true",help="Compile replay output with Onyx/Magma after validation")
+    benchmark=sub.add_parser("benchmark-replays",help="Compare guitar metrics across two replay corpora")
+    benchmark.add_argument("baseline",type=Path)
+    benchmark.add_argument("candidate",type=Path)
+    benchmark.add_argument("--output",type=Path,default=Path("output")/"replay-benchmark.json")
     reference=sub.add_parser("analyze-reference",help="Learn style statistics from finished Rock Band MIDI charts")
     reference.add_argument("folder",type=Path)
     reference.add_argument("--output",type=Path,default=Path("reference")/"style-profile.json")
@@ -106,6 +110,16 @@ def main():
             print(f"Dataset manifest is invalid: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report,indent=2))
+        return 0
+    if args.command=="benchmark-replays":
+        from .regression import benchmark_replays
+        try:
+            report=benchmark_replays(args.baseline,args.candidate,args.output)
+        except (FileNotFoundError,ValueError) as exc:
+            print(f"Replay benchmark failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["macro"],indent=2))
+        print(f"Compared {report['songs_matched']} songs -> {args.output}")
         return 0
     if args.command=="convert-guitarset":
         from .training import TrainingDataError, convert_guitarset_jams
