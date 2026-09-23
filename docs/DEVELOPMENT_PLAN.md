@@ -252,6 +252,13 @@ Status update (2026-09-22):
   density ratios ranged from 0.029 to 0.729, including 0.376 on Jonas. Thresholded
   attack integration is therefore still rejected. No learned output is wired
   into normal generation.
+- Structure prediction artifacts now record per-song attack-peak rank percentiles
+  and score quantiles so offline fusion experiments do not assume cleared-data
+  probabilities are calibrated on commercial stems. A 14-song shadow run still
+  showed inverted rank behavior on several songs, and TabCNN phrase-path trials
+  reduced some contour reversals while damaging supported intro lane range and
+  increasing collapsed changes. Learned attack and pitch evidence therefore
+  remain diagnostic-only.
 - Evaluated 56 additional Guitar-TECHS P1/P2 chord recordings as cleared
   training data. Seven source MIDI files omitted final note-off events; conversion
   now closes those notes at the authoritative track end and records the repair

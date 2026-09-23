@@ -399,6 +399,10 @@ def test_structure_baseline_trains_and_writes_auditable_checkpoint(tmp_path):
     assert prediction["summary"]["attacks"] == len(prediction["events"])
     assert prediction["summary"]["candidate_peaks"] == len(prediction["candidates"])
     assert len(prediction["candidates"]) >= len(prediction["events"])
+    ranks=[event["attack_rank_percentile"] for event in prediction["candidates"]]
+    assert min(ranks)==pytest.approx(0.0)
+    assert max(ranks)==pytest.approx(1.0)
+    assert set(prediction["summary"]["candidate_score_quantiles"])=={"0.5","0.75","0.9","0.95"}
 
 
 def test_structure_baseline_rejects_group_split_leakage(tmp_path):

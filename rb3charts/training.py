@@ -1148,6 +1148,17 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
         sustain = torch.argmax(outputs["sustain"][0], dim=-1).cpu().numpy()
     threshold = float(configuration.get("attack_threshold", 0.5))
     candidate_peaks = _attack_peaks(attack_scores)
+    candidate_heights=attack_scores[candidate_peaks]
+    rank_percentiles=np.zeros(len(candidate_peaks),dtype=float)
+    if len(candidate_peaks)==1:
+        rank_percentiles[0]=1.0
+    elif len(candidate_peaks)>1:
+        order=np.argsort(candidate_heights,kind="stable")
+        rank_percentiles[order]=np.linspace(0.0,1.0,len(candidate_peaks))
+    rank_by_frame={
+        int(frame):float(percentile)
+        for frame,percentile in zip(candidate_peaks,rank_percentiles)
+    }
 
     def event_rows(peaks, heights, prefix):
         rows = []
@@ -1157,6 +1168,7 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
                 "source_id": f"{prefix}-{index}",
                 "start": float(audio["frame_times"][frame]),
                 "attack_probability": float(heights[index]),
+                "attack_rank_percentile": rank_by_frame[int(frame)],
                 "polyphony": voices,
                 "is_chord": voices > 1,
                 "active_voices": int(sustain[frame]),
@@ -1199,6 +1211,10 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
             "attacks": len(events),
             "chord_attacks": sum(event["is_chord"] for event in events),
             "chord_rate": sum(event["is_chord"] for event in events) / max(1, len(events)),
+            "candidate_score_quantiles": {
+                str(quantile):float(np.quantile(candidate_heights,quantile))
+                for quantile in (.5,.75,.9,.95)
+            } if len(candidate_heights) else {},
         },
         "candidates": candidates,
         "events": events,
