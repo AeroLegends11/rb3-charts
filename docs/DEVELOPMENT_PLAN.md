@@ -193,6 +193,12 @@ Status update (2026-09-22):
   chart-author-disjoint splits, and a substantive in-range Expert guitar part.
   No RhythmVerse or official-chart data has been collected for training; actual
   model work remains blocked until lawful opt-in pairs are available.
+- Added deterministic conversion from validated pairs into versioned Stage B
+  examples. Each artifact keeps aligned lane-independent attack, polyphony and
+  sustain conditioning separate from Expert lane/duration targets, preserves
+  artist and chart-author split keys, and re-verifies every source and
+  permission-evidence hash. The chart-derived conditioning is a pipeline proxy
+  only; held-out generation must use independently predicted audio structure.
 - Added a versioned dataset-manifest validator with separate audio/annotation
   licenses, attribution, commercial-use status, file hashes and path checks.
 - Artist leakage across train, validation and test splits is rejected.

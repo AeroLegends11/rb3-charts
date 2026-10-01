@@ -199,6 +199,7 @@ def _validate_training_rights(root, rights, context, verify_hashes):
         "basis": basis,
         "license": license_name,
         "attribution": attribution,
+        "training_allowed": True,
         "evidence": str(relative),
         "evidence_sha256": expected,
         "redistribution_allowed": rights.get("redistribution_allowed") is True,

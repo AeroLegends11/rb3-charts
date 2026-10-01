@@ -41,6 +41,9 @@ def main():
     chart_pairs=sub.add_parser("validate-chart-pairs",help="Validate authorized synchronized audio/chart training pairs")
     chart_pairs.add_argument("manifest",type=Path)
     chart_pairs.add_argument("--verify-hashes",action="store_true",help="Verify audio, chart, and rights-evidence hashes")
+    convert_pairs=sub.add_parser("convert-chart-pairs",help="Create Stage B examples from authorized chart pairs")
+    convert_pairs.add_argument("manifest",type=Path)
+    convert_pairs.add_argument("output",type=Path)
     guitarset=sub.add_parser("convert-guitarset",help="Convert GuitarSet JAMS to lane-independent structure labels")
     guitarset.add_argument("annotation",type=Path)
     guitarset.add_argument("output",type=Path)
@@ -122,6 +125,19 @@ def main():
             print(f"Chart-pair manifest is invalid: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report,indent=2))
+        return 0
+    if args.command=="convert-chart-pairs":
+        from .training import TrainingDataError, convert_authorized_chart_pairs
+        try:
+            report=convert_authorized_chart_pairs(args.manifest,args.output)
+        except TrainingDataError as exc:
+            print(f"Chart-pair conversion failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps({
+            "dataset_id": report["dataset_id"],
+            "examples": len(report["examples"]),
+            "output": str(args.output),
+        },indent=2))
         return 0
     if args.command=="benchmark-replays":
         from .regression import benchmark_replays

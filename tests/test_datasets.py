@@ -11,6 +11,7 @@ from rb3charts.datasets import (
     validate_chart_pair_manifest,
     validate_dataset_manifest,
 )
+from rb3charts.training import TrainingDataError, convert_authorized_chart_pairs
 
 
 def _hash(path):
@@ -284,3 +285,49 @@ def test_chart_pair_manifest_rejects_chart_outside_audio(tmp_path):
 
     with pytest.raises(DatasetManifestError, match="outside the audio duration"):
         validate_chart_pair_manifest(path)
+
+
+def test_authorized_chart_pair_conversion_preserves_targets_and_provenance(tmp_path):
+    manifest = _write_chart_pair_manifest(tmp_path, [
+        {"song_id": "one", "artist_id": "artist", "chart_author_id": "author",
+         "split": "train", "audio": "audio.wav", "annotations": "chart.mid"},
+    ])
+    output = tmp_path / "converted"
+
+    index = convert_authorized_chart_pairs(manifest, output)
+
+    assert index["schema"] == "rb3charts-authoring-index"
+    assert index["examples"][0]["split_keys"] == [
+        "artist:artist",
+        "chart-author:author",
+    ]
+    example = json.loads(
+        (output / index["examples"][0]["artifact"]).read_text(encoding="utf-8")
+    )
+    assert example["conditioning_scope"].startswith("chart-derived")
+    assert example["source"]["audio"] == "audio.wav"
+    assert example["source"]["audio_rights"]["training_allowed"] is True
+    assert example["source"]["audio_rights"]["redistribution_allowed"] is False
+    assert example["conditioning"][0]["attack_id"] == "one:attack:0"
+    assert example["expert_targets"][0] == {
+        "attack_id": "one:attack:0",
+        "lanes": [0],
+        "lane_durations_seconds": [0.1],
+    }
+    assert example["summary"] == {
+        "attacks": 40,
+        "chord_attacks": 0,
+        "held_attacks": 0,
+        "lanes_used": [0, 1, 2, 3, 4],
+    }
+
+
+def test_authorized_chart_pair_conversion_always_verifies_hashes(tmp_path):
+    manifest = _write_chart_pair_manifest(tmp_path, [
+        {"song_id": "one", "artist_id": "artist", "chart_author_id": "author",
+         "split": "train", "audio": "audio.wav", "annotations": "chart.mid"},
+    ])
+    (tmp_path / "audio.wav").write_bytes(b"tampered")
+
+    with pytest.raises(TrainingDataError, match="audio_sha256 does not match"):
+        convert_authorized_chart_pairs(manifest, tmp_path / "converted")

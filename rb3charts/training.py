@@ -11,6 +11,7 @@ from .model import save_json
 
 
 STRUCTURE_LABEL_VERSION = 1
+AUTHORING_EXAMPLE_VERSION = 1
 FEATURE_VERSION = 3
 FEATURE_SAMPLE_RATE = 22050
 FEATURE_HOP_LENGTH = 256
@@ -91,6 +92,134 @@ def _label_summary(notes, attacks):
         "chord_attacks": sum(attack["is_chord"] for attack in attacks),
         "polyphony": dict(sorted(Counter(attack["polyphony"] for attack in attacks).items())),
     }
+
+
+def convert_authorized_chart_pairs(manifest, output):
+    """Create aligned Stage B examples from a validated authorized-pair manifest."""
+    from .datasets import DatasetManifestError, validate_chart_pair_manifest
+
+    manifest_path = Path(manifest).resolve()
+    output_root = Path(output).resolve()
+    try:
+        validation = validate_chart_pair_manifest(manifest_path, verify_hashes=True)
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (DatasetManifestError, OSError, json.JSONDecodeError) as exc:
+        raise TrainingDataError(f"Authorized chart-pair manifest is invalid: {exc}") from exc
+
+    try:
+        import pretty_midi
+    except ImportError as exc:
+        raise TrainingDataError("pretty_midi is required for chart-pair conversion") from exc
+
+    examples = []
+    for index, item in enumerate(payload["items"]):
+        song_id = str(item["song_id"])
+        chart_path = manifest_path.parent / item["annotations"]
+        try:
+            midi = pretty_midi.PrettyMIDI(str(chart_path))
+        except (EOFError, OSError, RuntimeError, ValueError) as exc:
+            raise TrainingDataError(f"Cannot read authorized chart for {song_id}: {exc}") from exc
+        guitar = next(
+            (instrument for instrument in midi.instruments if instrument.name == "PART GUITAR"),
+            None,
+        )
+        if guitar is None:
+            raise TrainingDataError(f"Authorized chart for {song_id} has no PART GUITAR")
+
+        offset = float(item["synchronization"]["audio_offset_seconds"])
+        grouped = {}
+        for note in guitar.notes:
+            if not 96 <= note.pitch <= 100:
+                continue
+            key = round(float(note.start), 6)
+            grouped.setdefault(key, []).append(note)
+
+        conditioning = []
+        targets = []
+        for attack_index, (chart_time, notes) in enumerate(sorted(grouped.items())):
+            notes.sort(key=lambda note: note.pitch)
+            time_seconds = chart_time + offset
+            lane_durations = [
+                round(float(note.end - note.start), 6)
+                for note in notes
+            ]
+            lanes = [int(note.pitch - 96) for note in notes]
+            duration = max(lane_durations)
+            conditioning.append({
+                "attack_id": f"{song_id}:attack:{attack_index}",
+                "time_seconds": round(time_seconds, 6),
+                "beat": round(float(midi.time_to_tick(chart_time) / midi.resolution), 6),
+                "polyphony": len(lanes),
+                "duration_seconds": duration,
+            })
+            targets.append({
+                "attack_id": f"{song_id}:attack:{attack_index}",
+                "lanes": lanes,
+                "lane_durations_seconds": lane_durations,
+            })
+
+        validated = validation["validated_items"][song_id]
+        example = {
+            "schema": "rb3charts-authoring-example",
+            "schema_version": AUTHORING_EXAMPLE_VERSION,
+            "song_id": song_id,
+            "artist_id": str(item["artist_id"]),
+            "chart_author_id": str(item["chart_author_id"]),
+            "split": str(item["split"]),
+            "split_keys": [
+                f"artist:{item['artist_id']}",
+                f"chart-author:{item['chart_author_id']}",
+            ],
+            "source": {
+                "manifest_sha256": validation["manifest_sha256"],
+                "audio": str(item["audio"]),
+                "audio_sha256": validated["audio_sha256"],
+                "chart": str(item["annotations"]),
+                "chart_sha256": validated["annotations_sha256"],
+                "synchronization": validated["synchronization"],
+                "audio_rights": validated["audio_rights"],
+                "chart_rights": validated["chart_rights"],
+            },
+            "conditioning_scope": (
+                "chart-derived lane-independent proxy; replace with independently "
+                "predicted audio structure for held-out inference"
+            ),
+            "conditioning": conditioning,
+            "expert_targets": targets,
+            "summary": {
+                "attacks": len(conditioning),
+                "chord_attacks": sum(row["polyphony"] > 1 for row in conditioning),
+                "held_attacks": sum(row["duration_seconds"] >= 0.35 for row in conditioning),
+                "lanes_used": sorted({
+                    lane for target in targets for lane in target["lanes"]
+                }),
+            },
+        }
+        relative = Path("items") / f"{index:05d}.json"
+        destination = output_root / relative
+        save_json(destination, example)
+        examples.append({
+            "song_id": song_id,
+            "artist_id": example["artist_id"],
+            "chart_author_id": example["chart_author_id"],
+            "split": example["split"],
+            "split_keys": example["split_keys"],
+            "artifact": str(relative),
+            "artifact_sha256": _hash_file(destination),
+            "attacks": len(conditioning),
+        })
+
+    index_payload = {
+        "schema": "rb3charts-authoring-index",
+        "schema_version": AUTHORING_EXAMPLE_VERSION,
+        "dataset_id": validation["dataset_id"],
+        "dataset_version": validation["dataset_version"],
+        "manifest": str(manifest_path),
+        "manifest_sha256": validation["manifest_sha256"],
+        "examples": examples,
+    }
+    save_json(output_root / "index.json", index_payload)
+    return index_payload
 
 
 def convert_guitarset_jams(path, output=None, simultaneous_tolerance=0.03):

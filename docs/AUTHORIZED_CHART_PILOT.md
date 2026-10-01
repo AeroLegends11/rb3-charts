@@ -95,3 +95,18 @@ The command rejects missing training permission, malformed or mismatched hashes,
 duplicate audio/charts, artist or chart-author split leakage, unverified
 synchronization, missing `PART GUITAR`, fewer than 32 Expert guitar gems, fewer
 than three used lanes, and chart timing outside the paired audio.
+
+After validation, create deterministic Stage B authoring examples:
+
+```powershell
+.\.venv\Scripts\python.exe -m rb3charts.cli convert-chart-pairs `
+  'C:\Path\To\ChartPairs\manifest.json' `
+  'C:\Path\To\AuthoringExamples'
+```
+
+Conversion always verifies the audio, chart, and permission-evidence hashes. It
+writes aligned lane-independent attack/polyphony/sustain conditioning beside
+the authorized Expert lane targets, with artist and chart-author split keys.
+The conditioning is explicitly marked as a chart-derived training proxy. At
+held-out inference it must be replaced by independently predicted audio
+structure; chart targets are never available to the generator.
