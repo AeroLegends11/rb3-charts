@@ -12,6 +12,7 @@ SCHEMA_VERSION = 1
 SPLITS = {"train", "validation", "test"}
 COMMERCIAL_USE = {"allowed", "noncommercial", "unknown"}
 CHART_PAIR_PURPOSE = "authorized_human_chart_pairs"
+CHART_FORMATS = {"rock_band_midi", "frets_on_fire_midi", "clone_hero_chart"}
 RIGHTS_BASES = {"creator_owned", "explicit_permission", "compatible_license"}
 SYNC_METHODS = {"manual_alignment", "shared_render", "embedded_audio_offset"}
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -206,52 +207,158 @@ def _validate_training_rights(root, rights, context, verify_hashes):
     }, verified
 
 
-def _inspect_chart_pair(audio_path, chart_path, synchronization, context):
+def _find_guitar_instrument(midi, chart_format):
+    named = next(
+        (instrument for instrument in midi.instruments if instrument.name == "PART GUITAR"),
+        None,
+    )
+    if named is not None or chart_format != "frets_on_fire_midi":
+        return named
+    candidates = [
+        instrument
+        for instrument in midi.instruments
+        if any(96 <= note.pitch <= 100 for note in instrument.notes)
+    ]
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _chart_tick_converter(tempo_rows, resolution, offset):
+    segments = []
+    elapsed = float(offset)
+    previous_tick = 0
+    previous_bpm = 120.0
+    for tick, bpm in sorted(tempo_rows):
+        elapsed += (tick - previous_tick) * 60.0 / (previous_bpm * resolution)
+        segments.append((tick, elapsed, bpm))
+        previous_tick = tick
+        previous_bpm = bpm
+    if not segments or segments[0][0] != 0:
+        segments.insert(0, (0, float(offset), 120.0))
+
+    def seconds(tick):
+        start_tick, start_seconds, bpm = segments[0]
+        for candidate in segments[1:]:
+            if candidate[0] > tick:
+                break
+            start_tick, start_seconds, bpm = candidate
+        return start_seconds + (tick - start_tick) * 60.0 / (bpm * resolution)
+
+    return seconds
+
+
+def _read_clone_hero_expert(path):
+    try:
+        text = Path(path).read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise DatasetManifestError(f"Cannot read Clone Hero chart: {exc}") from exc
+    section = None
+    resolution = None
+    offset = 0.0
+    tempo_rows = []
+    note_rows = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1]
+            continue
+        if section == "Song":
+            match = re.fullmatch(r"Resolution\s*=\s*(\d+)", line)
+            if match:
+                resolution = int(match.group(1))
+            match = re.fullmatch(r"Offset\s*=\s*(-?\d+(?:\.\d+)?)", line)
+            if match:
+                offset = float(match.group(1))
+        elif section == "SyncTrack":
+            match = re.fullmatch(r"(\d+)\s*=\s*B\s+(\d+)", line)
+            if match:
+                tempo_rows.append((int(match.group(1)), int(match.group(2)) / 1000.0))
+        elif section == "ExpertSingle":
+            match = re.fullmatch(r"(\d+)\s*=\s*N\s+([0-4])\s+(\d+)", line)
+            if match:
+                note_rows.append(tuple(map(int, match.groups())))
+    if not resolution or resolution <= 0:
+        raise DatasetManifestError("Clone Hero chart requires a positive Resolution")
+    if not tempo_rows:
+        raise DatasetManifestError("Clone Hero chart requires SyncTrack tempo events")
+    to_seconds = _chart_tick_converter(tempo_rows, resolution, offset)
+    return [
+        {
+            "start": to_seconds(tick),
+            "end": to_seconds(tick + duration),
+            "beat": tick / resolution,
+            "lane": lane,
+        }
+        for tick, lane, duration in note_rows
+    ]
+
+
+def _read_expert_gems(chart_path, chart_format):
+    if chart_format == "clone_hero_chart":
+        return _read_clone_hero_expert(chart_path)
     try:
         import pretty_midi
+
+        midi = pretty_midi.PrettyMIDI(str(chart_path))
+    except (EOFError, OSError, RuntimeError, ValueError) as exc:
+        raise DatasetManifestError(f"Cannot read five-lane MIDI: {exc}") from exc
+    guitar = _find_guitar_instrument(midi, chart_format)
+    if guitar is None:
+        requirement = (
+            "one unambiguous five-lane guitar track"
+            if chart_format == "frets_on_fire_midi"
+            else "a PART GUITAR track"
+        )
+        raise DatasetManifestError(f"Chart requires {requirement}")
+    return [
+        {
+            "start": float(note.start),
+            "end": float(note.end),
+            "beat": float(midi.time_to_tick(note.start) / midi.resolution),
+            "lane": int(note.pitch - 96),
+        }
+        for note in guitar.notes
+        if 96 <= note.pitch <= 100
+    ]
+
+
+def _inspect_chart_pair(audio_path, chart_path, chart_format, synchronization, context):
+    try:
         import soundfile as sf
 
         audio_duration = float(sf.info(audio_path).duration)
-        midi = pretty_midi.PrettyMIDI(str(chart_path))
+        expert = sorted(
+            _read_expert_gems(chart_path, chart_format),
+            key=lambda note: (note["start"], note["lane"]),
+        )
     except (EOFError, OSError, RuntimeError, ValueError) as exc:
         raise DatasetManifestError(f"{context} cannot inspect audio/chart pair: {exc}") from exc
     if audio_duration < 5:
         raise DatasetManifestError(f"{context} audio must be at least 5 seconds")
-    guitar = next(
-        (instrument for instrument in midi.instruments if instrument.name == "PART GUITAR"),
-        None,
-    )
-    if guitar is None:
-        raise DatasetManifestError(f"{context} chart requires a PART GUITAR track")
-    expert = sorted(
-        (note for note in guitar.notes if 96 <= note.pitch <= 100),
-        key=lambda note: (note.start, note.pitch),
-    )
     if len(expert) < 32:
         raise DatasetManifestError(
             f"{context} chart requires at least 32 Expert guitar gems"
         )
-    lanes = sorted({note.pitch - 96 for note in expert})
+    lanes = sorted({note["lane"] for note in expert})
     if len(lanes) < 3:
         raise DatasetManifestError(
             f"{context} Expert guitar must use at least three lanes"
         )
     if any(
-        not np.isfinite(note.start)
-        or not np.isfinite(note.end)
-        or note.start < 0
-        or note.end <= note.start
+        not np.isfinite(note["start"])
+        or not np.isfinite(note["end"])
+        or note["start"] < 0
+        or note["end"] < note["start"]
         for note in expert
     ):
         raise DatasetManifestError(f"{context} Expert guitar contains invalid note timing")
     offset = float(synchronization.get("audio_offset_seconds", 0))
-    first_audio_time = expert[0].start + offset
-    last_audio_time = max(note.end for note in expert) + offset
+    first_audio_time = expert[0]["start"] + offset
+    last_audio_time = max(note["end"] for note in expert) + offset
     if first_audio_time < -0.25 or last_audio_time > audio_duration + 0.25:
         raise DatasetManifestError(
             f"{context} synchronized Expert guitar falls outside the audio duration"
         )
-    attack_times = sorted({round(float(note.start), 6) for note in expert})
+    attack_times = sorted({round(float(note["start"]), 6) for note in expert})
     return {
         "audio_duration_seconds": round(audio_duration, 6),
         "expert_gems": len(expert),
@@ -281,9 +388,11 @@ def validate_chart_pair_manifest(path, verify_hashes=False):
         song_id = str(item["song_id"])
         author_id = str(_required(item, "chart_author_id", context))
         author_splits[author_id].add(str(item["split"]))
-        if item.get("chart_format") != "rock_band_midi":
+        chart_format = item.get("chart_format")
+        if chart_format not in CHART_FORMATS:
+            choices = ", ".join(sorted(CHART_FORMATS))
             raise DatasetManifestError(
-                f"{context}.chart_format must be rock_band_midi"
+                f"{context}.chart_format must be one of: {choices}"
             )
         synchronization = item.get("synchronization")
         if not isinstance(synchronization, dict):
@@ -321,13 +430,13 @@ def validate_chart_pair_manifest(path, verify_hashes=False):
             root, item["annotations"], f"{context}.annotations"
         )
         quality = _inspect_chart_pair(
-            audio_path, chart_path, synchronization, context
+            audio_path, chart_path, chart_format, synchronization, context
         )
         evidence_verified += audio_verified + chart_verified
         validated[song_id] = {
             **report["validated_items"][song_id],
             "chart_author_id": author_id,
-            "chart_format": "rock_band_midi",
+            "chart_format": chart_format,
             "synchronization": {
                 "method": method,
                 "audio_offset_seconds": offset,

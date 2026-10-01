@@ -96,7 +96,11 @@ def _label_summary(notes, attacks):
 
 def convert_authorized_chart_pairs(manifest, output):
     """Create aligned Stage B examples from a validated authorized-pair manifest."""
-    from .datasets import DatasetManifestError, validate_chart_pair_manifest
+    from .datasets import (
+        DatasetManifestError,
+        _read_expert_gems,
+        validate_chart_pair_manifest,
+    )
 
     manifest_path = Path(manifest).resolve()
     output_root = Path(output).resolve()
@@ -106,49 +110,36 @@ def convert_authorized_chart_pairs(manifest, output):
     except (DatasetManifestError, OSError, json.JSONDecodeError) as exc:
         raise TrainingDataError(f"Authorized chart-pair manifest is invalid: {exc}") from exc
 
-    try:
-        import pretty_midi
-    except ImportError as exc:
-        raise TrainingDataError("pretty_midi is required for chart-pair conversion") from exc
-
     examples = []
     for index, item in enumerate(payload["items"]):
         song_id = str(item["song_id"])
         chart_path = manifest_path.parent / item["annotations"]
         try:
-            midi = pretty_midi.PrettyMIDI(str(chart_path))
-        except (EOFError, OSError, RuntimeError, ValueError) as exc:
+            gems = _read_expert_gems(chart_path, item["chart_format"])
+        except DatasetManifestError as exc:
             raise TrainingDataError(f"Cannot read authorized chart for {song_id}: {exc}") from exc
-        guitar = next(
-            (instrument for instrument in midi.instruments if instrument.name == "PART GUITAR"),
-            None,
-        )
-        if guitar is None:
-            raise TrainingDataError(f"Authorized chart for {song_id} has no PART GUITAR")
 
         offset = float(item["synchronization"]["audio_offset_seconds"])
         grouped = {}
-        for note in guitar.notes:
-            if not 96 <= note.pitch <= 100:
-                continue
-            key = round(float(note.start), 6)
+        for note in gems:
+            key = round(float(note["start"]), 6)
             grouped.setdefault(key, []).append(note)
 
         conditioning = []
         targets = []
         for attack_index, (chart_time, notes) in enumerate(sorted(grouped.items())):
-            notes.sort(key=lambda note: note.pitch)
+            notes.sort(key=lambda note: note["lane"])
             time_seconds = chart_time + offset
             lane_durations = [
-                round(float(note.end - note.start), 6)
+                round(float(note["end"] - note["start"]), 6)
                 for note in notes
             ]
-            lanes = [int(note.pitch - 96) for note in notes]
+            lanes = [int(note["lane"]) for note in notes]
             duration = max(lane_durations)
             conditioning.append({
                 "attack_id": f"{song_id}:attack:{attack_index}",
                 "time_seconds": round(time_seconds, 6),
-                "beat": round(float(midi.time_to_tick(chart_time) / midi.resolution), 6),
+                "beat": round(float(notes[0]["beat"]), 6),
                 "polyphony": len(lanes),
                 "duration_seconds": duration,
             })

@@ -80,6 +80,10 @@ also uses:
 Rights bases are `creator_owned`, `explicit_permission`, or
 `compatible_license`. Synchronization methods are `manual_alignment`,
 `shared_render`, or `embedded_audio_offset`.
+`chart_format` may be `rock_band_midi`, `frets_on_fire_midi`, or
+`clone_hero_chart`; legacy MIDI is accepted only when exactly one track contains
+Expert five-lane gems, and `.chart` input must contain resolution, tempo events,
+and an `ExpertSingle` section.
 
 Permission evidence stays local with the dataset. The validator records its path
 and hash but does not copy its contents into model artifacts.

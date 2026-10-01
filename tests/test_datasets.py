@@ -331,3 +331,64 @@ def test_authorized_chart_pair_conversion_always_verifies_hashes(tmp_path):
 
     with pytest.raises(TrainingDataError, match="audio_sha256 does not match"):
         convert_authorized_chart_pairs(manifest, tmp_path / "converted")
+
+
+def test_chart_pair_manifest_accepts_unambiguous_frets_on_fire_midi(tmp_path):
+    manifest = _write_chart_pair_manifest(tmp_path, [
+        {"song_id": "one", "artist_id": "artist", "chart_author_id": "author",
+         "split": "train", "audio": "audio.wav", "annotations": "chart.mid"},
+    ])
+    chart_path = tmp_path / "chart.mid"
+    midi = pretty_midi.PrettyMIDI(initial_tempo=120)
+    guitar = pretty_midi.Instrument(program=29)
+    for index in range(40):
+        guitar.notes.append(pretty_midi.Note(
+            velocity=96,
+            pitch=96 + index % 5,
+            start=.2 + index * .2,
+            end=.3 + index * .2,
+        ))
+    midi.instruments.append(guitar)
+    midi.write(str(chart_path))
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["items"][0]["chart_format"] = "frets_on_fire_midi"
+    payload["items"][0]["annotations_sha256"] = _hash(chart_path)
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = validate_chart_pair_manifest(manifest, verify_hashes=True)
+
+    assert report["validated_items"]["one"]["chart_format"] == "frets_on_fire_midi"
+    converted = convert_authorized_chart_pairs(manifest, tmp_path / "converted")
+    assert converted["examples"][0]["attacks"] == 40
+
+
+def test_chart_pair_manifest_converts_clone_hero_chart_timing(tmp_path):
+    manifest = _write_chart_pair_manifest(tmp_path, [
+        {"song_id": "one", "artist_id": "artist", "chart_author_id": "author",
+         "split": "train", "audio": "audio.wav", "annotations": "notes.chart"},
+    ])
+    chart_path = tmp_path / "notes.chart"
+    notes = "\n".join(
+        f"  {index * 120} = N {index % 5} {60 if index % 2 else 0}"
+        for index in range(40)
+    )
+    chart_path.write_text(
+        "[Song]\n{\n  Offset = 0\n  Resolution = 480\n}\n"
+        "[SyncTrack]\n{\n  0 = B 120000\n}\n"
+        f"[ExpertSingle]\n{{\n{notes}\n}}\n",
+        encoding="utf-8",
+    )
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["items"][0]["chart_format"] = "clone_hero_chart"
+    payload["items"][0]["annotations_sha256"] = _hash(chart_path)
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = validate_chart_pair_manifest(manifest, verify_hashes=True)
+    converted = convert_authorized_chart_pairs(manifest, tmp_path / "converted")
+    example = json.loads(
+        (tmp_path / "converted" / converted["examples"][0]["artifact"]).read_text()
+    )
+
+    assert report["validated_items"]["one"]["quality"]["expert_attacks"] == 40
+    assert example["conditioning"][1]["time_seconds"] == pytest.approx(.125)
+    assert example["expert_targets"][1]["lane_durations_seconds"] == [.0625]

@@ -199,6 +199,18 @@ Status update (2026-09-22):
   artist and chart-author split keys, and re-verifies every source and
   permission-evidence hash. The chart-derived conditioning is a pipeline proxy
   only; held-out generation must use independently predicted audio structure.
+- Built a local, commercially reusable four-song five-lane seed from explicit
+  CC BY 4.0 and CC BY-SA 3.0 sources: 3,240 Expert attacks from two artists and
+  three chart authors. Three Brad Sucks charts are training-only and Zep
+  Hurme's Persephone is held out by both artist and charter. The source files,
+  manifests and permission evidence remain local under `.research/`.
+- Added strict ingestion for legacy Frets on Fire MIDI and Clone Hero `.chart`
+  files without weakening the Rock Band `PART GUITAR` requirement. The local
+  seed's Basic Pitch attack recall within 80 ms ranged from 0.570 to 0.959 on
+  training material but measured only 0.477 on the held-out song. This is enough
+  to validate the data path, not enough to train or request musical-quality
+  judgments; expand artist/charter diversity and improve held-out audio
+  structure first.
 - Added a versioned dataset-manifest validator with separate audio/annotation
   licenses, attribution, commercial-use status, file hashes and path checks.
 - Artist leakage across train, validation and test splits is rejected.
