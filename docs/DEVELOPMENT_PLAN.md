@@ -211,6 +211,19 @@ Status update (2026-09-22):
   to validate the data path, not enough to train or request musical-quality
   judgments; expand artist/charter diversity and improve held-out audio
   structure first.
+- Enabled stable studio-grid inference for Band as well as electronic profiles
+  whenever no sustained tempo change is detected. On the held-out Persephone
+  audio this replaced a 78-231 BPM variable map with a 99.996 BPM constant map
+  against the chart's evaluation-only 100 BPM tempo, raising attack F1 from
+  0.5055 to 0.5142.
+- Enabled the existing pitch-specific reattack/release refiner for Band guitar.
+  Held-out Persephone attack F1 rose further to 0.5553, recall rose from 0.4528
+  to 0.5603, and generated attacks moved from 486 to 625 against 614 human
+  attacks. Across the four-song open corpus the audio-only candidate measured
+  0.7181 macro attack F1 and 0.7602 recall. Chord and sustain style still vary
+  substantially by chart and remain the main blockers; broad chord expansion
+  was rejected because multi-pitch evidence overlapped human single notes more
+  often than human chords.
 - Added a versioned dataset-manifest validator with separate audio/annotation
   licenses, attribution, commercial-use status, file hashes and path checks.
 - Artist leakage across train, validation and test splits is rejected.

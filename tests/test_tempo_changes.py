@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from rb3charts.timing import _sustained_tempo_change, analyze_tempo
 
 
@@ -29,3 +30,18 @@ def test_audio_acceleration_overrides_studio_preference_but_not_manual_bpm():
     assert any('Sustained tempo change' in warning for warning in tempo.warnings)
     manual=analyze_tempo(y,sr,duration,bpm=120,prefer_constant=True)
     assert np.allclose(np.diff(manual.beats),.5)
+
+
+def test_studio_preference_produces_stable_grid_for_constant_band_audio():
+    sr=8000
+    duration=24
+    y=np.zeros(sr*duration,dtype=np.float32)
+    for time in np.arange(.4,duration-.1,.6):
+        index=int(time*sr)
+        y[index:index+80]=np.hanning(80)
+
+    tempo=analyze_tempo(y,sr,duration,prefer_constant=True)
+
+    assert np.std(np.diff(tempo.beats)) < 1e-8
+    assert tempo.bpm == pytest.approx(100,abs=.2)
+    assert any("stable studio grid" in warning for warning in tempo.warnings)

@@ -117,7 +117,7 @@ def analyze_tempo(y, sr, duration, bpm=None, first_beat=0.0, meter=4, beats_file
         while chosen>190:chosen/=2
         chosen,phase=_refine_studio_grid(onset,sr,hop,chosen)
         beats=np.arange(phase,duration+60/chosen,60/chosen).tolist()
-        return TempoMap(beats,meter,0.82,[f"Electronic profile inferred a stable studio grid at {chosen:.3f} BPM.",f"Quarter-note grid phase estimated at {phase:.3f}s; confirm the measure/downbeat phase by listening."])
+        return TempoMap(beats,meter,0.82,[f"Inferred a stable studio grid at {chosen:.3f} BPM.",f"Quarter-note grid phase estimated at {phase:.3f}s; confirm the measure/downbeat phase by listening."])
     _, frames = librosa.beat.beat_track(onset_envelope=onset, sr=sr, hop_length=hop, bpm=dynamic, trim=False)
     beats = librosa.frames_to_time(frames, sr=sr, hop_length=hop)
     if len(beats) < 4:

@@ -158,7 +158,10 @@ def generate(options: Options, progress=print):
         save_json(folder/"analysis"/"chart-profile.json",profile_evidence)
         log("Analyzing tempo and beat positions")
         y,sr=read_mono(stems.get("drums",wav))
-        tempo=analyze_tempo(y,sr,duration,options.bpm,options.first_beat,options.meter,options.beats_file,bpm_hint,resolved_profile=="electronic")
+        tempo=analyze_tempo(
+            y, sr, duration, options.bpm, options.first_beat, options.meter,
+            options.beats_file, bpm_hint, prefer_constant=True,
+        )
         save_json(folder/"analysis"/"tempo.json",asdict(tempo))
         charts={}
         playability={}
@@ -211,6 +214,9 @@ def generate(options: Options, progress=print):
                         warnings.append(f"Electronic lead focus retained {len(raw)} of {candidate_count} pitched candidates using phrase voice continuity.")
                 else:
                     raw=pitched(stem,instrument,options.confidence,log,
+                                refine_articulations=(
+                                    resolved_profile=="band" and instrument=="guitar"
+                                ),
                                 tempo=tempo,analysis_folder=folder/"analysis")
                     if resolved_profile=="band" and instrument=="guitar":
                         log("Selecting the lead-guitar contour from ambiguous pitched candidates")
