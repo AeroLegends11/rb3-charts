@@ -76,6 +76,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli replay 'C:\Path\To\Existing_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays'
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
+.\.venv\Scripts\python.exe -m rb3charts.cli validate-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' --verify-hashes
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-guitarset 'C:\Path\To\annotation.jams' 'C:\Path\To\labels.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-slakh 'C:\Path\To\Track00001' 'C:\Path\To\labels.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-guitar-techs 'C:\Path\To\midi.mid' 'C:\Path\To\micamp.wav' 'C:\Path\To\labels.json'
@@ -109,6 +110,14 @@ licenses separately, attribution, source/version, and whether commercial use is
 allowed, noncommercial, or unknown. `validate-dataset` rejects missing files,
 path traversal, duplicate songs/files, malformed hashes, and artists crossing
 splits; `--verify-hashes` also reads and verifies every file.
+
+Human-authored chart training is an opt-in pilot, not a license assumption.
+`validate-chart-pairs` requires separate per-song evidence that the audio rights
+holder and chart rights holder allow model training. It also requires verified
+audio/chart synchronization, Rock Band MIDI with a substantive Expert guitar
+part, file hashes, and artist- plus chart-author-disjoint splits. A chart being
+downloadable from a community site does not by itself authorize model training.
+See `docs/AUTHORIZED_CHART_PILOT.md`.
 
 `convert-guitarset` extracts note attacks, pitches, polyphony, sustain endpoints,
 and beat positions from GuitarSet JAMS annotations. Its output deliberately has

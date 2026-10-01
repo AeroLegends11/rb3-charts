@@ -186,6 +186,13 @@ charts remain post-generation evaluation evidence only.
 
 Status update (2026-09-22):
 
+- Began an authorized human-chart pilot for the weak Expert authoring stage
+  without replacing the working timing, export, validation, replay or reduction
+  pipeline. The new manifest gate requires separate hashed training permission
+  for audio and charts, verified synchronization, artist- and
+  chart-author-disjoint splits, and a substantive in-range Expert guitar part.
+  No RhythmVerse or official-chart data has been collected for training; actual
+  model work remains blocked until lawful opt-in pairs are available.
 - Added a versioned dataset-manifest validator with separate audio/annotation
   licenses, attribution, commercial-use status, file hashes and path checks.
 - Artist leakage across train, validation and test splits is rejected.

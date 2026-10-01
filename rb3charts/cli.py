@@ -38,6 +38,9 @@ def main():
     dataset=sub.add_parser("validate-dataset",help="Validate a rights-traceable training dataset manifest")
     dataset.add_argument("manifest",type=Path)
     dataset.add_argument("--verify-hashes",action="store_true",help="Read every audio/annotation file and verify SHA-256")
+    chart_pairs=sub.add_parser("validate-chart-pairs",help="Validate authorized synchronized audio/chart training pairs")
+    chart_pairs.add_argument("manifest",type=Path)
+    chart_pairs.add_argument("--verify-hashes",action="store_true",help="Verify audio, chart, and rights-evidence hashes")
     guitarset=sub.add_parser("convert-guitarset",help="Convert GuitarSet JAMS to lane-independent structure labels")
     guitarset.add_argument("annotation",type=Path)
     guitarset.add_argument("output",type=Path)
@@ -108,6 +111,15 @@ def main():
             report=validate_dataset_manifest(args.manifest,args.verify_hashes)
         except DatasetManifestError as exc:
             print(f"Dataset manifest is invalid: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report,indent=2))
+        return 0
+    if args.command=="validate-chart-pairs":
+        from .datasets import DatasetManifestError, validate_chart_pair_manifest
+        try:
+            report=validate_chart_pair_manifest(args.manifest,args.verify_hashes)
+        except DatasetManifestError as exc:
+            print(f"Chart-pair manifest is invalid: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report,indent=2))
         return 0
