@@ -32,6 +32,11 @@ def main():
     benchmark.add_argument("baseline",type=Path)
     benchmark.add_argument("candidate",type=Path)
     benchmark.add_argument("--output",type=Path,default=Path("output")/"replay-benchmark.json")
+    human_compare=sub.add_parser("compare-human-chart",help="Compare generated guitar with an authorized held-out chart")
+    human_compare.add_argument("manifest",type=Path)
+    human_compare.add_argument("song_id")
+    human_compare.add_argument("generated",type=Path)
+    human_compare.add_argument("--output",type=Path)
     reference=sub.add_parser("analyze-reference",help="Learn style statistics from finished Rock Band MIDI charts")
     reference.add_argument("folder",type=Path)
     reference.add_argument("--output",type=Path,default=Path("reference")/"style-profile.json")
@@ -148,6 +153,18 @@ def main():
             return 1
         print(json.dumps(report["macro"],indent=2))
         print(f"Compared {report['songs_matched']} songs -> {args.output}")
+        return 0
+    if args.command=="compare-human-chart":
+        from .datasets import DatasetManifestError
+        from .regression import compare_authorized_chart
+        try:
+            report=compare_authorized_chart(
+                args.manifest,args.song_id,args.generated,args.output
+            )
+        except (DatasetManifestError,FileNotFoundError,ValueError) as exc:
+            print(f"Human-chart comparison failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["difficulties"]["expert"],indent=2))
         return 0
     if args.command=="convert-guitarset":
         from .training import TrainingDataError, convert_guitarset_jams

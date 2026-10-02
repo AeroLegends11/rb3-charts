@@ -9,7 +9,12 @@ from rb3charts.chart import enforce_playability, map_pitched, reductions, stabil
 from rb3charts.model import Note, TempoMap
 from rb3charts.phrases import author_guitar_phrases
 from rb3charts.pipeline import replay_cached
-from rb3charts.regression import benchmark_replays, compute_regression_metrics, stage_entry
+from rb3charts.regression import (
+    benchmark_replays,
+    compare_chart_attacks,
+    compute_regression_metrics,
+    stage_entry,
+)
 
 
 def grid():
@@ -92,6 +97,29 @@ def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
     assert report["macro"]["baseline"]["lane_coverage"]==[0,1,2]
     assert report["macro"]["candidate"]["assessment_status_counts"]=={"missing":1}
     assert (tmp_path/"benchmark.json").is_file()
+
+
+def test_human_chart_comparison_reports_timing_style_and_motifs():
+    reference = [
+        {"time": index * .25, "lanes": (index % 4,), "duration": .5 if index == 2 else .1}
+        for index in range(8)
+    ]
+    candidate = [
+        {"time": row["time"] + .02, "lanes": row["lanes"], "duration": row["duration"]}
+        for row in reference
+    ]
+    candidate[4] = {**candidate[4], "lanes": (0, 2)}
+
+    report = compare_chart_attacks(reference, candidate)
+
+    assert report["attack"]["f1"] == 1
+    assert report["attack"]["timing_error_ms"]["median"] == pytest.approx(20)
+    assert report["chord"]["candidate"] == 1
+    assert report["sustain"]["matched"] == 1
+    assert report["lane"]["exact_agreement"] == .875
+    assert report["density"]["attack_count_ratio"] == 1
+    assert report["motifs"]["families"] == 1
+    assert report["motifs"]["coverage"] < 1
 
 
 def test_repeated_four_note_runs_metric_coverage():

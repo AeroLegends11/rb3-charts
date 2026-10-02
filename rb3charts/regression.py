@@ -340,6 +340,267 @@ def benchmark_replays(baseline_root: Path, candidate_root: Path, output: Path):
     return report
 
 
+def _chart_attacks(gems, offset=0.0):
+    grouped = defaultdict(list)
+    for gem in gems:
+        grouped[round(float(gem["start"]) + offset, 6)].append(gem)
+    return [
+        {
+            "time": time,
+            "lanes": tuple(sorted(int(gem["lane"]) for gem in rows)),
+            "duration": max(float(gem["end"]) - float(gem["start"]) for gem in rows),
+        }
+        for time, rows in sorted(grouped.items())
+    ]
+
+
+def _match_attacks(reference, candidate, tolerance):
+    left = right = 0
+    matches = []
+    while left < len(reference) and right < len(candidate):
+        error = candidate[right]["time"] - reference[left]["time"]
+        if abs(error) <= tolerance:
+            matches.append((reference[left], candidate[right], error))
+            left += 1
+            right += 1
+        elif error < 0:
+            right += 1
+        else:
+            left += 1
+    return matches
+
+
+def _binary_event_metrics(matches, reference, candidate, predicate):
+    true_positive = sum(predicate(left) and predicate(right) for left, right, _ in matches)
+    reference_positive = sum(predicate(row) for row in reference)
+    candidate_positive = sum(predicate(row) for row in candidate)
+    precision = true_positive / max(1, candidate_positive)
+    recall = true_positive / max(1, reference_positive)
+    return {
+        "reference": reference_positive,
+        "candidate": candidate_positive,
+        "matched": true_positive,
+        "precision": round(precision, 4),
+        "recall": round(recall, 4),
+        "f1": round(2 * precision * recall / max(1e-12, precision + recall), 4),
+    }
+
+
+def _peak_density(attacks, window=4.0):
+    starts = [row["time"] for row in attacks]
+    peak = right = 0
+    for left, start in enumerate(starts):
+        right = max(right, left)
+        while right < len(starts) and starts[right] < start + window:
+            right += 1
+        peak = max(peak, right - left)
+    return round(peak / window, 3)
+
+
+def _rest_boundaries(attacks, minimum_gap=1.0):
+    return [
+        (left["time"] + right["time"]) / 2
+        for left, right in zip(attacks, attacks[1:])
+        if right["time"] - left["time"] >= minimum_gap
+    ]
+
+
+def _motif_agreement(reference, matches, window=4):
+    matched_by_time = {
+        round(left["time"], 6): right
+        for left, right, _ in matches
+    }
+    families = defaultdict(list)
+    for index in range(len(reference) - window + 1):
+        phrase = reference[index:index + window]
+        if any(len(row["lanes"]) != 1 for row in phrase):
+            continue
+        gaps = tuple(round(right["time"] - left["time"], 2)
+                     for left, right in zip(phrase, phrase[1:]))
+        if any(gap <= 0 or gap > 2 for gap in gaps):
+            continue
+        lanes = tuple(row["lanes"][0] for row in phrase)
+        shape = tuple(lane - lanes[0] for lane in lanes)
+        families[(gaps, shape)].append(phrase)
+    repeated = [phrases for phrases in families.values() if len(phrases) >= 2]
+    occurrences = [phrase for phrases in repeated for phrase in phrases]
+    covered = agreed = 0
+    for phrase in occurrences:
+        candidate = [matched_by_time.get(round(row["time"], 6)) for row in phrase]
+        if any(row is None or len(row["lanes"]) != 1 for row in candidate):
+            continue
+        covered += 1
+        lanes = tuple(row["lanes"][0] for row in candidate)
+        candidate_shape = tuple(lane - lanes[0] for lane in lanes)
+        reference_lanes = tuple(row["lanes"][0] for row in phrase)
+        reference_shape = tuple(lane - reference_lanes[0] for lane in reference_lanes)
+        agreed += int(candidate_shape == reference_shape)
+    return {
+        "families": len(repeated),
+        "reference_occurrences": len(occurrences),
+        "covered_occurrences": covered,
+        "coverage": round(covered / max(1, len(occurrences)), 4),
+        "relative_lane_shape_agreement": round(agreed / max(1, covered), 4),
+    }
+
+
+def compare_chart_attacks(reference, candidate, tolerance=0.08, hold_seconds=0.35):
+    matches = _match_attacks(reference, candidate, tolerance)
+    errors = [abs(error) * 1000 for _, _, error in matches]
+    precision = len(matches) / max(1, len(candidate))
+    recall = len(matches) / max(1, len(reference))
+    single_pairs = [
+        (left, right)
+        for left, right, _ in matches
+        if len(left["lanes"]) == len(right["lanes"]) == 1
+    ]
+    movement_pairs = list(zip(single_pairs, single_pairs[1:]))
+    direction_matches = 0
+    direction_changes = 0
+    interval_errors = []
+    for ((left_a, right_a), (left_b, right_b)) in movement_pairs:
+        reference_move = left_b["lanes"][0] - left_a["lanes"][0]
+        candidate_move = right_b["lanes"][0] - right_a["lanes"][0]
+        if reference_move:
+            direction_changes += 1
+            direction_matches += int(np.sign(reference_move) == np.sign(candidate_move))
+        interval_errors.append(abs(reference_move - candidate_move))
+    duration_errors = [
+        abs(left["duration"] - right["duration"]) * 1000
+        for left, right, _ in matches
+    ]
+    reference_boundaries = _rest_boundaries(reference)
+    candidate_boundaries = _rest_boundaries(candidate)
+    boundary_matches = _match_attacks(
+        [{"time": time} for time in reference_boundaries],
+        [{"time": time} for time in candidate_boundaries],
+        0.25,
+    )
+    boundary_precision = len(boundary_matches) / max(1, len(candidate_boundaries))
+    boundary_recall = len(boundary_matches) / max(1, len(reference_boundaries))
+    return {
+        "attack": {
+            "reference": len(reference),
+            "candidate": len(candidate),
+            "matched": len(matches),
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1": round(2 * precision * recall / max(1e-12, precision + recall), 4),
+            "timing_error_ms": {
+                "median": round(float(np.median(errors)), 3) if errors else None,
+                "p95": round(float(np.quantile(errors, .95)), 3) if errors else None,
+            },
+        },
+        "chord": _binary_event_metrics(
+            matches, reference, candidate, lambda row: len(row["lanes"]) > 1
+        ),
+        "sustain": {
+            **_binary_event_metrics(
+                matches, reference, candidate,
+                lambda row: row["duration"] >= hold_seconds,
+            ),
+            "matched_duration_error_ms": {
+                "median": round(float(np.median(duration_errors)), 3)
+                if duration_errors else None,
+                "p95": round(float(np.quantile(duration_errors, .95)), 3)
+                if duration_errors else None,
+            },
+        },
+        "lane": {
+            "exact_agreement": round(
+                sum(left["lanes"] == right["lanes"] for left, right, _ in matches)
+                / max(1, len(matches)), 4
+            ),
+            "single_note_pairs": len(single_pairs),
+            "movement_direction_agreement": round(
+                direction_matches / max(1, direction_changes), 4
+            ),
+            "mean_interval_error": round(float(np.mean(interval_errors)), 4)
+            if interval_errors else None,
+        },
+        "density": {
+            "reference_peak_four_second_nps": _peak_density(reference),
+            "candidate_peak_four_second_nps": _peak_density(candidate),
+            "attack_count_ratio": round(len(candidate) / max(1, len(reference)), 4),
+        },
+        "phrase_boundaries": {
+            "reference": len(reference_boundaries),
+            "candidate": len(candidate_boundaries),
+            "matched_250ms": len(boundary_matches),
+            "precision": round(boundary_precision, 4),
+            "recall": round(boundary_recall, 4),
+            "f1": round(
+                2 * boundary_precision * boundary_recall
+                / max(1e-12, boundary_precision + boundary_recall), 4
+            ),
+        },
+        "motifs": _motif_agreement(reference, matches),
+    }
+
+
+def compare_authorized_chart(manifest, song_id, generated_folder, output=None):
+    from .datasets import validate_chart_pair_manifest, _read_expert_gems
+
+    manifest = Path(manifest).resolve()
+    generated_folder = Path(generated_folder).resolve()
+    validation = validate_chart_pair_manifest(manifest, verify_hashes=True)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    item = next((row for row in payload["items"] if str(row["song_id"]) == str(song_id)), None)
+    if item is None:
+        raise ValueError(f"song_id is not present in chart-pair manifest: {song_id}")
+    metadata_path = generated_folder / "metadata" / "song.json"
+    generated_midi = generated_folder / "midi" / "notes.mid"
+    if not metadata_path.is_file() or not generated_midi.is_file():
+        raise FileNotFoundError("Generated folder requires metadata/song.json and midi/notes.mid")
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    lead = float(metadata.get("lead_seconds", 0))
+    reference_path = manifest.parent / item["annotations"]
+    difficulties = {}
+    for difficulty in ("expert", "hard", "medium", "easy"):
+        reference = _chart_attacks(
+            _read_expert_gems(reference_path, item["chart_format"], difficulty)
+        )
+        candidate = _chart_attacks(
+            _read_expert_gems(generated_midi, "rock_band_midi", difficulty),
+            offset=-lead,
+        )
+        difficulties[difficulty] = compare_chart_attacks(reference, candidate)
+    expert_attacks = difficulties["expert"]["attack"]["reference"]
+    report = {
+        "schema_version": 1,
+        "scope": (
+            "post-generation evaluation only; authorized human notes were not "
+            "generation inputs"
+        ),
+        "song_id": str(song_id),
+        "manifest_sha256": validation["manifest_sha256"],
+        "generated_folder": str(generated_folder),
+        "generated_audio_lead_seconds": lead,
+        "difficulties": difficulties,
+        "difficulty_retention": {
+            difficulty: {
+                "reference": round(
+                    difficulties[difficulty]["attack"]["reference"]
+                    / max(1, expert_attacks), 4
+                ),
+                "candidate": round(
+                    difficulties[difficulty]["attack"]["candidate"]
+                    / max(1, difficulties["expert"]["attack"]["candidate"]), 4
+                ),
+            }
+            for difficulty in ("hard", "medium", "easy")
+        },
+    }
+    output = (
+        Path(output)
+        if output is not None
+        else generated_folder / "analysis" / "human-chart-comparison.json"
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    return report
+
+
 def hash_file(path: Path):
     digest = hashlib.sha256()
     with Path(path).open("rb") as stream:

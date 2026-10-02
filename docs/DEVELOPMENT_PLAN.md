@@ -224,6 +224,14 @@ Status update (2026-09-22):
   substantially by chart and remain the main blockers; broad chord expansion
   was rejected because multi-pitch evidence overlapped human single notes more
   often than human chords.
+- Added a reusable held-out human-chart benchmark that verifies authorized
+  provenance before comparing attacks, timing, chords, sustains, lane movement,
+  density, rest boundaries, repeated motifs and difficulty retention. The first
+  Persephone candidate measured 0.5553 attack F1 with 18.2 ms median matched
+  timing error and a 1.018 attack-count ratio, but zero matched chords, 0.0217
+  sustain F1, 0.0513 phrase-boundary F1 and only 0.069 relative motif-lane
+  agreement. This confirms that timing/density are ready for preliminary review
+  while phrase, chord, sustain and lane authoring remain the primary work.
 - Added a versioned dataset-manifest validator with separate audio/annotation
   licenses, attribution, commercial-use status, file hashes and path checks.
 - Artist leakage across train, validation and test splits is rejected.

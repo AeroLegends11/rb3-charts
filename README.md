@@ -75,6 +75,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli package 'C:\Path\To\Reviewed_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli replay 'C:\Path\To\Existing_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays'
+.\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' --verify-hashes
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' 'C:\Path\To\AuthoringExamples'

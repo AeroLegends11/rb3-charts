@@ -114,3 +114,21 @@ the authorized Expert lane targets, with artist and chart-author split keys.
 The conditioning is explicitly marked as a chart-derived training proxy. At
 held-out inference it must be replaced by independently predicted audio
 structure; chart targets are never available to the generator.
+
+## Held-out comparison
+
+Generate a song from audio first, then compare the completed output with its
+authorized human chart:
+
+```powershell
+.\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart `
+  'C:\Path\To\ChartPairs\manifest.json' song-id `
+  'C:\Path\To\GeneratedOutput'
+```
+
+The command revalidates the complete manifest and writes
+`analysis/human-chart-comparison.json`. It reports attack precision/recall and
+timing error, chord and sustain agreement, lane movement, four-second density,
+rest-delimited phrase boundaries, repeated-motif lane shapes, and
+Expert-to-lower-difficulty retention. Human notes are loaded only after
+generation and must never become runtime inputs.

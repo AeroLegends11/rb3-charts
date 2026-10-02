@@ -246,7 +246,7 @@ def _chart_tick_converter(tempo_rows, resolution, offset):
     return seconds
 
 
-def _read_clone_hero_expert(path):
+def _read_clone_hero_expert(path, difficulty="expert"):
     try:
         text = Path(path).read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError) as exc:
@@ -256,6 +256,12 @@ def _read_clone_hero_expert(path):
     offset = 0.0
     tempo_rows = []
     note_rows = []
+    target_section = {
+        "easy": "EasySingle",
+        "medium": "MediumSingle",
+        "hard": "HardSingle",
+        "expert": "ExpertSingle",
+    }[difficulty]
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if line.startswith("[") and line.endswith("]"):
@@ -272,7 +278,7 @@ def _read_clone_hero_expert(path):
             match = re.fullmatch(r"(\d+)\s*=\s*B\s+(\d+)", line)
             if match:
                 tempo_rows.append((int(match.group(1)), int(match.group(2)) / 1000.0))
-        elif section == "ExpertSingle":
+        elif section == target_section:
             match = re.fullmatch(r"(\d+)\s*=\s*N\s+([0-4])\s+(\d+)", line)
             if match:
                 note_rows.append(tuple(map(int, match.groups())))
@@ -292,9 +298,9 @@ def _read_clone_hero_expert(path):
     ]
 
 
-def _read_expert_gems(chart_path, chart_format):
+def _read_expert_gems(chart_path, chart_format, difficulty="expert"):
     if chart_format == "clone_hero_chart":
-        return _read_clone_hero_expert(chart_path)
+        return _read_clone_hero_expert(chart_path, difficulty)
     try:
         import pretty_midi
 
@@ -309,15 +315,16 @@ def _read_expert_gems(chart_path, chart_format):
             else "a PART GUITAR track"
         )
         raise DatasetManifestError(f"Chart requires {requirement}")
+    base = {"easy": 60, "medium": 72, "hard": 84, "expert": 96}[difficulty]
     return [
         {
             "start": float(note.start),
             "end": float(note.end),
             "beat": float(midi.time_to_tick(note.start) / midi.resolution),
-            "lane": int(note.pitch - 96),
+            "lane": int(note.pitch - base),
         }
         for note in guitar.notes
-        if 96 <= note.pitch <= 100
+        if base <= note.pitch <= base + 4
     ]
 
 
