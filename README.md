@@ -45,6 +45,32 @@ Supported input: WAV, FLAC, MP3, OGG, M4A, AIFF and WMA through bundled FFmpeg.
 Audio stays on this machine. Internet is used for installing tools and downloading
 model weights; source songs are not uploaded. Spotify links/downloads are not input files.
 
+## Share context with ChatGPT on your phone
+
+Click **Export for ChatGPT** in the GUI. The readable `.txt` file includes project
+source code and development progress. Choose **Yes** to also select an individual
+chart output folder (one containing `result.json`) and include its diagnostics.
+You can export project context without generating a chart or loading models.
+
+1. Save to a new filename and review the text for anything private.
+2. Transfer it to your phone, for example through OneDrive.
+3. Attach it in ChatGPT, or paste relevant sections if attachments are unavailable.
+4. Use the suggested feedback prompt at the top of the file.
+
+Nothing is uploaded automatically. Audio, stems, MIDI, raw chart notes, model
+weights, logs, and reference charts are excluded. Only selected documentation,
+top-level Python source, and allowlisted diagnostic reports are read. Common
+credentials and local paths are redacted **best-effort**, not guaranteed; review
+before sharing. Missing, oversized, invalid, or externally linked files are
+marked as omitted. Files are limited to 64 KB each and exports to two million
+characters. Existing files are never overwritten. This snapshot is not the full
+repository, and text-only feedback cannot verify musical quality or playability.
+
+```powershell
+.\.venv\Scripts\python.exe -m rb3charts.cli share-chatgpt --output 'C:\Users\You\OneDrive\rb3-context.txt'
+.\.venv\Scripts\python.exe -m rb3charts.cli share-chatgpt --folder 'C:\Path\To\Chart_Output' --output 'C:\Users\You\OneDrive\rb3-chart-context.txt'
+```
+
 ## Install on another Windows machine
 
 Install Python 3.11 or 3.12 and Git, then run:

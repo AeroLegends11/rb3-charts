@@ -16,6 +16,9 @@ def main():
     parser=argparse.ArgumentParser(description="Generate local Rock Band 3 draft charts")
     sub=parser.add_subparsers(dest="command")
     sub.add_parser("gui")
+    share=sub.add_parser("share-chatgpt",help="Export project context and optional chart diagnostics locally")
+    share.add_argument("--folder",type=Path,help="Individual chart output folder containing result.json")
+    share.add_argument("--output",type=Path,required=True,help="New .txt file to review and transfer to your phone")
     demo=sub.add_parser("demo")
     demo.add_argument("--compile",action="store_true")
     demo.add_argument("--output",type=Path,default=Path("output"))
@@ -53,6 +56,14 @@ def main():
     if args.command in (None,"gui"):
         from .gui import launch
         return launch()
+    if args.command=="share-chatgpt":
+        from .sharing import export_chatgpt
+        try:
+            destination=export_chatgpt(args.output,args.folder)
+        except (OSError,ValueError) as exc:
+            parser.error(str(exc))
+        print(f"Saved {destination}. Review before sharing; nothing was uploaded.")
+        return 0
     from .pipeline import generate,batch,package_existing,replay_cached
     if args.command=="analyze-reference":
         from .reference import analyze_reference_corpus

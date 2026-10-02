@@ -157,7 +157,39 @@ class Window(QMainWindow):
         self.open_output.clicked.connect(lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.last_folder or ROOT/"output"))))
         row.addWidget(self.open_output)
         layout.addLayout(row)
+        self.share=QPushButton("Export for ChatGPT")
+        self.share.clicked.connect(self.export_for_chatgpt)
+        layout.addWidget(self.share)
         self.setStyleSheet('''QMainWindow,QWidget{background:#111a28;color:#e5edf8;font:14px "Segoe UI"}QLabel#heading{font-size:28px;font-weight:700;letter-spacing:3px;color:#6ee7c5}QLabel#build_info{font-size:11px;color:#7c8ea8;letter-spacing:1px}QLabel#subtitle{font-size:18px;color:#b1c2d9}QLabel#hint{color:#a6b6ce;font-size:12px}QLineEdit,QComboBox,QPlainTextEdit{background:#1b293b;border:1px solid #34475e;border-radius:6px;padding:7px}QPushButton{background:#263a52;border:1px solid #435e7a;border-radius:7px;padding:9px 16px}QPushButton:hover{background:#33516e}QPushButton:disabled{color:#697b90}QPushButton#primary{background:#51c9a5;color:#10241e;font-weight:700;font-size:16px;padding:12px}QGroupBox{border:1px solid #34475e;border-radius:8px;margin-top:8px;padding-top:16px}QGroupBox::title{subcontrol-origin:margin;left:10px;padding:0 4px}''')
+
+    def export_for_chatgpt(self):
+        from .sharing import export_chatgpt
+        if self.worker and self.worker.isRunning():
+            QMessageBox.information(self,"Export for ChatGPT","Wait until generation or packaging finishes.")
+            return
+        answer=QMessageBox.question(
+            self,"Include chart diagnostics?",
+            "The export includes project code and development progress. Include a chart run too?\n"
+            "Only text diagnostics are included, not audio or MIDI. Nothing is uploaded automatically.")
+        run=None
+        if answer==QMessageBox.StandardButton.Yes:
+            folder=QFileDialog.getExistingDirectory(
+                self,"Select one chart run containing result.json",str(self.last_folder or ROOT/"output"))
+            if not folder:return
+            run=Path(folder)
+        name,_=QFileDialog.getSaveFileName(
+            self,"Save ChatGPT context",str(ROOT/"rb3-chatgpt-context.txt"),"Text (*.txt)")
+        if not name:return
+        try:
+            export_chatgpt(Path(name),run)
+        except (OSError,ValueError) as exc:
+            QMessageBox.warning(self,"Export failed",str(exc))
+            return
+        QMessageBox.information(
+            self,"Export ready",
+            "Review the text for private information first; redaction is best-effort.\n"
+            "Transfer it to your phone (for example via OneDrive), attach it in ChatGPT, "
+            "and use the suggested prompt at the top. Nothing was uploaded.")
 
     def select_song(self):
         name,_=QFileDialog.getOpenFileName(self,"Select audio",str(ROOT),"Audio (*.mp3 *.wav *.flac *.ogg *.m4a *.aiff *.wma)")
