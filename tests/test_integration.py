@@ -288,7 +288,9 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     )
     page=(tmp_path/"review.html").read_text(encoding="utf-8")
     assert "Play / Pause" in page and "−5 seconds" in page
-    assert "Highway spacing" in page and "Spread out" in page
+    assert "Highway speed" in page and "Hyper 5" in page
+    assert "highway.onchange=()=>lookAhead=+highway.value" in page
+    assert "Playback speed" in page
     assert "const payload=" in page and '"beats": [0, 0.5, 1, 1.5, 2]' in page
     assert '"lead": 0' in page and "local density" in page
     assert '"overlays": {"guitar":' in page and '"register_switches": 4' in page
@@ -360,6 +362,9 @@ def test_comparison_preview_keeps_versions_synchronized(tmp_path):
     assert "A · Baseline" in page and "B · Candidate" in page
     assert '"different": true' in page
     assert "A/B keys switch versions" in page
+    assert "Highway speed" in page and "Hyper 5" in page
+    assert "highway.onchange=()=>lookAhead=+highway.value" in page
+    assert "Playback speed" in page
     assert "NOTES HIT THIS LINE" in page
     assert "rawY>strike+2" in page
     assert '"lead": 2.0' in page and "song '+Math.max(0,time-payload.lead)" in page
@@ -445,6 +450,9 @@ def test_midi_comparison_preview_aligns_reference_to_generated_audio(
     assert "A · Project Expert" in abc_page
     assert "B · Project Hard" in abc_page
     assert "C · Official Expert" in abc_page
+    assert "Highway speed" in abc_page and "Hyper 5" in abc_page
+    assert "highway.onchange=()=>lookAhead=+highway.value" in abc_page
+    assert "Playback speed" in abc_page
     assert "selectVersion('generated_hard')" in abc_page
     assert '"t": 3.6' in abc_page
 

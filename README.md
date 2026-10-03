@@ -33,9 +33,11 @@ branch, then starts the GUI).
   or bass pulses on Bass. Manual Band and Electronic overrides remain available.
 - Generation now stops at a reviewable draft by default. Use **Listen & review
   chart** to watch a five-lane perspective note highway with the music, inspect
-  measure lines and hear separate guitar, bass, or drum onset clicks. Highway
-  spacing can be spread out for dense charts, and pitched-instrument sustains
-  remain visible at the strike line until their release.
+  measure lines and hear separate guitar, bass, or drum onset clicks. All review
+  highways provide Normal plus Hyper 1-5 visual speeds independently of audio
+  playback speed, and pitched-instrument sustains remain visible at the strike
+  line until their release. These are consistent review look-ahead levels, not
+  a claim of pixel-for-pixel calibration to a specific Rock Band display.
 - After review, **Package reviewed chart for Xbox** runs Onyx/Magma without
   repeating separation or transcription. Immediate compilation remains an
   advanced opt-in.
