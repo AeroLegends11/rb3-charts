@@ -572,12 +572,15 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
             if instrument not in previous_charts:
                 warnings.append("drums: prior chart unavailable in replay source; instrument omitted")
                 continue
-            charts[instrument]={difficulty:_notes_from_payload(notes) for difficulty,notes in previous_charts[instrument].items()}
+            expert=_notes_from_payload(
+                previous_charts[instrument]["expert"]
+            )
+            charts[instrument]=reductions(expert,instrument,tempo)
             _record_stage_snapshot(
                 stage_snapshots,
                 instrument,
                 "replay_source_expert",
-                charts[instrument]["expert"],
+                expert,
             )
             _record_reduction_snapshot(
                 stage_snapshots,instrument,charts[instrument]
@@ -682,7 +685,7 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
         patterns.setdefault(instrument,{})["stabilization"]=details
     if resolved_profile=="electronic":
         warnings.append("Cached replay used electronic role selection from saved event reports.")
-    # Replay starts from already-authored drum charts from analysis/charts.json.
+    # Replay preserves the already-aligned drum Expert chart from charts.json.
     # Reapplying activation alignment would shift drums twice.
     corrections=[]
     structure_diagnostics=analyze_structure_diagnostics(

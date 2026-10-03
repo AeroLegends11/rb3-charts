@@ -66,6 +66,9 @@ Status update (2026-10-02):
 - Cached replay writes per-instrument regression metrics plus an aggregate
   `regression-metrics-by-instrument.json`. The existing guitar
   `regression-metrics.json` remains as a compatibility alias.
+- Cached drum replay preserves the already-aligned Expert chart but now
+  rederives Hard/Medium/Easy, so reduction experiments no longer reuse stale
+  cached difficulties. It still does not rerun drum activation alignment.
 - Per-instrument metrics now audit every difficulty reduction for attack
   retention, retained/orphan source IDs, lane changes from Expert, and timing
   error. These are observability checks; intended lane simplification remains
@@ -75,6 +78,11 @@ Status update (2026-10-02):
   review flag only. Hail measured 0.53 guitar retention (below the 0.60 p10)
   and 0.97 drum retention (above the 0.82 p90); changing reduction behavior
   remains gated on broader replay evidence.
+  - A drum-specific grid-consistent accompaniment thinning candidate moved
+    Hail/Less Talk Hard retention from 0.967/0.773 to 0.798/0.704 and retained
+    46%/52% of accompaniment-only attacks. It was rejected from runtime because
+    only two drum charts were available and no lawful authoring labels or
+    listening evidence establish that the changed grooves are musically better.
 - A six-song cached-replay sweep then reduced guitar Hard minimum spacing from
   0.46 to 0.38 beats. Retention moved from 0.531-0.724 to 0.606-0.810, placing
   every song inside the aggregate guitar p10-p90 range (0.599-0.854). Worst

@@ -440,3 +440,23 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   their prior 0.46 spacing; a regression test prevents cross-instrument drift.
   A fresh Hail replay confirmed guitar retention 0.6056 and unchanged drum
   retention 0.9672.
+
+### 2026-10-03 01:18 - Drum reduction candidate measured and rejected
+
+- Found that cached replay copied prior drum difficulties verbatim, preventing
+  drum reduction experiments from exercising current code. Replay now preserves
+  the already-aligned Expert drum chart but rederives Hard/Medium/Easy; it still
+  does not rerun activation alignment.
+- A global drum spacing increase was rejected because retention fell sharply to
+  about 0.56 on both Hail and Less Talk, below the aggregate p10.
+- An aggressive nearby-accompaniment filter was rejected because it retained
+  only 3.3%/17.2% of accompaniment-only attacks and would hollow out grooves.
+- A bounded measure-grid variant moved Hail/Less Talk Hard retention from
+  0.9672/0.7728 to 0.7980/0.7037, retained 46.0%/52.3% of accompaniment-only
+  attacks, and held peak Hard density to 3.75/s.
+- The bounded variant is also rejected from runtime: two songs and aggregate
+  retention do not establish musical groove quality, and lawful drum-authoring
+  labels/listening evidence remain unavailable. Local candidates are saved
+  under ignored `.research/drum-hard-grid`; the runtime rule was removed.
+- Focused replay/chart validation passed 69 tests before rejection; the retained
+  replay-harness change has dedicated stale-reduction coverage.

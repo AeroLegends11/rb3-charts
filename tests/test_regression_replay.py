@@ -51,6 +51,24 @@ def _write_replay_fixture(source: Path, profile="band", instruments=None):
         (source/"analysis"/"bass-transcription.json").write_text(
             json.dumps(bass_rows),encoding="utf-8"
         )
+    if "drums" in instruments:
+        drum_rows=[
+            {
+                "start":1+i*.2,
+                "end":1+i*.2+.065,
+                "lanes":[0 if i%2==0 else 2],
+                "confidence":.9,
+                "source_id":f"d-{i}",
+            }
+            for i in range(8)
+        ]
+        (source/"analysis"/"charts.json").write_text(
+            json.dumps({"drums":{
+                difficulty:drum_rows
+                for difficulty in ("expert","hard","medium","easy")
+            }}),
+            encoding="utf-8",
+        )
 
 
 def test_cached_replay_writes_provenance_snapshots_and_metrics(tmp_path, monkeypatch):
@@ -109,6 +127,26 @@ def test_cached_replay_writes_snapshots_and_metrics_for_each_instrument(tmp_path
         row["max_timing_error_ms"] in (None,0)
         for row in bass_reductions.values()
     )
+
+
+def test_cached_replay_rederives_drum_reductions_from_expert(tmp_path):
+    source=tmp_path/"source-run"
+    _write_replay_fixture(source,profile="band",instruments=["drums"])
+    result=replay_cached(
+        source,output=tmp_path/"output",progress=lambda _:None,compile=False
+    )
+    charts=json.loads(
+        (Path(result["folder"])/"analysis"/"charts.json").read_text(
+            encoding="utf-8"
+        )
+    )["drums"]
+    assert len(charts["expert"])==8
+    assert len(charts["hard"])<len(charts["expert"])
+    assert {
+        note["source_id"] for note in charts["hard"]
+    } <= {
+        note["source_id"] for note in charts["expert"]
+    }
 
 
 def test_cached_replay_requires_event_reports_for_electronic_roles(tmp_path):
