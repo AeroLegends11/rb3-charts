@@ -275,8 +275,19 @@ def _benchmark_runs(root: Path, instrument: str):
             str(metadata.get("artist","")).strip().casefold(),
             str(metadata.get("title","")).strip().casefold(),
         )
+        if not all(key):
+            raise ValueError(
+                f"Replay metadata requires artist and title: {metadata_path}"
+            )
         folder=metadata_path.parents[1]
         if (folder/"analysis"/f"{instrument}-stage-snapshots.json").is_file():
+            if key in runs:
+                raise ValueError(
+                    f"Duplicate replay song for {instrument}: "
+                    f"{metadata.get('artist','')} - "
+                    f"{metadata.get('title','')} appears in "
+                    f"{runs[key][0]} and {folder}"
+                )
             runs[key]=(folder,metadata)
     return runs
 

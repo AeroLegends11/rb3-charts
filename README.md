@@ -103,6 +103,9 @@ attack coverage. Complete reduction snapshots add mean/max four-second density
 for Expert, Hard, Medium, and Easy. Pattern artifacts add song-mean recurring
 family/occurrence counts, supported-attack coverage, and pitched lane-motion
 metrics.
+Each root must contain at most one run for a given artist/title; ambiguous
+duplicate song keys and missing artist/title metadata are rejected instead of
+selecting or matching a run implicitly.
 
 New review drafts record hashes for `import/notes.mid`, `song.wav`, and
 `song.ini`. The `package` command rejects any of those inputs if they changed

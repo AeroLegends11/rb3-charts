@@ -515,3 +515,7 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Independent Hail roots matched exactly at 158 families, 442 occurrences,
   0.5619 supported-attack ratio, 0.993 contour agreement, and zero deltas across
   every pattern metric. Focused replay benchmark coverage passes 16 tests.
+- Replay corpus discovery now rejects duplicate artist/title keys and names
+  both conflicting paths, preventing accidental arbitrary baseline selection.
+  Missing artist/title identity is also rejected. Focused benchmark coverage
+  passes 18 tests.

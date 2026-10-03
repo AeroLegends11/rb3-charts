@@ -97,6 +97,9 @@ Status update (2026-10-02):
 - Reduction macro totals now include only songs whose baseline and candidate
   both contain complete reduction snapshots. Asymmetric legacy coverage reports
   unavailable retention instead of comparing different song sets.
+- Corpus discovery rejects duplicate artist/title keys within either root and
+  reports both conflicting paths. This prevents broad experiment folders from
+  silently selecting an arbitrary run as the baseline.
 - Complete reduction pairs also aggregate mean/max four-second density for all
   four difficulties. The retained Hail guitar Hard change is now reproducible
   directly in `benchmark-replays`: retention 0.5312 to 0.6056 and max density

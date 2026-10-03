@@ -297,6 +297,53 @@ def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
     assert unmatched["macro"]["baseline"]["hard_retention"] is None
 
 
+def test_benchmark_replays_rejects_duplicate_song_keys(tmp_path):
+    for name in ("one","two"):
+        root=tmp_path/"baseline"/name
+        (root/"metadata").mkdir(parents=True)
+        (root/"analysis").mkdir()
+        (root/"metadata"/"song.json").write_text(json.dumps({
+            "artist":"Same Artist",
+            "title":"Same Song",
+        }),encoding="utf-8")
+        (root/"analysis"/"guitar-stage-snapshots.json").write_text(
+            json.dumps({
+                "instrument":"guitar",
+                "stages":[{"stage":"final","notes":[]}],
+            }),
+            encoding="utf-8",
+        )
+    with pytest.raises(ValueError,match="Duplicate replay song"):
+        benchmark_replays(
+            tmp_path/"baseline",
+            tmp_path/"candidate",
+            tmp_path/"report.json",
+        )
+
+
+def test_benchmark_replays_rejects_missing_song_identity(tmp_path):
+    root=tmp_path/"baseline"/"run"
+    (root/"metadata").mkdir(parents=True)
+    (root/"analysis").mkdir()
+    (root/"metadata"/"song.json").write_text(
+        json.dumps({"artist":"","title":"Untitled"}),
+        encoding="utf-8",
+    )
+    (root/"analysis"/"guitar-stage-snapshots.json").write_text(
+        json.dumps({
+            "instrument":"guitar",
+            "stages":[{"stage":"final","notes":[]}],
+        }),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError,match="requires artist and title"):
+        benchmark_replays(
+            tmp_path/"baseline",
+            tmp_path/"candidate",
+            tmp_path/"report.json",
+        )
+
+
 def test_human_chart_comparison_reports_timing_style_and_motifs():
     reference = [
         {"time": index * .25, "lanes": (index % 4,), "duration": .5 if index == 2 else .1}
