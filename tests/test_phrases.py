@@ -2,6 +2,7 @@ import numpy as np
 from rb3charts.model import Note, TempoMap
 from rb3charts.phrases import (
     _preserve_supported_lane_span,
+    _stabilize_repeated_pitch_lanes,
     author_guitar_phrases,
     select_lead_phrases,
 )
@@ -19,6 +20,7 @@ def test_phrase_restores_distinct_pitches_and_repeated_shape_without_new_attacks
     assert [n.lanes for n in result[:7]] == [n.lanes for n in result[7:]]
     assert len(set(n.lanes for n in result[:4])) == 4
     assert report["after"]["collapsed_pitch_changes"] == 0
+    assert "pitch_anchor_contours_protected" in report
     assert report["phrases"][1]["reused_fingering"]
     assert [(n.start,n.source_id,n.pitch) for n in result] == [(n.start,n.source_id,n.pitch) for n in notes]
     assert all(n.lanes == (1,) for n in notes)  # No mutation of detector/mapping inputs.
@@ -174,6 +176,42 @@ def test_phrase_span_rejects_locally_reversed_mapping():
 
     assert not changed
     assert lanes == authored
+
+
+def test_repeated_pitch_stability_does_not_flatten_supported_contour():
+    rows = [
+        Note(i * .25, i * .25 + .065, (lane,), pitch=pitch, source_id=str(i))
+        for i, (pitch, lane) in enumerate(zip(
+            (60, 62, 60, 62, 60, 58, 60),
+            (1, 2, 1, 2, 1, 2, 3),
+        ))
+    ]
+
+    lanes, changed, protected = _stabilize_repeated_pitch_lanes(
+        rows, [note.lanes[0] for note in rows]
+    )
+
+    assert lanes == [1, 2, 1, 2, 1, 2, 3]
+    assert changed == 0
+    assert protected == 1
+
+
+def test_repeated_pitch_stability_keeps_safe_anchor_change():
+    rows = [
+        Note(i * .25, i * .25 + .065, (lane,), pitch=pitch, source_id=str(i))
+        for i, (pitch, lane) in enumerate(zip(
+            (60, 62, 60, 62, 60, 62, 60),
+            (1, 2, 1, 2, 1, 2, 2),
+        ))
+    ]
+
+    lanes, changed, protected = _stabilize_repeated_pitch_lanes(
+        rows, [note.lanes[0] for note in rows]
+    )
+
+    assert lanes == [1, 2, 1, 2, 1, 2, 1]
+    assert changed == 1
+    assert protected == 0
 
 
 def test_empty_phrase_inputs():

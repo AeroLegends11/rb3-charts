@@ -173,6 +173,16 @@ Status update (2026-10-02):
   for collapsed nonzero pitch intervals and evaluate contour-aware reduction
   on rights-cleared material before changing either pitch selection or lane
   authoring.
+- Expert repeated-pitch anchoring now protects an adjacent interval when the
+  pre-anchor fingering already moves in the same direction as source pitch.
+  Isolated cached replay reduced collapsed Expert transitions from 22 to 3,
+  32 to 8, 56 to 50 and 25 to 11 on the three development songs plus held-out
+  Persephone, without changing attacks or timing. Held-out movement agreement
+  improved 0.5178 to 0.5330 while exact color agreement shifted 0.2624 to
+  0.2536; Hail post-generation evaluation improved exact lanes 0.1336 to
+  0.1430 and movement 0.4071 to 0.4390. Retain this source-derived contour
+  safeguard, but do not treat it as a fix for repeated same-pitch voice collapse
+  or difficulty-reduction sampling.
 - Added post-generation playability-evidence audits that join each attributed
   removal to raw onset/level evidence, optional offline structure ranks,
   source-mix versus guitar-stem onset prominence/width, and voice-continuity

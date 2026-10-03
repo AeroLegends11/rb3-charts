@@ -150,6 +150,49 @@ def _preserve_supported_lane_span(rows, lanes):
     return stable, stable != lanes
 
 
+def _stabilize_repeated_pitch_lanes(rows, lanes):
+    proposals = {}
+    for pitch in {note.pitch for note in rows}:
+        pitch_indices = [
+            index for index, note in enumerate(rows) if note.pitch == pitch
+        ]
+        if len(pitch_indices) < 4:
+            continue
+        counts = {
+            lane: sum(lanes[index] == lane for index in pitch_indices)
+            for lane in {lanes[index] for index in pitch_indices}
+        }
+        anchor = max(counts, key=lambda lane: (counts[lane], -lane))
+        if counts[anchor] / len(pitch_indices) < .6:
+            continue
+        proposals.update({
+            index: anchor
+            for index in pitch_indices
+            if lanes[index] != anchor
+        })
+    candidate = [
+        proposals.get(index, lane)
+        for index, lane in enumerate(lanes)
+    ]
+    protected = set()
+    for left in range(len(rows) - 1):
+        right = left + 1
+        pitch_step = rows[right].pitch - rows[left].pitch
+        if not pitch_step or not ({left, right} & proposals.keys()):
+            continue
+        original_direction = pitch_step * (lanes[right] - lanes[left])
+        candidate_direction = pitch_step * (
+            candidate[right] - candidate[left]
+        )
+        if original_direction > 0 and candidate_direction <= 0:
+            protected.update({left, right} & proposals.keys())
+    stabilized = [
+        lane if index in protected else candidate[index]
+        for index, lane in enumerate(lanes)
+    ]
+    return stabilized, len(proposals) - len(protected), len(protected)
+
+
 def _fingering(rows, previous=None, preferred=None):
     pitches = [note.pitch for note in rows]
     unique = sorted(set(pitches))
@@ -521,6 +564,7 @@ def author_guitar_phrases(
     baseline = [replace(n) for n in result]
     continuity_summary = {"adjacent_single": 0, "through_chord": 0, "none": 0}
     pitch_anchor_changes = 0
+    pitch_anchor_contours_protected = 0
     supported_span_preservations = 0
     for phrase_index, rows in enumerate(phrases):
         index = indices[id(rows[0])]
@@ -594,21 +638,9 @@ def author_guitar_phrases(
             if (all(0 <= lane <= 4 for lane in shifted)
                     and _constraint_cost(shifted, preferred) <= _constraint_cost(lanes, preferred)):
                 lanes = [lane + boundary_delta for lane in lanes]
-        for pitch in {note.pitch for note in rows}:
-            pitch_indices = [i for i, note in enumerate(rows) if note.pitch == pitch]
-            if len(pitch_indices) < 4:
-                continue
-            counts = {
-                lane: sum(lanes[index] == lane for index in pitch_indices)
-                for lane in set(lanes[index] for index in pitch_indices)
-            }
-            anchor = max(counts, key=lambda lane: (counts[lane], -lane))
-            if counts[anchor] / len(pitch_indices) < .6:
-                continue
-            for note_index in pitch_indices:
-                if lanes[note_index] != anchor:
-                    lanes[note_index] = anchor
-                    pitch_anchor_changes += 1
+        lanes, changes, protected = _stabilize_repeated_pitch_lanes(rows, lanes)
+        pitch_anchor_changes += changes
+        pitch_anchor_contours_protected += protected
         lanes, span_preserved = _preserve_supported_lane_span(rows, lanes)
         supported_span_preservations += int(span_preserved)
         before = [n.lanes[0] for n in rows]
@@ -659,6 +691,7 @@ def author_guitar_phrases(
                     "before": contour(sorted(notes, key=lambda n:n.start)), "after": contour(result),
                     "continuity_summary": continuity_summary,
                     "pitch_anchor_changes": pitch_anchor_changes,
+                    "pitch_anchor_contours_protected": pitch_anchor_contours_protected,
                     "supported_span_preservations": supported_span_preservations,
                     "sustain_threshold_seconds": sustain_threshold,
                     "phrases": phrase_report, "short_tails_removed": tails,

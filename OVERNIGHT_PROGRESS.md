@@ -1111,3 +1111,32 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   distinguish same-pitch repetition from collapsed nonzero pitch intervals and
   make reduction preserve supported contour anchors rather than merely sampling
   attacks by spacing.
+
+### 2026-10-03 17:20 - Protected Expert contour from pitch-anchor flattening
+
+- Kept the implementation scoped to canonical Expert authoring. Repeated-pitch
+  lane stabilization may still make recurring pitches consistent, but it can
+  no longer overwrite an already-correct adjacent pitch/lane direction into a
+  flat or reversed move.
+- Isolated cached baseline versus candidate replays changed no attacks or
+  timing. Collapsed Expert pitch changes fell:
+  - Certain Death: 22 to 3.
+  - There's Something Wrong: 32 to 8.
+  - Dirtbag: 56 to 50.
+  - Held-out Persephone: 25 to 11.
+  - Hail evaluation: 139 to 35.
+- Authorized lane evaluation:
+  - Certain Death exact lanes 0.0153 to 0.0165; movement unchanged at 0.4167.
+  - There's Something Wrong exact lanes 0.3453 to 0.3373; movement
+    0.5839 to 0.6510; motif shape 0.5294 to 0.5343.
+  - Dirtbag was unchanged.
+  - Held-out Persephone exact lanes 0.2624 to 0.2536; movement
+    0.5178 to 0.5330; mean interval error 1.1429 to 1.1357.
+- Frozen post-generation Hail evaluation also improved exact lanes
+  0.1336 to 0.1430 and movement 0.4071 to 0.4390. The player 32-second Expert
+  window now preserves the large 63-to-73 pitch rise instead of flattening both
+  attacks to yellow.
+- Retained because the source-derived contour metric improves broadly and the
+  held-out movement gain outweighs the small absolute-color shift. This does
+  not solve repeated same-pitch transcription at player 17 seconds or the
+  contour-blind Hard reduction; those remain separate tasks.
