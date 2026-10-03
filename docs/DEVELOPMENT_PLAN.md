@@ -510,6 +510,12 @@ Status update (2026-09-22):
   0.8527/0.8996/0.9260 versus best-source 0.8244/0.8518/0.8919. The direction
   persisted at 30 and 80 ms. This completes a second lawful independent-capture
   calibration without changing runtime recovery.
+- Authorized chart-pair validation can now attach those existing source-
+  agreement artifacts through an additive provenance summary. It distinguishes
+  available, unavailable and invalid lineage; exposes report/manifest/release
+  hashes, tolerance and per-split shared/best-source metrics; and separately
+  reports that the current chart-pair corpus has no independent paired capture.
+  No evaluation metric is recomputed from audio and generation remains unchanged.
 - Reframed EGFxSet as deterministic multi-attack phrase augmentation rather
   than one five-second optimizer item per isolated note. Twelve ten-second
   phrases contain 236 known attacks, use 280 ms source excerpts with 25 ms

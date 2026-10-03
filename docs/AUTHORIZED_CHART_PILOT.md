@@ -100,13 +100,23 @@ and hash but does not copy its contents into model artifacts.
 
 ```powershell
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-chart-pairs `
-  'C:\Path\To\ChartPairs\manifest.json' --verify-hashes
+  'C:\Path\To\ChartPairs\manifest.json' --verify-hashes `
+  --source-agreement-report 'C:\Path\To\source-agreement.json'
 ```
 
 The command rejects missing training permission, malformed or mismatched hashes,
 duplicate audio/charts, artist or chart-author split leakage, unverified
 synchronization, missing `PART GUITAR`, fewer than 32 Expert guitar gems, fewer
 than three used lanes, and chart timing outside the paired audio.
+
+The source-agreement report is optional and never changes chart-pair
+eligibility or generation. When supplied, its report hash, paired-manifest hash,
+published release checksum, tolerance and per-split shared/best-source metrics
+are exposed under `paired_source_agreement`. Status is `available` only when
+lineage validates, `unavailable` when no report is supplied, and `invalid` for
+missing or mismatched lineage. The current 28 authorized chart pairs have zero
+independent paired captures; GuitarSet and Guitar-TECHS results therefore appear
+only as external rights-cleared calibration with target coverage unavailable.
 
 After validation, create deterministic Stage B authoring examples:
 

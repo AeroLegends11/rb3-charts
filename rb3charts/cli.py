@@ -99,6 +99,11 @@ def main():
     chart_pairs=sub.add_parser("validate-chart-pairs",help="Validate authorized synchronized audio/chart training pairs")
     chart_pairs.add_argument("manifest",type=Path)
     chart_pairs.add_argument("--verify-hashes",action="store_true",help="Verify audio, chart, and rights-evidence hashes")
+    chart_pairs.add_argument(
+        "--source-agreement-report",
+        type=Path,
+        help="Attach a validated offline paired-source evaluation summary",
+    )
     convert_pairs=sub.add_parser("convert-chart-pairs",help="Create Stage B examples from authorized chart pairs")
     convert_pairs.add_argument("manifest",type=Path)
     convert_pairs.add_argument("output",type=Path)
@@ -221,7 +226,11 @@ def main():
     if args.command=="validate-chart-pairs":
         from .datasets import DatasetManifestError, validate_chart_pair_manifest
         try:
-            report=validate_chart_pair_manifest(args.manifest,args.verify_hashes)
+            report=validate_chart_pair_manifest(
+                args.manifest,
+                args.verify_hashes,
+                args.source_agreement_report,
+            )
         except DatasetManifestError as exc:
             print(f"Chart-pair manifest is invalid: {exc}",file=sys.stderr)
             return 1

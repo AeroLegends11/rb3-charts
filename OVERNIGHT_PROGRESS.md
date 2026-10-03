@@ -782,3 +782,26 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   performers and fixed tolerances. It still does not create independent paired
   captures for Certain Death, Dirtbag, There's Something Wrong or Persephone.
   No chart-generation or playability-recovery rule changed.
+
+### 2026-10-03 06:59 - Paired-source evidence exposed in corpus reports
+
+- Extended `validate-chart-pairs` with optional
+  `--source-agreement-report`. It consumes the existing
+  `evaluate-source-agreement` artifact rather than re-running onset selection or
+  matching, and emits additive `rb3charts-paired-source-evidence` schema v1.
+- The summary distinguishes `available`, `unavailable` and `invalid` lineage.
+  Available evidence includes evaluation-report SHA-256, paired-manifest
+  SHA-256, release archive published MD5/size, tolerance, channels, split,
+  shared precision/recall/F1, best-source baseline and deltas.
+- The current authorized 28-song manifest plus GuitarSet 50 ms report validates
+  as `external_rights_cleared_calibration`. Target coverage is explicitly
+  unavailable: 0/28 chart pairs have an independently captured alternate
+  channel. The tool does not infer agreement from separator stems.
+- GuitarSet shared-versus-best-source F1 deltas are train -0.0045, validation
+  +0.0048 and untouched test -0.0040 despite precision lifts of
+  +0.0283/+0.0478/+0.0341. This makes the precision/coverage tradeoff visible
+  rather than presenting agreement as an unconditional recall gain.
+- No runtime generation, playability threshold or chart logic changed.
+- Validation: 16 dataset/reporting tests passed; paired chart/training selection
+  passed 12 tests; full suite passed 193 tests. CLI help and the real 28-song
+  corpus plus GuitarSet report were also exercised successfully.

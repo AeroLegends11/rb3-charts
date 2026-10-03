@@ -16,6 +16,7 @@ CHART_FORMATS = {"rock_band_midi", "frets_on_fire_midi", "clone_hero_chart"}
 RIGHTS_BASES = {"creator_owned", "explicit_permission", "compatible_license"}
 SYNC_METHODS = {"manual_alignment", "shared_render", "embedded_audio_offset"}
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_MD5 = re.compile(r"^[0-9a-f]{32}$")
 
 
 class DatasetManifestError(ValueError):
@@ -49,6 +50,224 @@ def _hash_file(path):
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _metric_f1(metric):
+    precision = float(metric["precision"])
+    recall = float(metric["label_recall"])
+    if precision + recall == 0:
+        return 0.0
+    return round(2 * precision * recall / (precision + recall), 4)
+
+
+def _source_agreement_summary(report_path, target_payload):
+    target_items = target_payload["items"]
+    explicit_pairs = sum(
+        1 for item in target_items
+        if item.get("alternate_audio") and item.get("alternate_audio_sha256")
+    )
+    coverage = {
+        "status": "unavailable",
+        "paired_items": explicit_pairs,
+        "total_items": len(target_items),
+        "reason": (
+            "Authorized chart-pair audio is not assumed to have an independent "
+            "paired capture"
+        ),
+    }
+    if report_path is None:
+        return {
+            "schema": "rb3charts-paired-source-evidence",
+            "schema_version": 1,
+            "status": "unavailable",
+            "reason": "No source-agreement evaluation report was supplied",
+            "target_coverage": coverage,
+        }
+    report_path = Path(report_path).resolve()
+    evidence = {
+        "schema": "rb3charts-paired-source-evidence",
+        "schema_version": 1,
+        "status": "invalid",
+        "report": str(report_path),
+        "target_coverage": coverage,
+    }
+    try:
+        report_bytes = report_path.read_bytes()
+        evidence["report_sha256"] = sha256(report_bytes).hexdigest()
+        source = json.loads(report_bytes)
+        if not isinstance(source, dict):
+            raise DatasetManifestError("source-agreement report must be an object")
+        if source.get("schema") != "rb3charts-source-agreement-evaluation":
+            raise DatasetManifestError("unexpected source-agreement report schema")
+        if source.get("schema_version") != 1:
+            raise DatasetManifestError("unsupported source-agreement schema version")
+        manifest_path = Path(str(_required(source, "manifest", "source agreement"))).resolve()
+        expected_manifest_hash = str(
+            _required(source, "manifest_sha256", "source agreement")
+        )
+        if not _SHA256.fullmatch(expected_manifest_hash):
+            raise DatasetManifestError("source agreement has an invalid manifest hash")
+        actual_manifest_hash = _hash_file(manifest_path)
+        if actual_manifest_hash != expected_manifest_hash:
+            raise DatasetManifestError("source-agreement manifest hash does not match")
+        manifest_validation = validate_dataset_manifest(
+            manifest_path,
+            verify_hashes=False,
+        )
+        manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest_payload.get("dataset") != source.get("dataset"):
+            raise DatasetManifestError("source-agreement dataset lineage does not match")
+        validation = source.get("validation") or {}
+        if validation.get("manifest_sha256") != expected_manifest_hash:
+            raise DatasetManifestError("source-agreement validation lineage does not match")
+        if validation.get("dataset_id") != manifest_validation["dataset_id"]:
+            raise DatasetManifestError("source-agreement validation dataset does not match")
+        if validation.get("dataset") != source["dataset"]:
+            raise DatasetManifestError("source-agreement validated provenance does not match")
+        if int(validation.get("hashes_verified", 0)) < 2 * len(manifest_payload["items"]):
+            raise DatasetManifestError("source-agreement source hashes were not verified")
+        source_items = {
+            str(item.get("song_id")): item for item in source.get("items") or []
+        }
+        for item in manifest_payload["items"]:
+            evaluated = source_items.get(str(item["song_id"]))
+            if evaluated is None:
+                raise DatasetManifestError(
+                    f"source agreement omits {item['song_id']}"
+                )
+            if evaluated.get("primary", {}).get("sha256") != item["audio_sha256"]:
+                raise DatasetManifestError(
+                    f"source agreement primary hash differs for {item['song_id']}"
+                )
+            if evaluated.get("labels_sha256") != item["annotations_sha256"]:
+                raise DatasetManifestError(
+                    f"source agreement label hash differs for {item['song_id']}"
+                )
+            expected_alternate = item.get("alternate_audio_sha256")
+            if (
+                expected_alternate is not None
+                and evaluated.get("alternate", {}).get("sha256")
+                != expected_alternate
+            ):
+                raise DatasetManifestError(
+                    f"source agreement alternate hash differs for {item['song_id']}"
+                )
+        configuration = source.get("configuration") or {}
+        tolerance_ms = int(_required(configuration, "tolerance_ms", "configuration"))
+        if tolerance_ms <= 0:
+            raise DatasetManifestError("source-agreement tolerance must be positive")
+        primary_channel = str(
+            _required(configuration, "primary_channel", "configuration")
+        )
+        alternate_channel = str(
+            _required(configuration, "alternate_channel", "configuration")
+        )
+        split_summaries = {}
+        for split, metrics in sorted((source.get("splits") or {}).items()):
+            rows = {}
+            for key in ("primary", "alternate", "shared"):
+                metric = metrics.get(key)
+                if not isinstance(metric, dict):
+                    raise DatasetManifestError(
+                        f"source agreement split {split} has no {key} metrics"
+                    )
+                precision = float(_required(metric, "precision", f"{split}.{key}"))
+                recall = float(
+                    _required(metric, "label_recall", f"{split}.{key}")
+                )
+                if not (0 <= precision <= 1 and 0 <= recall <= 1):
+                    raise DatasetManifestError(
+                        f"source agreement split {split} has invalid {key} metrics"
+                    )
+                rows[key] = {
+                    "precision": precision,
+                    "recall": recall,
+                    "f1": _metric_f1(metric),
+                }
+            candidates = (
+                (primary_channel, rows["primary"]),
+                (alternate_channel, rows["alternate"]),
+            )
+            best_channel, best = max(candidates, key=lambda row: row[1]["f1"])
+            shared = rows["shared"]
+            split_summaries[split] = {
+                "items": int(metrics.get("items", 0)),
+                "labeled_attacks": int(metrics.get("labeled_attacks", 0)),
+                "shared": shared,
+                "best_source": {"channel": best_channel, **best},
+                "delta_vs_best_source": {
+                    key: round(shared[key] - best[key], 4)
+                    for key in ("precision", "recall", "f1")
+                },
+            }
+        if not split_summaries:
+            raise DatasetManifestError("source agreement has no split metrics")
+        release = (source.get("dataset") or {}).get("source_agreement_release")
+        release_summary = None
+        if release is not None:
+            published_md5 = str(
+                _required(release, "published_md5", "source agreement release")
+            )
+            if not _MD5.fullmatch(published_md5):
+                raise DatasetManifestError(
+                    "source agreement release has an invalid published MD5"
+                )
+            release_summary = {
+                "record_url": release.get("record_url"),
+                "archive": release.get("archive"),
+                "archive_bytes": release.get("archive_bytes"),
+                "published_md5": published_md5,
+            }
+        target_ids = {str(item["song_id"]) for item in target_items}
+        directly_covered = sum(
+            1 for item in target_items
+            if (
+                str(item["song_id"]) in source_items
+                and source_items[str(item["song_id"])].get("primary", {}).get("sha256")
+                == item.get("audio_sha256")
+            )
+        )
+        same_dataset = (
+            source["dataset"].get("id") == target_payload["dataset"].get("id")
+        )
+        if same_dataset and directly_covered:
+            coverage = {
+                "status": "available",
+                "paired_items": directly_covered,
+                "total_items": len(target_items),
+                "source_song_ids": len(target_ids & set(source_items)),
+            }
+        evidence.update({
+            "status": "available",
+            "scope": (
+                "direct_target_coverage"
+                if coverage["status"] == "available"
+                else "external_rights_cleared_calibration"
+            ),
+            "source_dataset": {
+                "id": source["dataset"].get("id"),
+                "version": source["dataset"].get("version"),
+            },
+            "configuration": {
+                "tolerance_ms": tolerance_ms,
+                "primary_channel": primary_channel,
+                "alternate_channel": alternate_channel,
+            },
+            "lineage": {
+                "manifest": str(manifest_path),
+                "manifest_sha256": expected_manifest_hash,
+                "release": release_summary,
+            },
+            "splits": split_summaries,
+            "target_coverage": coverage,
+        })
+        return evidence
+    except (
+        DatasetManifestError, OSError, ValueError, TypeError,
+        json.JSONDecodeError,
+    ) as exc:
+        evidence["reason"] = str(exc)
+        return evidence
 
 
 def validate_dataset_manifest(path, verify_hashes=False):
@@ -376,7 +595,11 @@ def _inspect_chart_pair(audio_path, chart_path, chart_format, synchronization, c
     }
 
 
-def validate_chart_pair_manifest(path, verify_hashes=False):
+def validate_chart_pair_manifest(
+    path,
+    verify_hashes=False,
+    source_agreement_report=None,
+):
     """Validate opt-in synchronized audio/chart pairs for supervised training."""
     report = validate_dataset_manifest(path, verify_hashes=verify_hashes)
     manifest_path = Path(path).resolve()
@@ -472,4 +695,8 @@ def validate_chart_pair_manifest(path, verify_hashes=False):
         "chart_authors": len(author_splits),
         "rights_evidence_hashes_verified": evidence_verified,
         "validated_items": validated,
+        "paired_source_agreement": _source_agreement_summary(
+            source_agreement_report,
+            payload,
+        ),
     }

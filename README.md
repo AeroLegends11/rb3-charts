@@ -84,7 +84,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli audit-playability-evidence 'C:\Path\To\Generated_Output' --structure-predictions 'C:\Path\To\predictions.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli analyze-reference 'C:\Path\To\Reference_MIDI_Corpus'
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
-.\.venv\Scripts\python.exe -m rb3charts.cli validate-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' --verify-hashes
+.\.venv\Scripts\python.exe -m rb3charts.cli validate-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' --verify-hashes --source-agreement-report 'C:\Path\To\agreement.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' 'C:\Path\To\AuthoringExamples'
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-guitarset 'C:\Path\To\annotation.jams' 'C:\Path\To\labels.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-egfxset 'C:\Path\To\Clean\Neck\6-0.wav' 'C:\Path\To\labels.json'
@@ -172,6 +172,15 @@ audio/chart synchronization, Rock Band MIDI with a substantive Expert guitar
 part, file hashes, and artist- plus chart-author-disjoint splits. A chart being
 downloadable from a community site does not by itself authorize model training.
 See `docs/AUTHORIZED_CHART_PILOT.md`.
+
+`--source-agreement-report` additively attaches an existing
+`evaluate-source-agreement` result to the chart-pair validation report. The
+summary verifies the evaluation report, paired manifest and release lineage,
+then records tolerance, splits, shared precision/recall/F1, the best individual
+source and deltas. Missing reports are explicitly `unavailable`; broken lineage
+is `invalid`. A valid GuitarSet or Guitar-TECHS result is external
+rights-cleared calibration, not evidence that authorized chart-pair songs have
+paired captures.
 
 `convert-guitarset` extracts note attacks, pitches, polyphony, sustain endpoints,
 and beat positions from GuitarSet JAMS annotations. Its output deliberately has

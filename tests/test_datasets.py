@@ -201,6 +201,100 @@ def test_chart_pair_manifest_requires_both_rights_and_author_disjoint_splits(tmp
     assert report["rights_evidence_hashes_verified"] == 4
     assert report["hashes_verified"] == 4
     assert report["validated_items"]["train-song"]["quality"]["expert_attacks"] == 40
+    agreement = report["paired_source_agreement"]
+    assert agreement["status"] == "unavailable"
+    assert agreement["target_coverage"]["paired_items"] == 0
+    assert agreement["target_coverage"]["total_items"] == 2
+
+
+def test_chart_pair_report_attaches_external_source_agreement_with_lineage(tmp_path):
+    path = _write_chart_pair_manifest(tmp_path, [
+        {"song_id": "train-song", "artist_id": "artist-a", "chart_author_id": "author-a",
+         "split": "train", "audio": "audio/train.wav", "annotations": "charts/train.mid"},
+        {"song_id": "test-song", "artist_id": "artist-b", "chart_author_id": "author-b",
+         "split": "test", "audio": "audio/test.wav", "annotations": "charts/test.mid"},
+    ])
+    source_manifest = tmp_path / "source-agreement-manifest.json"
+    source_payload = json.loads(path.read_text(encoding="utf-8"))
+    source_payload["dataset"] = {
+        **source_payload["dataset"],
+        "id": "paired-calibration",
+        "purpose": "independent_source_agreement",
+        "source_agreement_release": {
+            "record_url": "https://example.invalid/release",
+            "archive": "paired.zip",
+            "archive_bytes": 1234,
+            "published_md5": "a" * 32,
+        },
+    }
+    source_manifest.write_text(json.dumps(source_payload), encoding="utf-8")
+    manifest_hash = _hash(source_manifest)
+    agreement_path = tmp_path / "source-agreement.json"
+    agreement_path.write_text(json.dumps({
+        "schema": "rb3charts-source-agreement-evaluation",
+        "schema_version": 1,
+        "manifest": str(source_manifest),
+        "manifest_sha256": manifest_hash,
+        "dataset": source_payload["dataset"],
+        "validation": {
+            "manifest_sha256": manifest_hash,
+            "dataset_id": "paired-calibration",
+            "dataset": source_payload["dataset"],
+            "hashes_verified": 4,
+        },
+        "configuration": {
+            "tolerance_ms": 50,
+            "primary_channel": "mic",
+            "alternate_channel": "pickup",
+        },
+        "splits": {
+            "validation": {
+                "items": 1,
+                "labeled_attacks": 100,
+                "primary": {"precision": .8, "label_recall": .75},
+                "alternate": {"precision": .82, "label_recall": .76},
+                "shared": {"precision": .9, "label_recall": .72},
+            },
+        },
+        "items": [
+            {
+                "song_id": item["song_id"],
+                "labels_sha256": item["annotations_sha256"],
+                "primary": {"sha256": item["audio_sha256"]},
+                "alternate": {"sha256": "b" * 64},
+            }
+            for item in source_payload["items"]
+        ],
+    }), encoding="utf-8")
+
+    report = validate_chart_pair_manifest(
+        path,
+        verify_hashes=True,
+        source_agreement_report=agreement_path,
+    )
+    agreement = report["paired_source_agreement"]
+
+    assert agreement["status"] == "available"
+    assert agreement["scope"] == "external_rights_cleared_calibration"
+    assert agreement["configuration"]["tolerance_ms"] == 50
+    assert agreement["lineage"]["manifest_sha256"] == manifest_hash
+    assert agreement["lineage"]["release"]["published_md5"] == "a" * 32
+    assert agreement["splits"]["validation"]["shared"] == {
+        "precision": .9, "recall": .72, "f1": .8,
+    }
+    assert agreement["splits"]["validation"]["best_source"]["channel"] == "pickup"
+    assert agreement["splits"]["validation"]["delta_vs_best_source"] == {
+        "precision": .08, "recall": -.04, "f1": .0111,
+    }
+    assert agreement["target_coverage"]["status"] == "unavailable"
+
+    source_manifest.write_text("{}\n", encoding="utf-8")
+    invalid = validate_chart_pair_manifest(
+        path,
+        source_agreement_report=agreement_path,
+    )["paired_source_agreement"]
+    assert invalid["status"] == "invalid"
+    assert "manifest hash does not match" in invalid["reason"]
 
 
 def test_chart_pair_manifest_rejects_missing_audio_training_permission(tmp_path):
