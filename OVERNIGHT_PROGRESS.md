@@ -974,3 +974,22 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   the evaluation report's verification count. Duplicate, missing or extra
   evaluation item identities and changed alternate bytes produce `invalid`
   lineage without exposing their metrics.
+
+### 2026-10-03 16:30 - Final hygiene gate
+
+- Revalidated both saved morning-review drafts with the current validator and
+  package-input manifests: 2/2 passed.
+- `pip check` reports only Basic Pitch 0.4.0's declared TensorFlow dependency.
+  This is the documented intentional exception: Setup installs Basic Pitch with
+  `--no-deps`, and RB3 Charts executes its bundled ONNX model through
+  ONNX Runtime. Installing TensorFlow would add an unused heavyweight runtime.
+- The branch is synchronized with `origin/codex/authorized-chart-pilot`; only
+  the intentionally local `comparisons/` tree remains untracked.
+- Hail voice/attack recovery is blocked pending independent per-song source
+  evidence that separates true weak attacks from the same weak/plain class on
+  cleared songs. The only current human question is the saved Hard-guitar
+  density review.
+- Less Talk Expert scaling-riff recovery is blocked pending stronger
+  lane-independent attack/pitch/voice evidence. Existing grid, motif, stem,
+  TabCNN and structure-fusion candidates were rejected and remain absent from
+  runtime generation.
