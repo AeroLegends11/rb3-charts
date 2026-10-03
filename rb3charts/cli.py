@@ -80,6 +80,11 @@ def main():
         choices=["expert","hard","medium","easy"],
         default="expert",
     )
+    midi_compare.add_argument(
+        "--reference-difficulty",
+        choices=["expert","hard","medium","easy"],
+        help="Reference difficulty; defaults to the generated difficulty",
+    )
     midi_compare.add_argument("--tolerance-ms",type=int,default=80)
     midi_compare.add_argument("--offset",type=float)
     comparison_index=sub.add_parser(
@@ -355,6 +360,7 @@ def main():
                 args.reference,
                 args.output,
                 difficulty=args.difficulty,
+                reference_difficulty=args.reference_difficulty,
                 tolerance=args.tolerance_ms/1000,
                 offset=args.offset,
             )

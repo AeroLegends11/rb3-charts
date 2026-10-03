@@ -1317,7 +1317,17 @@ def _reference_comparison_markdown(report):
         f"- Generated SHA-256: `{provenance['generated_sha256']}`",
         f"- Reference MIDI: `{reference_name}`",
         f"- Reference SHA-256: `{provenance['reference_sha256']}`",
-        f"- Difficulty: **{provenance['difficulty'].title()} Guitar**",
+        (
+            f"- Difficulty: **{provenance['difficulty'].title()} Guitar**"
+            if provenance.get("reference_difficulty",provenance["difficulty"])
+            == provenance["difficulty"]
+            else (
+                f"- Generated difficulty: "
+                f"**{provenance['difficulty'].title()} Guitar**\n"
+                f"- Reference difficulty: "
+                f"**{provenance['reference_difficulty'].title()} Guitar**"
+            )
+        ),
         (
             f"- Alignment: **{provenance['alignment']}**, "
             f"{provenance['alignment_offset_seconds']:+.3f} seconds"
@@ -1487,6 +1497,7 @@ def compare_reference_midi(
     difficulty="expert",
     tolerance=0.08,
     offset=None,
+    reference_difficulty=None,
 ):
     """Compare a completed guitar chart with evaluation-only reference MIDI."""
     from .datasets import _read_expert_gems
@@ -1499,9 +1510,10 @@ def compare_reference_midi(
         if metadata_path.is_file():
             metadata=json.loads(metadata_path.read_text(encoding="utf-8"))
             lead=float(metadata.get("lead_seconds",0))
-    reference_attacks=_chart_attacks(
-        _read_expert_gems(reference_midi,"rock_band_midi",difficulty)
-    )
+    reference_difficulty=reference_difficulty or difficulty
+    reference_attacks=_chart_attacks(_read_expert_gems(
+        reference_midi,"rock_band_midi",reference_difficulty
+    ))
     candidate_attacks=_chart_attacks(
         _read_expert_gems(generated_midi,"rock_band_midi",difficulty),
         offset=-lead,
@@ -1534,6 +1546,8 @@ def compare_reference_midi(
             "reference_sha256":hash_file(reference_midi),
             "instrument":"guitar",
             "difficulty":difficulty,
+            "generated_difficulty":difficulty,
+            "reference_difficulty":reference_difficulty,
             "tolerance_seconds":float(tolerance),
             "generated_audio_lead_seconds":lead,
             "alignment":alignment,
@@ -1548,7 +1562,7 @@ def compare_reference_midi(
                 offset,
                 tolerance,
             )
-            if generated_folder is not None else []
+            if generated_folder is not None and difficulty=="expert" else []
         ),
     }
     output=Path(output) if output else (

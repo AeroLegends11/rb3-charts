@@ -17,6 +17,7 @@ from rb3charts.regression import (
     build_comparison_index,
     compare_chart_attacks,
     compare_comparison_indexes,
+    compare_reference_midi,
     estimate_attack_offset,
     _authorized_comparison_markdown,
     _paired_source_evidence_markdown,
@@ -567,6 +568,44 @@ def test_reference_comparison_markdown_omits_local_paths_and_note_rows():
     assert "reference note rows are not embedded" in markdown
     assert r"C:\private" not in markdown
     assert r"C:\excluded" not in markdown
+
+
+def test_reference_comparison_supports_cross_difficulty(monkeypatch,tmp_path):
+    generated=tmp_path/"generated.mid"
+    reference=tmp_path/"reference.mid"
+    generated.write_bytes(b"generated")
+    reference.write_bytes(b"reference")
+    calls=[]
+
+    def read_gems(path, chart_format, difficulty):
+        calls.append((Path(path).name,chart_format,difficulty))
+        count=2 if Path(path)==generated else 3
+        return [
+            {"start":float(index),"end":float(index)+.1,"lane":index}
+            for index in range(count)
+        ]
+
+    monkeypatch.setattr("rb3charts.datasets._read_expert_gems",read_gems)
+    report=compare_reference_midi(
+        generated,
+        reference,
+        tmp_path/"comparison.json",
+        difficulty="hard",
+        reference_difficulty="expert",
+        offset=0,
+    )
+
+    assert calls==[
+        ("reference.mid","rock_band_midi","expert"),
+        ("generated.mid","rock_band_midi","hard"),
+    ]
+    assert report["metrics"]["attack"]["reference"]==3
+    assert report["metrics"]["attack"]["candidate"]==2
+    assert report["provenance"]["generated_difficulty"]=="hard"
+    assert report["provenance"]["reference_difficulty"]=="expert"
+    markdown=(tmp_path/"comparison.md").read_text(encoding="utf-8")
+    assert "Generated difficulty: **Hard Guitar**" in markdown
+    assert "Reference difficulty: **Expert Guitar**" in markdown
 
 
 def _write_index_run(root, name, song_id, schema=None, title="Song", artist="Artist"):

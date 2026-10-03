@@ -147,6 +147,12 @@ Status update (2026-10-02):
   cross-checks after generation. It records input hashes, Git state, alignment,
   exact unmatched events, weakest four-second windows, and per-authoring-stage
   metrics. Reference notes remain excluded from generation and training.
+- `compare-midi` can explicitly compare different generated and reference
+  difficulties. A Hail generated-Hard versus official-Expert A/B check, using
+  one Expert-derived frozen alignment, showed the denser Hard candidate improved
+  attack F1 0.4750→0.5182 and matched 74 of 119 added attacks while exact lanes
+  declined 0.1474→0.1330. This supports attack density/timing but not the current
+  lane pattern; the result remains post-generation evaluation only.
 - Added post-generation playability-evidence audits that join each attributed
   removal to raw onset/level evidence, optional offline structure ranks,
   source-mix versus guitar-stem onset prominence/width, and voice-continuity

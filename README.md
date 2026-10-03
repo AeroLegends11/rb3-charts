@@ -82,6 +82,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument all
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output' --source-agreement-report 'C:\Path\To\agreement.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-midi 'C:\Path\To\Generated_Output' 'C:\Path\To\Evaluation\notes.mid'
+.\.venv\Scripts\python.exe -m rb3charts.cli compare-midi 'C:\Path\To\Generated_Output' 'C:\Path\To\Evaluation\notes.mid' --difficulty hard --reference-difficulty expert
 .\.venv\Scripts\python.exe -m rb3charts.cli index-comparisons 'C:\Path\To\Generated_Corpus'
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-comparison-indexes 'C:\Path\To\Baseline\comparison-index.json' 'C:\Path\To\Candidate\comparison-index.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli audit-playability-evidence 'C:\Path\To\Generated_Output' --structure-predictions 'C:\Path\To\predictions.json'
@@ -141,6 +142,8 @@ attributes metrics to saved authoring stages when snapshots are present. It
 writes JSON plus a Markdown summary; reference notes are loaded only after
 generation and are never runtime inputs. The Markdown includes content hashes
 but omits local paths and individual reference-note rows.
+`--reference-difficulty` permits explicit cross-difficulty review, such as
+generated Hard against reference Expert; it defaults to `--difficulty`.
 
 `index-comparisons` scans generated runs below one local corpus root and writes
 `comparison-index.json` plus Markdown. It indexes either authorized-chart or

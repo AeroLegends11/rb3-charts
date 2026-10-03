@@ -1037,3 +1037,26 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   and slightly reduced movement agreement. Persephone removed 30 attacks,
   lowering Expert attack F1 0.5537→0.5363 and exact lanes 0.2624→0.2523,
   despite motif shape 0.2903→0.3103. No runtime music logic remains.
+
+### 2026-10-03 16:36 - Hail generated Hard compared with official Expert
+
+- Extended evaluation-only `compare-midi` with an explicit
+  `--reference-difficulty`; generation and reference difficulties no longer
+  need to match. Non-Expert generated comparisons correctly omit Expert-only
+  authoring-stage attribution.
+- Froze alignment at -1.10 seconds, independently recovered from both identical
+  generated Expert charts, then compared the 0.46- and 0.38-spacing generated
+  Hard charts against official Expert.
+- Baseline A: 850 generated attacks, 475/1,150 official Expert attacks matched,
+  precision 0.5588, recall 0.4130 and F1 0.4750.
+- Candidate B: 969 generated attacks, 549 matches, precision 0.5666, recall
+  0.4774 and F1 0.5182. The 119 added attacks produced 74 additional matches;
+  precision increased by 0.0078 rather than falling.
+- In every four-second window from source 4-24 seconds, all generated Hard
+  attacks matched an official Expert onset within 80 ms. Candidate B raised
+  window recall from 0.3548-0.4375 to 0.3871-0.4688 while retaining 1.0 timing
+  precision in those windows.
+- This supports the reviewer's observation that the denser Hard chart resembles
+  official Expert attack placement. It does not solve pattern authoring:
+  exact-lane agreement fell 0.1474→0.1330, although movement direction improved
+  0.2769→0.3176. Relative motif-shape agreement remained zero.
