@@ -1366,6 +1366,109 @@ def _reference_comparison_markdown(report):
     return "\n".join(lines)+"\n"
 
 
+def _paired_source_evidence_markdown(evidence):
+    status=str(evidence.get("status","invalid"))
+    lines=[
+        "## Paired-source evidence",
+        "",
+        f"- Lineage status: **{status}**",
+    ]
+    coverage=evidence.get("target_coverage") or {}
+    paired=int(coverage.get("paired_items",0))
+    total=int(coverage.get("total_items",0))
+    if status=="unavailable":
+        lines.extend([
+            (
+                "- Generated-song coverage: **unavailable** "
+                f"({paired}/{total} explicitly paired corpus items)"
+            ),
+            (
+                "- No paired-source evaluation was attached. This does not "
+                "imply that the generated song has an independent paired capture."
+            ),
+        ])
+        return "\n".join(lines)+"\n"
+    if status=="invalid":
+        lines.extend([
+            "- Metrics omitted because the supplied lineage did not validate.",
+            f"- Reason: {evidence.get('reason','unspecified lineage failure')}",
+        ])
+        return "\n".join(lines)+"\n"
+    scope=evidence.get("scope")
+    if scope=="external_rights_cleared_calibration":
+        lines.append(
+            "- **External rights-cleared calibration only; this is not "
+            "generated-song evidence and does not establish a paired capture "
+            "for this song.**"
+        )
+    else:
+        lines.append("- Scope: **direct paired-source corpus coverage**")
+    lines.extend([
+        (
+            f"- Generated-song corpus coverage: **{coverage.get('status','unavailable')}** "
+            f"({paired}/{total} items)"
+        ),
+        (
+            f"- Calibration dataset: **{evidence.get('source_dataset',{}).get('id','unknown')} "
+            f"{evidence.get('source_dataset',{}).get('version','')}**"
+        ),
+        f"- Tolerance: **{evidence.get('configuration',{}).get('tolerance_ms')} ms**",
+        f"- Evaluation report SHA-256: `{evidence.get('report_sha256','unavailable')}`",
+        (
+            "- Paired manifest SHA-256: "
+            f"`{evidence.get('lineage',{}).get('manifest_sha256','unavailable')}`"
+        ),
+    ])
+    release=(evidence.get("lineage") or {}).get("release")
+    if release:
+        lines.append(
+            f"- Release archive published MD5: `{release.get('published_md5')}`"
+        )
+    lines.extend([
+        "",
+        "| Split | Shared P | Shared R | Shared F1 | Best source | Best F1 | ΔP | ΔR | ΔF1 |",
+        "|---|---:|---:|---:|---|---:|---:|---:|---:|",
+    ])
+    for split,row in sorted((evidence.get("splits") or {}).items()):
+        shared=row["shared"]
+        best=row["best_source"]
+        delta=row["delta_vs_best_source"]
+        lines.append(
+            f"| {split} | {shared['precision']:.4f} | {shared['recall']:.4f} | "
+            f"{shared['f1']:.4f} | {best['channel']} | {best['f1']:.4f} | "
+            f"{delta['precision']:+.4f} | {delta['recall']:+.4f} | "
+            f"{delta['f1']:+.4f} |"
+        )
+    return "\n".join(lines)+"\n"
+
+
+def _authorized_comparison_markdown(report):
+    attack=report["difficulties"]["expert"]["attack"]
+    lines=[
+        "# Authorized human-chart comparison",
+        "",
+        (
+            "Post-generation evaluation only: authorized human notes were "
+            "not generation inputs."
+        ),
+        "",
+        f"- Song ID: `{report['song_id']}`",
+        f"- Chart-pair manifest SHA-256: `{report['manifest_sha256']}`",
+        "",
+        "| Metric | Expert |",
+        "|---|---:|",
+        f"| Reference attacks | {attack['reference']} |",
+        f"| Generated attacks | {attack['candidate']} |",
+        f"| Matched attacks | {attack['matched']} |",
+        f"| Attack precision | {attack['precision']:.4f} |",
+        f"| Attack recall | {attack['recall']:.4f} |",
+        f"| Attack F1 | {attack['f1']:.4f} |",
+        "",
+        _paired_source_evidence_markdown(report["paired_source_agreement"]).rstrip(),
+    ]
+    return "\n".join(lines)+"\n"
+
+
 def compare_reference_midi(
     generated,
     reference,
@@ -1449,12 +1552,22 @@ def compare_reference_midi(
     return report
 
 
-def compare_authorized_chart(manifest, song_id, generated_folder, output=None):
+def compare_authorized_chart(
+    manifest,
+    song_id,
+    generated_folder,
+    output=None,
+    source_agreement_report=None,
+):
     from .datasets import validate_chart_pair_manifest, _read_expert_gems
 
     manifest = Path(manifest).resolve()
     generated_folder = Path(generated_folder).resolve()
-    validation = validate_chart_pair_manifest(manifest, verify_hashes=True)
+    validation = validate_chart_pair_manifest(
+        manifest,
+        verify_hashes=True,
+        source_agreement_report=source_agreement_report,
+    )
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     item = next((row for row in payload["items"] if str(row["song_id"]) == str(song_id)), None)
     if item is None:
@@ -1488,6 +1601,7 @@ def compare_authorized_chart(manifest, song_id, generated_folder, output=None):
         "generated_folder": str(generated_folder),
         "generated_audio_lead_seconds": lead,
         "difficulties": difficulties,
+        "paired_source_agreement": validation["paired_source_agreement"],
         "difficulty_retention": {
             difficulty: {
                 "reference": round(
@@ -1509,6 +1623,10 @@ def compare_authorized_chart(manifest, song_id, generated_folder, output=None):
     )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    output.with_suffix(".md").write_text(
+        _authorized_comparison_markdown(report),
+        encoding="utf-8",
+    )
     return report
 
 

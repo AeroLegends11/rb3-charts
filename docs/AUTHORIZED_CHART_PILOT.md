@@ -141,12 +141,16 @@ authorized human chart:
 ```powershell
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart `
   'C:\Path\To\ChartPairs\manifest.json' song-id `
-  'C:\Path\To\GeneratedOutput'
+  'C:\Path\To\GeneratedOutput' `
+  --source-agreement-report 'C:\Path\To\source-agreement.json'
 ```
 
 The command revalidates the complete manifest and writes
-`analysis/human-chart-comparison.json`. It reports attack precision/recall and
-timing error, chord and sustain agreement, lane movement, four-second density,
-rest-delimited phrase boundaries, repeated-motif lane shapes, and
-Expert-to-lower-difficulty retention. Human notes are loaded only after
+`analysis/human-chart-comparison.json` plus a deterministic Markdown companion.
+It reports attack precision/recall and timing error, chord and sustain agreement,
+lane movement, four-second density, rest-delimited phrase boundaries,
+repeated-motif lane shapes, and Expert-to-lower-difficulty retention. Optional
+paired-source evidence is clearly labeled external calibration unless the
+generated-song audio hash has direct covered lineage. Unavailable or invalid
+lineage never renders agreement metrics. Human notes are loaded only after
 generation and must never become runtime inputs.

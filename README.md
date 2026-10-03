@@ -79,7 +79,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument drums
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument all
-.\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output'
+.\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output' --source-agreement-report 'C:\Path\To\agreement.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-midi 'C:\Path\To\Generated_Output' 'C:\Path\To\Evaluation\notes.mid'
 .\.venv\Scripts\python.exe -m rb3charts.cli audit-playability-evidence 'C:\Path\To\Generated_Output' --structure-predictions 'C:\Path\To\predictions.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli analyze-reference 'C:\Path\To\Reference_MIDI_Corpus'
@@ -181,6 +181,12 @@ source and deltas. Missing reports are explicitly `unavailable`; broken lineage
 is `invalid`. A valid GuitarSet or Guitar-TECHS result is external
 rights-cleared calibration, not evidence that authorized chart-pair songs have
 paired captures.
+
+The same option on `compare-human-chart` writes the evidence into
+`human-chart-comparison.json` and a deterministic companion Markdown report.
+The Markdown labels external calibration separately from generated-song
+evidence, reports explicit corpus coverage, omits local manifest/report paths,
+and suppresses all metrics when lineage is unavailable or invalid.
 
 `convert-guitarset` extracts note attacks, pitches, polyphony, sustain endpoints,
 and beat positions from GuitarSet JAMS annotations. Its output deliberately has

@@ -805,3 +805,21 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Validation: 16 dataset/reporting tests passed; paired chart/training selection
   passed 12 tests; full suite passed 193 tests. CLI help and the real 28-song
   corpus plus GuitarSet report were also exercised successfully.
+
+### 2026-10-03 07:02 - Paired-source evidence added to review Markdown
+
+- `compare-human-chart` now accepts `--source-agreement-report`, carries the
+  already-validated additive summary into its JSON, and writes deterministic
+  `human-chart-comparison.md` beside the existing JSON.
+- Available external evidence is prominently labeled rights-cleared calibration
+  rather than generated-song evidence. The report prints explicit paired corpus
+  coverage, tolerance, report/manifest/release hashes and compact split metrics.
+  It does not print local manifest/report paths.
+- Unavailable lineage states that absence does not imply a paired capture.
+  Invalid lineage omits every supplied metric and renders only the failure
+  reason, preventing stale or forged values from appearing authoritative.
+- Rendering tests cover external calibration, unavailable lineage, invalid
+  lineage, path omission and the authorized comparison wrapper. Runtime
+  generation and reference loading remain unchanged.
+- Validation: four focused comparison/lineage tests passed and the full suite
+  passed 196 tests.

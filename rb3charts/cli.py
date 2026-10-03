@@ -56,6 +56,11 @@ def main():
     human_compare.add_argument("song_id")
     human_compare.add_argument("generated",type=Path)
     human_compare.add_argument("--output",type=Path)
+    human_compare.add_argument(
+        "--source-agreement-report",
+        type=Path,
+        help="Attach external or directly covered paired-source evidence",
+    )
     midi_compare=sub.add_parser(
         "compare-midi",
         help="Evaluate a completed guitar chart against reference MIDI",
@@ -296,7 +301,11 @@ def main():
         from .regression import compare_authorized_chart
         try:
             report=compare_authorized_chart(
-                args.manifest,args.song_id,args.generated,args.output
+                args.manifest,
+                args.song_id,
+                args.generated,
+                args.output,
+                args.source_agreement_report,
             )
         except (DatasetManifestError,FileNotFoundError,ValueError) as exc:
             print(f"Human-chart comparison failed: {exc}",file=sys.stderr)

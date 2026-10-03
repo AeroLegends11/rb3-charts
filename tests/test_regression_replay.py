@@ -15,6 +15,8 @@ from rb3charts.regression import (
     benchmark_replays,
     compare_chart_attacks,
     estimate_attack_offset,
+    _authorized_comparison_markdown,
+    _paired_source_evidence_markdown,
     _snapshot_attacks,
     compute_regression_metrics,
     stage_entry,
@@ -421,6 +423,96 @@ def test_human_chart_comparison_exposes_local_attack_recall_collapse():
 
     assert [row["recall"] for row in windows["windows"]] == [1, .5]
     assert windows["worst_reference_recall"]["start"] == 4
+
+
+def test_paired_source_markdown_labels_external_calibration_without_paths():
+    evidence={
+        "status":"available",
+        "scope":"external_rights_cleared_calibration",
+        "report":r"C:\private\agreement.json",
+        "report_sha256":"a"*64,
+        "source_dataset":{"id":"guitarset","version":"1.1.0"},
+        "configuration":{"tolerance_ms":50},
+        "lineage":{
+            "manifest":r"C:\private\manifest.json",
+            "manifest_sha256":"b"*64,
+            "release":{"published_md5":"c"*32},
+        },
+        "target_coverage":{
+            "status":"unavailable",
+            "paired_items":0,
+            "total_items":28,
+        },
+        "splits":{
+            "validation":{
+                "shared":{"precision":.9,"recall":.82,"f1":.8581},
+                "best_source":{"channel":"pickup","f1":.85},
+                "delta_vs_best_source":{
+                    "precision":.05,"recall":-.03,"f1":.0081,
+                },
+            },
+        },
+    }
+
+    markdown=_paired_source_evidence_markdown(evidence)
+
+    assert "External rights-cleared calibration only" in markdown
+    assert "not generated-song evidence" in markdown
+    assert "unavailable** (0/28 items)" in markdown
+    assert "| validation | 0.9000 | 0.8200 | 0.8581 |" in markdown
+    assert r"C:\private" not in markdown
+
+
+def test_paired_source_markdown_omits_metrics_for_unavailable_or_invalid_lineage():
+    hidden={
+        "validation":{
+            "shared":{"precision":.9999,"recall":.9999,"f1":.9999},
+        },
+    }
+    unavailable=_paired_source_evidence_markdown({
+        "status":"unavailable",
+        "target_coverage":{"paired_items":0,"total_items":28},
+        "splits":hidden,
+    })
+    invalid=_paired_source_evidence_markdown({
+        "status":"invalid",
+        "reason":"manifest hash does not match",
+        "target_coverage":{"paired_items":0,"total_items":28},
+        "splits":hidden,
+    })
+
+    assert "does not imply" in unavailable
+    assert "0.9999" not in unavailable
+    assert "Metrics omitted" in invalid
+    assert "manifest hash does not match" in invalid
+    assert "0.9999" not in invalid
+
+
+def test_authorized_comparison_markdown_includes_paired_source_state():
+    markdown=_authorized_comparison_markdown({
+        "song_id":"authorized-song",
+        "manifest_sha256":"d"*64,
+        "difficulties":{
+            "expert":{
+                "attack":{
+                    "reference":100,
+                    "candidate":90,
+                    "matched":80,
+                    "precision":.8889,
+                    "recall":.8,
+                    "f1":.8421,
+                },
+            },
+        },
+        "paired_source_agreement":{
+            "status":"unavailable",
+            "target_coverage":{"paired_items":0,"total_items":28},
+        },
+    })
+
+    assert "Authorized human-chart comparison" in markdown
+    assert "authorized human notes were not generation inputs" in markdown
+    assert "Lineage status: **unavailable**" in markdown
 
 
 def test_attack_alignment_and_unmatched_events_are_reported():
