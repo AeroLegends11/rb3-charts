@@ -97,6 +97,10 @@ Status update (2026-10-02):
 - Reduction macro totals now include only songs whose baseline and candidate
   both contain complete reduction snapshots. Asymmetric legacy coverage reports
   unavailable retention instead of comparing different song sets.
+- Complete reduction pairs also aggregate mean/max four-second density for all
+  four difficulties. The retained Hail guitar Hard change is now reproducible
+  directly in `benchmark-replays`: retention 0.5312 to 0.6056 and max density
+  3.75 to 4.25 attacks/s.
 - Structural MIDI validation now enforces type 1, 960 PPQ, unique required
   tracks, EVENTS-local lifecycle markers, tempo/beat content, track-specific
   pitches, and exact serialized gem counts for every instrument/difficulty.
@@ -270,6 +274,12 @@ Status update (2026-10-02):
 - Song assessments and `review_notes.md` now surface neutral activity-block,
   ranked-boundary, and repeated-groove counts plus supported drum-attack
   coverage. This changes review visibility only, not assessment status or notes.
+- Review notes now include an always-visible per-instrument Expert/Hard/Medium/
+  Easy attack table, generated Hard retention, and aggregate human p10-p90
+  range. Hail currently exposes guitar 1600/969/466/236, bass
+  493/400/280/166, and drums 916/885/508/274 for targeted difficulty review.
+- The visual review page now shows those four attack counts for the selected
+  instrument and updates them immediately when the instrument selector changes.
 - Corpus replay benchmarks now aggregate those neutral structure metrics when
   both roots provide them. Independent Hail replay roots matched exactly:
   19 blocks, 12 ranked boundaries, 19 repeated groove families, and 0.6299

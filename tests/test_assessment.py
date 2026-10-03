@@ -96,6 +96,8 @@ def test_assessment_exposes_structure_diagnostics_in_review_notes(tmp_path):
     path=tmp_path/"review_notes.md"
     write_song_review_notes(path,"Demo","Artist",result)
     text=path.read_text(encoding="utf-8")
+    assert "Difficulty reductions" in text
+    assert "| Guitar | 40 | 40 | 40 | 40 | 100.0%" in text
     assert "Neutral structure diagnostics" in text
     assert "62.5%" in text
 

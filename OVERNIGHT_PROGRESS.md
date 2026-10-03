@@ -483,3 +483,20 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   snapshots on both sides. Asymmetric legacy coverage now reports unavailable
   retention/count deltas rather than a misleading comparison. Focused replay
   benchmark coverage passes 16 tests.
+
+### 2026-10-03 01:32 - Difficulty review table retained
+
+- Added an always-visible per-instrument Expert/Hard/Medium/Easy attack table to
+  `review_notes.md`, including generated Hard retention and the aggregate human
+  p10-p90 range.
+- A fresh Hail replay exposes guitar 1600/969/466/236 (60.6%), bass
+  493/400/280/166 (81.1%), and drums 916/885/508/274 (96.6%) directly to the
+  morning reviewer.
+- Focused assessment/integration coverage passes 22 tests.
+- Added the selected instrument's four difficulty counts directly to
+  `review.html`; switching instruments updates the summary without leaving the
+  listening page. Focused preview/assessment coverage remains 22 tests.
+- Added mean/max four-second density for every difficulty to corpus replay
+  benchmarks. The retained Hail Hard change now reproduces directly in the
+  standard report: retention 0.5312 -> 0.6056 and max density 3.75 -> 4.25/s.
+  Focused replay benchmark coverage passes 16 tests.

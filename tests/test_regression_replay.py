@@ -213,6 +213,7 @@ def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
     assert report["macro"]["delta"]["collapsed_pitch_changes"]==1
     assert report["macro"]["baseline"]["lane_coverage"]==[0,1,2]
     assert report["macro"]["baseline"]["hard_retention"]==.6667
+    assert report["macro"]["baseline"]["max_hard_peak_four_second_nps"]==.5
     assert report["structure_macro_song_mean"]["songs_matched"]==1
     assert (
         report["structure_macro_song_mean"]["baseline"]

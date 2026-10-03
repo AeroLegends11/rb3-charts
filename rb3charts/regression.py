@@ -296,17 +296,9 @@ def _benchmark_stage_metrics(folder: Path, instrument: str):
     shape["simultaneous_attacks"]=simultaneous
     shape["chords"]=simultaneous if instrument!="drums" else 0
     shape["holds"]=sum(note.end-note.start>=.22 for note in notes)
-    starts=np.asarray(sorted(note.start for note in notes),dtype=float)
-    peak=0
-    right=0
-    for left,start in enumerate(starts):
-        right=max(right,left)
-        while right<len(starts) and starts[right]<start+4:
-            right+=1
-        peak=max(peak,right-left)
     shape.update({
         "lane_coverage":sorted({lane for note in notes for lane in note.lanes}),
-        "peak_four_second_nps":round(peak/4,3),
+        "peak_four_second_nps":_peak_four_second_nps(notes),
     })
     reductions=payload.get("reductions",{}).get("difficulties",{})
     shape["reductions_available"]=all(
@@ -317,6 +309,12 @@ def _benchmark_stage_metrics(folder: Path, instrument: str):
         reduction=reductions.get(difficulty,{})
         shape[f"{difficulty}_attacks"]=(
             len(reduction.get("notes",[]))
+            if shape["reductions_available"] else None
+        )
+        shape[f"{difficulty}_peak_four_second_nps"]=(
+            _peak_four_second_nps(
+                _snapshots_to_notes(reduction.get("notes",[]))
+            )
             if shape["reductions_available"] else None
         )
     assessment_path=folder/"analysis"/"quality-assessment.json"
@@ -354,6 +352,18 @@ def _benchmark_structure_metrics(folder: Path):
     }
 
 
+def _peak_four_second_nps(notes):
+    starts=np.asarray(sorted(note.start for note in notes),dtype=float)
+    peak=0
+    right=0
+    for left,start in enumerate(starts):
+        right=max(right,left)
+        while right<len(starts) and starts[right]<start+4:
+            right+=1
+        peak=max(peak,right-left)
+    return round(peak/4,3)
+
+
 def benchmark_replays(
     baseline_root: Path,
     candidate_root: Path,
@@ -387,6 +397,12 @@ def benchmark_replays(
     statuses={"baseline":defaultdict(int),"candidate":defaultdict(int)}
     reduction_pairs=0
     structure_pairs=[]
+    reduction_densities={
+        label:{difficulty:[] for difficulty in (
+            "expert","hard","medium","easy"
+        )}
+        for label in ("baseline","candidate")
+    }
     for key in shared:
         baseline_folder,metadata=baseline[key]
         candidate_folder,_=candidate[key]
@@ -405,6 +421,13 @@ def benchmark_replays(
             for metric in reduction_total_keys:
                 totals["baseline"][metric]+=before[metric]
                 totals["candidate"][metric]+=after[metric]
+            for difficulty in ("expert","hard","medium","easy"):
+                reduction_densities["baseline"][difficulty].append(
+                    before[f"{difficulty}_peak_four_second_nps"]
+                )
+                reduction_densities["candidate"][difficulty].append(
+                    after[f"{difficulty}_peak_four_second_nps"]
+                )
         for label,metrics in (("baseline",before),("candidate",after)):
             densities[label].append(metrics["peak_four_second_nps"])
             lanes[label].update(metrics["lane_coverage"])
@@ -453,6 +476,14 @@ def benchmark_replays(
                 if reduction_pairs else None
             )
         totals[label]["reduction_songs"]=reduction_pairs
+        for difficulty in ("expert","hard","medium","easy"):
+            values=reduction_densities[label][difficulty]
+            totals[label][
+                f"mean_{difficulty}_peak_four_second_nps"
+            ]=round(float(np.mean(values)),3) if values else None
+            totals[label][
+                f"max_{difficulty}_peak_four_second_nps"
+            ]=round(float(np.max(values)),3) if values else None
     delta={}
     for key,value in totals["baseline"].items():
         if not isinstance(value,(int,float)):

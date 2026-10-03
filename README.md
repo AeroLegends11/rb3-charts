@@ -99,7 +99,8 @@ Its macro report includes difficulty-retention totals; simultaneous drum hits
 are reported separately rather than classified as chords. When both replay
 roots contain structure diagnostics, the report also compares mean activity
 blocks, boundary strengths, repeated drum-groove families, and groove-supported
-attack coverage.
+attack coverage. Complete reduction snapshots add mean/max four-second density
+for Expert, Hard, Medium, and Easy.
 
 New review drafts record hashes for `import/notes.mid`, `song.wav`, and
 `song.ini`. The `package` command rejects any of those inputs if they changed

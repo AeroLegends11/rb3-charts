@@ -195,7 +195,11 @@ def assess_chart(
         item={"attacks":attacks,"lane_coverage":lane_coverage,"hold_ratio":round(hold_ratio,3),
               "chord_ratio":round(chord_ratio,3),"removed_ratio":round(removed_ratio,3),
               "peak_four_second_nps":peak,
-              "recurring_pattern_families":pattern.get("recurring_pattern_families",0)}
+              "recurring_pattern_families":pattern.get("recurring_pattern_families",0),
+              "difficulty_attacks":{
+                  difficulty:len(parts.get(difficulty,[]))
+                  for difficulty in ("expert","hard","medium","easy")
+              }}
         hard_retention=len(parts.get("hard",[]))/max(1,attacks)
         item["hard_attack_retention"]=round(hard_retention,4)
         retention_reference=_reference_retention(name)
@@ -301,6 +305,31 @@ def write_song_review_notes(path,title,artist,assessment):
     lines=[f"# Chart review notes — {title}","",f"Artist: {artist}",
            f"Automatic assessment: **{assessment['label']}**",""]
     lines += [f"- {note}" for note in assessment["summary"]]
+    instruments=assessment.get("instruments",{})
+    if instruments:
+        lines += [
+            "",
+            "## Difficulty reductions",
+            "",
+            "| Instrument | Expert | Hard | Medium | Easy | Hard retention | Reference p10-p90 |",
+            "|---|---:|---:|---:|---:|---:|---:|",
+        ]
+        for instrument,item in sorted(instruments.items()):
+            counts=item.get("difficulty_attacks",{})
+            p10=item.get("reference_hard_retention_p10")
+            p90=item.get("reference_hard_retention_p90")
+            reference=(
+                f"{p10:.1%}-{p90:.1%}"
+                if p10 is not None and p90 is not None
+                else "unavailable"
+            )
+            lines.append(
+                f"| {instrument.title()} | {counts.get('expert',0)} | "
+                f"{counts.get('hard',0)} | {counts.get('medium',0)} | "
+                f"{counts.get('easy',0)} | "
+                f"{item.get('hard_attack_retention',0):.1%} | "
+                f"{reference} |"
+            )
     structure=assessment.get("structure",{})
     if structure:
         lines += [
