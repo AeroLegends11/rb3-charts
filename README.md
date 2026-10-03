@@ -78,6 +78,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli replay 'C:\Path\To\Existing_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays'
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-reviews 'C:\Path\To\Baseline_Draft' 'C:\Path\To\Candidate_Draft'
+.\.venv\Scripts\python.exe -m rb3charts.cli review-midi-comparison 'C:\Path\To\Generated_Draft' 'C:\Path\To\Reference\notes.mid' --difficulty hard --reference-difficulty expert --offset -1.1
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument drums
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument all
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output' --source-agreement-report 'C:\Path\To\agreement.json'
@@ -133,6 +134,13 @@ transport is shared across both versions; use the A/B buttons or keyboard keys
 to switch at the same timestamp. Candidate-only and baseline-only attacks are
 outlined, and the densest eight-second candidate-addition windows become jump
 markers. This is a review surface only and never changes either draft.
+
+`review-midi-comparison` creates the same synchronized A/B highway for a
+generated difficulty and an evaluation-only reference difficulty. The required
+offset must come from a prior aligned comparison. The command materializes
+aligned reference markers in a local companion folder and hard-links the
+generated review audio when supported; neither chart is modified or used as
+generation input.
 
 `compare-midi` is an evaluation-only cross-check for a completed generated
 guitar chart and a local reference MIDI. It automatically estimates a global

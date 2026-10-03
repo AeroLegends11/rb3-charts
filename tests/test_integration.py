@@ -10,7 +10,11 @@ from rb3charts.midi import write_midi
 from rb3charts.validate import validate
 from rb3charts.audio import write_padded_audio
 from rb3charts.timing import analyze_tempo
-from rb3charts.preview import create_comparison_preview,create_preview
+from rb3charts.preview import (
+    create_comparison_preview,
+    create_midi_comparison_preview,
+    create_preview,
+)
 from rb3charts.audio import detect_chart_profile
 
 def test_missing_beats_repaired_without_moving_detected_anchors():
@@ -359,6 +363,66 @@ def test_comparison_preview_keeps_versions_synchronized(tmp_path):
     assert "rawY>strike+2" in page
     assert '"lead": 2.0' in page and "song '+Math.max(0,time-payload.lead)" in page
     assert "../candidate/audio/song.wav" in page
+
+
+def test_midi_comparison_preview_aligns_reference_to_generated_audio(
+    monkeypatch,tmp_path
+):
+    generated=tmp_path/"generated"
+    for part in ("analysis","metadata","source","audio"):
+        (generated/part).mkdir(parents=True,exist_ok=True)
+    (generated/"analysis"/"charts.json").write_text(json.dumps({
+        "guitar":{"hard":[{
+            "start":1.0,
+            "end":1.1,
+            "lanes":[0],
+            "confidence":.8,
+            "source_id":"generated",
+        }]}
+    }),encoding="utf-8")
+    (generated/"analysis"/"tempo.json").write_text(json.dumps({
+        "beats":[0,.5,1,1.5,2],
+        "numerator":4,
+    }),encoding="utf-8")
+    (generated/"metadata"/"song.json").write_text(json.dumps({
+        "song_id":"song-id",
+        "title":"Cross Difficulty",
+        "artist":"Tester",
+        "lead_seconds":2.0,
+    }),encoding="utf-8")
+    (generated/"source"/"source.json").write_text(
+        json.dumps({"sha256":"abc"}),encoding="utf-8"
+    )
+    (generated/"audio"/"song.wav").write_bytes(b"audio")
+    reference=tmp_path/"reference.mid"
+    reference.write_bytes(b"midi")
+    monkeypatch.setattr(
+        "rb3charts.datasets._read_expert_gems",
+        lambda path,chart_format,difficulty:[
+            {"start":.5,"end":.6,"lane":4}
+        ],
+    )
+
+    output=tmp_path/"review"/"hard-vs-expert.html"
+    report=create_midi_comparison_preview(
+        generated,
+        reference,
+        output,
+        generated_difficulty="hard",
+        reference_difficulty="expert",
+        offset=-1.1,
+    )
+
+    page=output.read_text(encoding="utf-8")
+    assert report["reference_attacks"]==1
+    assert report["alignment_offset_seconds"]==-1.1
+    assert "A · Generated Hard" in page
+    assert "B · Official Expert" in page
+    assert '"t": 3.6' in page
+    assert '"different": false' in page
+    assert (
+        tmp_path/"review"/"hard-vs-expert"/"audio"/"song.wav"
+    ).is_file()
 
 
 def test_midi_preserves_hold_note_duration(tmp_path):

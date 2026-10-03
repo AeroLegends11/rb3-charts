@@ -58,6 +58,24 @@ def main():
     review_compare.add_argument("baseline",type=Path)
     review_compare.add_argument("candidate",type=Path)
     review_compare.add_argument("--output",type=Path)
+    midi_review=sub.add_parser(
+        "review-midi-comparison",
+        help="Create a synchronized generated-versus-reference review page",
+    )
+    midi_review.add_argument("generated",type=Path)
+    midi_review.add_argument("reference",type=Path)
+    midi_review.add_argument("--output",type=Path)
+    midi_review.add_argument(
+        "--difficulty",
+        choices=["expert","hard","medium","easy"],
+        default="hard",
+    )
+    midi_review.add_argument(
+        "--reference-difficulty",
+        choices=["expert","hard","medium","easy"],
+        default="expert",
+    )
+    midi_review.add_argument("--offset",type=float,required=True)
     human_compare=sub.add_parser("compare-human-chart",help="Compare generated guitar with an authorized held-out chart")
     human_compare.add_argument("manifest",type=Path)
     human_compare.add_argument("song_id")
@@ -332,6 +350,26 @@ def main():
             FileNotFoundError,KeyError,TypeError,ValueError,json.JSONDecodeError
         ) as exc:
             print(f"Review comparison failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report,indent=2))
+        return 0
+    if args.command=="review-midi-comparison":
+        from .preview import create_midi_comparison_preview
+        output=args.output or Path("output")/"midi-comparison-review.html"
+        try:
+            report=create_midi_comparison_preview(
+                args.generated,
+                args.reference,
+                output,
+                args.difficulty,
+                args.reference_difficulty,
+                args.offset,
+            )
+        except (
+            FileNotFoundError,KeyError,OSError,TypeError,ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(f"MIDI review creation failed: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report,indent=2))
         return 0

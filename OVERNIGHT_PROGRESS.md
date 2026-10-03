@@ -1060,3 +1060,9 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   official Expert attack placement. It does not solve pattern authoring:
   exact-lane agreement fell 0.1474→0.1330, although movement direction improved
   0.2769→0.3176. Relative motif-shape agreement remained zero.
+- Added `review-midi-comparison` and generated
+  `comparisons/morning-review/Hail_Generated_Hard_vs_Official_Expert.html`.
+  Its shared transport switches A (969-note generated Hard) and B (1,150-note
+  aligned official Expert) at the same timestamp. The official markers are
+  materialized only in the ignored local companion folder and never enter
+  generation.
