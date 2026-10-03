@@ -532,6 +532,10 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Prevented instrument runs from overwriting the default guitar report: bass,
   drums, and keys now default to instrument-specific output filenames. A real
   bass comparison wrote `output/bass-replay-benchmark.json`.
+- Hardened reference data exclusion: default analyzer output is now compact and
+  omits `source_folder` plus per-song records. An explicit distinct
+  `--full-output` writes the local detailed report and is documented as
+  unstageable. Focused reference tests and CLI help pass.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage

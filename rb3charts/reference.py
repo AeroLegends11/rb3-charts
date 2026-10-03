@@ -70,8 +70,16 @@ def _percentiles(values):
     return {"p10":round(float(np.quantile(values,.1)),4),"median":round(float(np.median(values)),4),"p90":round(float(np.quantile(values,.9)),4)}
 
 
-def analyze_reference_corpus(folder,output=None):
+def analyze_reference_corpus(folder,output=None,full_output=None):
     folder=Path(folder).resolve()
+    if (
+        output
+        and full_output
+        and Path(output).resolve()==Path(full_output).resolve()
+    ):
+        raise ValueError(
+            "Compact profile and full report require different paths"
+        )
     discovered=sorted(folder.rglob("*.mid"))+sorted(folder.rglob("*.midi"))
     # Repositories often keep RB2, RB3-update or conversion variants beside the
     # canonical chart. Treat one song folder as one sample to avoid bias.
@@ -149,5 +157,16 @@ def analyze_reference_corpus(folder,output=None):
             "songs":songs}
     if output:
         Path(output).parent.mkdir(parents=True,exist_ok=True)
-        Path(output).write_text(json.dumps(report,indent=2),encoding="utf-8")
+        compact={
+            key:value for key,value in report.items()
+            if key not in ("source_folder","songs")
+        }
+        Path(output).write_text(
+            json.dumps(compact,indent=2),encoding="utf-8"
+        )
+    if full_output:
+        Path(full_output).parent.mkdir(parents=True,exist_ok=True)
+        Path(full_output).write_text(
+            json.dumps(report,indent=2),encoding="utf-8"
+        )
     return report

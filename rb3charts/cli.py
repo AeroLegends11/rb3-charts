@@ -48,6 +48,11 @@ def main():
     reference=sub.add_parser("analyze-reference",help="Learn style statistics from finished Rock Band MIDI charts")
     reference.add_argument("folder",type=Path)
     reference.add_argument("--output",type=Path,default=Path("reference")/"style-profile.json")
+    reference.add_argument(
+        "--full-output",
+        type=Path,
+        help="Optional local per-song report; do not stage this file",
+    )
     dataset=sub.add_parser("validate-dataset",help="Validate a rights-traceable training dataset manifest")
     dataset.add_argument("manifest",type=Path)
     dataset.add_argument("--verify-hashes",action="store_true",help="Read every audio/annotation file and verify SHA-256")
@@ -138,7 +143,9 @@ def main():
         return launch()
     if args.command=="analyze-reference":
         from .reference import analyze_reference_corpus
-        report=analyze_reference_corpus(args.folder,args.output)
+        report=analyze_reference_corpus(
+            args.folder,args.output,args.full_output
+        )
         print(f"Analyzed {report['analyzed_files']}/{report['midi_files']} reference charts -> {args.output}")
         return 1 if report["failed_files"] else 0
     if args.command=="validate-dataset":

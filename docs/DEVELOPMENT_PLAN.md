@@ -82,6 +82,10 @@ Status update (2026-10-02):
   and Easy retention percentiles while retaining the old Hard-only key as a
   compatibility alias. The committed schema-1 profile intentionally lacks
   per-song records and was not reverse-engineered or overwritten.
+- The analyzer now writes a compact, path-free aggregate profile by default.
+  Full per-song records and source paths require a distinct explicit
+  `--full-output`, preventing the tracked runtime profile from accidentally
+  receiving excluded local reference details.
   - A drum-specific grid-consistent accompaniment thinning candidate moved
     Hail/Less Talk Hard retention from 0.967/0.773 to 0.798/0.704 and retained
     46%/52% of accompaniment-only attacks. It was rejected from runtime because

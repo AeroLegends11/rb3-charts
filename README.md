@@ -438,6 +438,9 @@ Newly analyzed reference profiles include aggregate per-song
 Expert-to-Hard/Medium/Easy retention percentiles. The committed schema-1 profile
 continues to provide its existing Hard prior until its excluded source corpus is
 available for legitimate regeneration.
+`analyze-reference` writes only compact aggregate statistics to `--output`.
+Use `--full-output` for an optional per-song report with source paths, and keep
+that report local.
 
 `input/`, `cache/`, `output/`, `tools/`, `.research/` and `Ready for Xbox/` remain
 local. Git exclusions do not prevent normal reading, generation or packaging.
