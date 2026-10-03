@@ -558,6 +558,25 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Required EVENTS lifecycle, instrument play/idle, and drum mix markers now
   require exact uniqueness as well as correct ticks. Duplicate corruption is
   rejected; focused charting/integration coverage passes 71 tests.
+
+### 2026-10-03 02:05 - Fresh morning reviews saved
+
+- Generated new non-overwriting current-code drafts:
+  - `comparisons/morning-review/Avenged_sevenfold_Hail_To_The_King_20261003_003813_937125`
+  - `comparisons/morning-review/Freezepop_Less_Talk_More_Rokk_20261003_003814_021279`
+- Both pass `validate-run` with verified package-input manifests and the full
+  tempo/beat/lifecycle/gem readback audit.
+- Hail's listening question is limited to Hard guitar: does the retained
+  0.38-beat spacing feel more appropriately dense than the prior 0.46-beat
+  reduction without becoming tiring? Expert is not a new musical candidate.
+- Less Talk remains an informational current review. The scaling-riff Expert
+  attack/pattern problem remains upstream and no rejected recovery hook was
+  re-enabled.
+- A retained-change review found malformed package manifests could escape as
+  JSON/type exceptions. Manifest parsing now normalizes truncated JSON and
+  invalid entry types into failed validation reports, so `validate-run` and
+  packaging fail cleanly instead of producing a traceback. Focused integration
+  coverage passes 15 tests.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage

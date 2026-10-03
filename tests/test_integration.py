@@ -207,6 +207,19 @@ def test_existing_run_validation_rechecks_midi_and_manifest(
         RuntimeError,match="Current chart revalidation failed"
     ):
         pipeline.package_existing(run,lambda message:None)
+    (run/"analysis"/"package-inputs.json").write_text(
+        "{invalid",encoding="utf-8"
+    )
+    malformed=pipeline.validate_existing_run(run)
+    assert not malformed["passed"]
+    assert "Package-input manifest is malformed" in malformed["errors"]
+    (run/"analysis"/"package-inputs.json").write_text(
+        json.dumps({"schema_version":1,"files":[None]}),
+        encoding="utf-8",
+    )
+    invalid_item=pipeline.validate_existing_run(run)
+    assert not invalid_item["passed"]
+    assert "Package-input manifest is malformed" in invalid_item["errors"]
 
 def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     (tmp_path/"audio").mkdir()

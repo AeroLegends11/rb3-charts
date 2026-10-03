@@ -127,8 +127,20 @@ def _verify_package_input_manifest(folder: Path):
     path=folder/"analysis"/"package-inputs.json"
     if not path.is_file():
         return False
-    payload=json.loads(path.read_text(encoding="utf-8"))
-    if payload.get("schema_version")!=1 or not payload.get("files"):
+    try:
+        payload=json.loads(path.read_text(encoding="utf-8"))
+    except (OSError,json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            "Package-input manifest is malformed"
+        ) from exc
+    if not isinstance(payload,dict):
+        raise RuntimeError("Package-input manifest is malformed")
+    files=payload.get("files")
+    if (
+        payload.get("schema_version")!=1
+        or not isinstance(files,list)
+        or not all(isinstance(item,dict) for item in files)
+    ):
         raise RuntimeError("Package-input manifest is malformed")
     expected_paths={
         "import/notes.mid",
@@ -137,11 +149,11 @@ def _verify_package_input_manifest(folder: Path):
     }
     manifest_paths={
         str(item.get("path","")).replace("\\","/")
-        for item in payload["files"]
+        for item in files
     }
-    if manifest_paths!=expected_paths or len(payload["files"])!=3:
+    if manifest_paths!=expected_paths or len(files)!=3:
         raise RuntimeError("Package-input manifest is incomplete")
-    for item in payload["files"]:
+    for item in files:
         relative=Path(str(item.get("path","")))
         candidate=(folder/relative).resolve()
         if folder not in candidate.parents:
