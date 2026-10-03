@@ -408,7 +408,7 @@ def _peak_four_second_nps(notes):
 def benchmark_replays(
     baseline_root: Path,
     candidate_root: Path,
-    output: Path,
+    output: Path | None,
     instrument: str = "guitar",
 ):
     if instrument not in ("guitar","bass","drums","keys"):
@@ -605,10 +605,51 @@ def benchmark_replays(
         for key in pattern_keys
     } if pattern_pairs else None
     report["pattern_macro_song_mean"]=pattern_macro
+    if output is not None:
+        output=Path(output)
+        output.parent.mkdir(parents=True,exist_ok=True)
+        output.write_text(
+            json.dumps(report,indent=2)+"\n",encoding="utf-8"
+        )
+    return report
+
+
+def benchmark_all_replays(
+    baseline_root: Path,
+    candidate_root: Path,
+    output: Path,
+):
+    reports={}
+    unavailable={}
+    for instrument in ("guitar","bass","drums","keys"):
+        try:
+            reports[instrument]=benchmark_replays(
+                baseline_root,
+                candidate_root,
+                None,
+                instrument=instrument,
+            )
+        except ValueError as exc:
+            if not str(exc).startswith("No matching replay songs"):
+                raise
+            unavailable[instrument]=str(exc)
+    if not reports:
+        raise ValueError(
+            "No matching replay songs for any supported instrument"
+        )
+    combined={
+        "schema_version":1,
+        "baseline_root":str(Path(baseline_root).resolve()),
+        "candidate_root":str(Path(candidate_root).resolve()),
+        "instruments":reports,
+        "unavailable":unavailable,
+    }
     output=Path(output)
     output.parent.mkdir(parents=True,exist_ok=True)
-    output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
-    return report
+    output.write_text(
+        json.dumps(combined,indent=2)+"\n",encoding="utf-8"
+    )
+    return combined
 
 
 def _chart_attacks(gems, offset=0.0):

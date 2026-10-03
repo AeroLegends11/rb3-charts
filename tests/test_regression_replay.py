@@ -10,6 +10,7 @@ from rb3charts.model import Note, TempoMap
 from rb3charts.phrases import author_guitar_phrases
 from rb3charts.pipeline import replay_cached
 from rb3charts.regression import (
+    benchmark_all_replays,
     benchmark_replays,
     compare_chart_attacks,
     compute_regression_metrics,
@@ -343,6 +344,39 @@ def test_benchmark_replays_rejects_missing_song_identity(tmp_path):
             tmp_path/"candidate",
             tmp_path/"report.json",
         )
+
+
+def test_benchmark_all_replays_reports_available_instruments(tmp_path):
+    for side in ("baseline","candidate"):
+        root=tmp_path/side/"run"
+        (root/"metadata").mkdir(parents=True)
+        (root/"analysis").mkdir()
+        (root/"metadata"/"song.json").write_text(json.dumps({
+            "artist":"RB3 Charts",
+            "title":"All Instrument Demo",
+        }),encoding="utf-8")
+        notes=[{
+            "source_id":"one",
+            "start":0,
+            "end":.1,
+            "lanes":[0],
+            "pitch":48,
+        }]
+        (root/"analysis"/"guitar-stage-snapshots.json").write_text(
+            json.dumps({
+                "instrument":"guitar",
+                "stages":[{"stage":"final","notes":notes}],
+            }),
+            encoding="utf-8",
+        )
+    report=benchmark_all_replays(
+        tmp_path/"baseline",
+        tmp_path/"candidate",
+        tmp_path/"all.json",
+    )
+    assert set(report["instruments"])=={"guitar"}
+    assert set(report["unavailable"])=={"bass","drums","keys"}
+    assert (tmp_path/"all.json").is_file()
 
 
 def test_human_chart_comparison_reports_timing_style_and_motifs():

@@ -77,6 +77,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli replay 'C:\Path\To\Existing_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument drums
+.\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument all
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli analyze-reference 'C:\Path\To\Reference_MIDI_Corpus'
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
@@ -96,7 +97,8 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-`benchmark-replays` defaults to guitar and also supports bass, drums, and keys.
+`benchmark-replays` defaults to guitar and also supports bass, drums, keys, or
+all available instruments in one combined report.
 Its macro report includes difficulty-retention totals; simultaneous drum hits
 are reported separately rather than classified as chords. When both replay
 roots contain structure diagnostics, the report also compares mean activity
@@ -111,7 +113,9 @@ selecting or matching a run implicitly.
 Expanded multi-instrument, reduction-density, structure, and pattern reports use
 benchmark schema 2; guitar remains the default instrument. Without `--output`,
 guitar writes `output/replay-benchmark.json` and other instruments write
-`output/<instrument>-replay-benchmark.json`.
+`output/<instrument>-replay-benchmark.json`. The all-instrument mode writes
+`output/all-instruments-replay-benchmark.json` and lists instruments that were
+unavailable in either replay root.
 
 New review drafts record hashes for `import/notes.mid`, `song.wav`, and
 `song.ini`. The `package` command rejects any of those inputs if they changed

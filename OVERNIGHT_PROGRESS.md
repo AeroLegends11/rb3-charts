@@ -583,6 +583,10 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - `package` now provides the same concise nonzero CLI failure for incomplete,
   invalid, or failed-revalidation folders; a missing-run probe also produced no
   traceback.
+- Replay benchmarking now accepts `--instrument all`, writes one combined
+  artifact for every instrument available in both roots, and records unavailable
+  instruments explicitly. A real comparison exercised guitar, bass, and drums
+  in one invocation; the focused regression suite passes 19 tests.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage

@@ -42,7 +42,7 @@ def main():
     benchmark.add_argument("--output",type=Path)
     benchmark.add_argument(
         "--instrument",
-        choices=["guitar","bass","drums","keys"],
+        choices=["guitar","bass","drums","keys","all"],
         default="guitar",
     )
     human_compare=sub.add_parser("compare-human-chart",help="Compare generated guitar with an authorized held-out chart")
@@ -185,27 +185,46 @@ def main():
         },indent=2))
         return 0
     if args.command=="benchmark-replays":
-        from .regression import benchmark_replays
+        from .regression import benchmark_all_replays, benchmark_replays
         output=(
             args.output
             or Path("output")/(
                 "replay-benchmark.json"
                 if args.instrument=="guitar"
+                else "all-instruments-replay-benchmark.json"
+                if args.instrument=="all"
                 else f"{args.instrument}-replay-benchmark.json"
             )
         )
         try:
-            report=benchmark_replays(
-                args.baseline,
-                args.candidate,
-                output,
-                instrument=args.instrument,
-            )
+            if args.instrument=="all":
+                report=benchmark_all_replays(
+                    args.baseline,args.candidate,output
+                )
+            else:
+                report=benchmark_replays(
+                    args.baseline,
+                    args.candidate,
+                    output,
+                    instrument=args.instrument,
+                )
         except (FileNotFoundError,ValueError) as exc:
             print(f"Replay benchmark failed: {exc}",file=sys.stderr)
             return 1
-        print(json.dumps(report["macro"],indent=2))
-        print(f"Compared {report['songs_matched']} songs -> {output}")
+        if args.instrument=="all":
+            print(json.dumps({
+                instrument:item["macro"]
+                for instrument,item in report["instruments"].items()
+            },indent=2))
+            print(
+                f"Compared {len(report['instruments'])} instruments "
+                f"-> {output}"
+            )
+        else:
+            print(json.dumps(report["macro"],indent=2))
+            print(
+                f"Compared {report['songs_matched']} songs -> {output}"
+            )
         return 0
     if args.command=="compare-human-chart":
         from .datasets import DatasetManifestError
