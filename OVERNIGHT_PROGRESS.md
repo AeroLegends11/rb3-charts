@@ -680,3 +680,40 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   removals, and the two already-rejected high-confidence density exceptions
   remain exact no-ops on the cleared selection. The next safe step is to seek
   an independent attack/voice-continuity feature rather than relax density.
+
+### 2026-10-03 06:55 - Independent removal evidence audited
+
+- Added post-generation `audit-playability-evidence`. It joins every attributed
+  removal to cached model-onset, attack-strength, relative-level and evidence
+  scores; optional structure-model probability/periodic-width ranks; source-mix
+  and guitar-stem onset height/prominence/width ranks; and overlapping
+  voice-continuity windows. Optional reference labels and feature-separability
+  summaries are evaluation-only and never enter generation.
+- Threshold selection used only Certain Death, Dirtbag, and There's Something
+  Wrong. Their current charts left 10 otherwise-unmatched authorized attacks
+  among 211 removals. Top-quartile feature precision was weak:
+  confidence 3/53, model onset 4/53, attack strength 2/53, evidence score 4/53,
+  structure rank 1/53, structure peak width 2/53, onset prominence 1/53, and
+  onset width 2/53. The best voice-continuity subset recovered 3/17. No simple
+  one-to-three-feature conjunction supported at least two songs above 8.6%
+  precision.
+- The cleared source audio and saved guitar stem are byte-identical for all
+  three development songs, so no independent stem-agreement threshold can be
+  selected from them. The audit records this explicitly instead of treating
+  duplicate audio as corroboration.
+- Frozen Persephone contained four otherwise-unmatched authorized attacks among
+  29 removals. Development thresholds recovered zero with confidence, model
+  onset, attack strength, evidence score, or onset prominence; structure width
+  recovered 1/2 selected, while the broad voice candidate recovered 4/22 and
+  stem/mix agreement 2/15. This did not justify a runtime rule.
+- Only after rejection, the seven official-reference audits showed 139
+  otherwise-unmatched labeled attacks among 343 removals. Development
+  thresholds appeared substantially more selective there (model onset 46/88,
+  structure rank 43/73, onset prominence 37/62, attack strength 6/8), confirming
+  a domain-separation problem rather than providing lawful threshold-selection
+  evidence. Broad official-only stem agreement was 101/240 and voice continuity
+  61/128.
+- No attack was restored and no generation threshold changed. The retained
+  tooling makes this lack of cross-domain separability reproducible and prevents
+  future official-only correlations from being mistaken for selectable runtime
+  evidence.

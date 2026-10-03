@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from importlib import metadata as importlib_metadata
 from pathlib import Path
 import hashlib
@@ -708,6 +708,319 @@ def estimate_attack_offset(reference, candidate, tolerance=0.08, limit=10.0):
             best_score=score
             best_offset=coarse
     return round(float(best_offset),6)
+
+
+def _rank_percentiles(values):
+    values=np.asarray(values,dtype=float)
+    if not len(values):
+        return np.asarray([],dtype=float)
+    order=np.argsort(np.argsort(values,kind="mergesort"),kind="mergesort")
+    return order / max(1,len(values)-1)
+
+
+def _audio_onset_peaks(path):
+    import librosa
+    from scipy import signal
+
+    y,sr=librosa.load(path,sr=22050,mono=True)
+    hop=256
+    envelope=librosa.onset.onset_strength(y=y,sr=sr,hop_length=hop)
+    peaks,properties=signal.find_peaks(
+        envelope,
+        distance=3,
+        prominence=max(1e-8,float(np.max(envelope))*.01),
+    )
+    widths=signal.peak_widths(envelope,peaks,rel_height=.5)[0]
+    return {
+        "times":librosa.frames_to_time(peaks,sr=sr,hop_length=hop),
+        "height_rank":_rank_percentiles(envelope[peaks]),
+        "prominence_rank":_rank_percentiles(properties["prominences"]),
+        "width_rank":_rank_percentiles(widths),
+    }
+
+
+def _nearest_onset_feature(payload,seconds,tolerance=.05):
+    times=payload["times"]
+    if not len(times):
+        return {"found":False}
+    index=int(np.argmin(np.abs(times-seconds)))
+    error=abs(float(times[index])-seconds)
+    if error>tolerance:
+        return {"found":False}
+    return {
+        "found":True,
+        "error_ms":round(error*1000,3),
+        "height_rank":round(float(payload["height_rank"][index]),4),
+        "prominence_rank":round(float(payload["prominence_rank"][index]),4),
+        "width_rank":round(float(payload["width_rank"][index]),4),
+    }
+
+
+def audit_playability_evidence(
+    folder,
+    output=None,
+    structure_predictions=None,
+    reference=None,
+    reference_format="rock_band_midi",
+    tolerance=.08,
+    offset=None,
+):
+    """Join post-generation removals to independent source evidence."""
+    folder=Path(folder).resolve()
+    analysis=folder/"analysis"
+    playability=json.loads((analysis/"playability.json").read_text(encoding="utf-8"))
+    guitar=playability.get("guitar",{})
+    attribution=guitar.get("removal_attribution")
+    if not isinstance(attribution,dict):
+        raise ValueError("Run lacks playability removal attribution")
+    transcription=json.loads(
+        (analysis/"guitar-transcription.json").read_text(encoding="utf-8")
+    )
+    raw_exact={str(row["source_id"]):row for row in transcription}
+    raw_components={}
+    for row in transcription:
+        for source_id in str(row["source_id"]).split("+"):
+            raw_components.setdefault(source_id,[]).append(row)
+    voice_path=analysis/"guitar-voice-continuity.json"
+    voice=(
+        json.loads(voice_path.read_text(encoding="utf-8")).get("windows",[])
+        if voice_path.is_file() else []
+    )
+    structure=[]
+    if structure_predictions is not None:
+        payload=json.loads(Path(structure_predictions).read_text(encoding="utf-8"))
+        structure=payload.get("candidates",[])
+    structure_times=np.asarray(
+        [float(row["start"]) for row in structure],dtype=float
+    )
+    source_payload=json.loads(
+        (folder/"source"/"source.json").read_text(encoding="utf-8")
+    )
+    stems=json.loads((analysis/"stems.json").read_text(encoding="utf-8"))
+    source_path=Path(source_payload["path"])
+    stem_path=Path(stems["guitar"])
+    source_hash=hash_file(source_path)
+    stem_hash=hash_file(stem_path)
+    source_onsets=_audio_onset_peaks(source_path)
+    stem_onsets=(
+        source_onsets if source_hash==stem_hash else _audio_onset_peaks(stem_path)
+    )
+    rows=[]
+    for reason,summary in attribution.items():
+        for event in summary.get("events",[]):
+            source_id=str(event["source_id"])
+            raw=[raw_exact[source_id]] if source_id in raw_exact else [
+                row
+                for component in source_id.split("+")
+                for row in raw_components.get(component,[])
+            ]
+            evidence=[row.get("evidence",{}) for row in raw]
+            seconds=float(event["start"])
+            structure_row=None
+            if len(structure_times):
+                index=int(np.argmin(np.abs(structure_times-seconds)))
+                if abs(float(structure_times[index])-seconds)<=.05:
+                    structure_row=structure[index]
+            containing=[
+                window for window in voice
+                if float(window["start_seconds"])<=seconds<float(window["end_seconds"])
+            ]
+            voice_row=max(
+                containing,
+                key=lambda row:float(row.get("dominant_evidence_share",0)),
+                default=None,
+            )
+            source_feature=_nearest_onset_feature(source_onsets,seconds)
+            stem_feature=_nearest_onset_feature(stem_onsets,seconds)
+            rows.append({
+                **event,
+                "removal_reason":reason,
+                "raw_evidence":{
+                    "candidate_count":len(raw),
+                    "model_onset_strength":round(max(
+                        [float(row.get("model_onset_strength") or 0) for row in raw]
+                        or [0]
+                    ),4),
+                    "attack_strength":round(max(
+                        [float(row.get("attack_strength") or 0) for row in evidence]
+                        or [0]
+                    ),4),
+                    "relative_level":round(max(
+                        [float(row.get("relative_level") or 0) for row in evidence]
+                        or [0]
+                    ),4),
+                    "evidence_score":round(max(
+                        [float(row.get("evidence_score") or 0) for row in evidence]
+                        or [0]
+                    ),4),
+                },
+                "structure_evidence":(
+                    {
+                        "found":True,
+                        "error_ms":round(
+                            abs(float(structure_row["start"])-seconds)*1000,3
+                        ),
+                        "attack_probability":round(
+                            float(structure_row["attack_probability"]),4
+                        ),
+                        "periodic_width_attack_rank_percentile":round(
+                            float(structure_row[
+                                "periodic_width_attack_rank_percentile"
+                            ]),4
+                        ),
+                        "peak_width_rank_percentile":round(
+                            float(structure_row["peak_width_rank_percentile"]),4
+                        ),
+                    } if structure_row is not None else {"found":False}
+                ),
+                "source_mix_onset":source_feature,
+                "guitar_stem_onset":stem_feature,
+                "independent_stem_mix_agreement":bool(
+                    source_hash!=stem_hash
+                    and source_feature.get("found")
+                    and stem_feature.get("found")
+                ),
+                "voice_continuity":(
+                    {
+                        "inside_window":True,
+                        "candidate_for_tracking":bool(
+                            voice_row.get("candidate_for_tracking")
+                        ),
+                        "dominant_evidence_share":float(
+                            voice_row.get("dominant_evidence_share",0)
+                        ),
+                        "register_separation":float(
+                            voice_row.get("register_separation",0)
+                        ),
+                    } if voice_row is not None else {"inside_window":False}
+                ),
+            })
+    reference_scope=None
+    if reference is not None:
+        from .datasets import _read_expert_gems
+
+        snapshots=json.loads(
+            (analysis/"guitar-stage-snapshots.json").read_text(encoding="utf-8")
+        )
+        stages={row["stage"]:row for row in snapshots.get("stages",[])}
+        mapped=_snapshot_attacks(stages["after_map_pitched"]["notes"])
+        playable=_snapshot_attacks(stages["after_enforce_playability"]["notes"])
+        reference_attacks=_chart_attacks(
+            _read_expert_gems(Path(reference),reference_format,"expert")
+        )
+        resolved_offset=(
+            estimate_attack_offset(reference_attacks,mapped,tolerance)
+            if offset is None else float(offset)
+        )
+        aligned_playable=[
+            {**row,"time":round(float(row["time"])+resolved_offset,6)}
+            for row in playable
+        ]
+        baseline_matches=_match_attacks(
+            reference_attacks,aligned_playable,tolerance
+        )
+        covered={id(left) for left,_,_ in baseline_matches}
+        uncovered=[
+            row for row in reference_attacks if id(row) not in covered
+        ]
+        for row in rows:
+            aligned=float(row["start"])+resolved_offset
+            row["evaluation_only"]={
+                "covers_unmatched_reference_attack":any(
+                    abs(float(target["time"])-aligned)<=tolerance
+                    for target in uncovered
+                )
+            }
+        reference_scope={
+            "reference":str(Path(reference).resolve()),
+            "reference_format":reference_format,
+            "alignment_offset_seconds":resolved_offset,
+            "tolerance_seconds":tolerance,
+            "baseline_matches":len(baseline_matches),
+            "unmatched_reference_attacks":len(uncovered),
+        }
+    features={
+        "confidence":lambda row:float(row["confidence"]),
+        "model_onset_strength":lambda row:row["raw_evidence"]["model_onset_strength"],
+        "attack_strength":lambda row:row["raw_evidence"]["attack_strength"],
+        "evidence_score":lambda row:row["raw_evidence"]["evidence_score"],
+        "structure_rank":lambda row:row["structure_evidence"].get(
+            "periodic_width_attack_rank_percentile",0
+        ),
+        "stem_prominence_rank":lambda row:row["guitar_stem_onset"].get(
+            "prominence_rank",0
+        ),
+        "stem_width_rank":lambda row:row["guitar_stem_onset"].get("width_rank",0),
+        "voice_dominant_share":lambda row:row["voice_continuity"].get(
+            "dominant_evidence_share",0
+        ),
+    }
+    separability={}
+    if reference_scope is not None:
+        positives=sum(
+            row["evaluation_only"]["covers_unmatched_reference_attack"]
+            for row in rows
+        )
+        for name,getter in features.items():
+            values=[getter(row) for row in rows]
+            threshold=float(np.quantile(values,.75)) if values else 0.0
+            selected=[
+                row for row,value in zip(rows,values)
+                if value>=threshold and value>0
+            ]
+            hits=sum(
+                row["evaluation_only"]["covers_unmatched_reference_attack"]
+                for row in selected
+            )
+            separability[name]={
+                "top_quartile_threshold":round(threshold,4),
+                "selected":len(selected),
+                "uncovered_reference_hits":hits,
+                "precision":round(hits/max(1,len(selected)),4),
+                "positive_recall":round(hits/max(1,positives),4),
+            }
+    report={
+        "schema_version":1,
+        "scope":(
+            "post-generation diagnostics; reference data, when supplied, "
+            "labels outcomes only and is not generation input"
+        ),
+        "run_folder":str(folder),
+        "source_mix_sha256":source_hash,
+        "guitar_stem_sha256":stem_hash,
+        "independent_stem_mix_available":source_hash!=stem_hash,
+        "structure_predictions":(
+            str(Path(structure_predictions).resolve())
+            if structure_predictions is not None else None
+        ),
+        "reference_evaluation":reference_scope,
+        "summary":{
+            "removed_attacks":len(rows),
+            "by_reason":dict(Counter(
+                row["removal_reason"] for row in rows
+            )),
+            "structure_supported":sum(
+                row["structure_evidence"]["found"] for row in rows
+            ),
+            "stem_mix_agreement":sum(
+                row["independent_stem_mix_agreement"] for row in rows
+            ),
+            "voice_continuity_windows":sum(
+                row["voice_continuity"]["inside_window"] for row in rows
+            ),
+            "uncovered_reference_hits":sum(
+                row.get("evaluation_only",{}).get(
+                    "covers_unmatched_reference_attack",False
+                ) for row in rows
+            ),
+        },
+        "feature_separability":separability,
+        "events":rows,
+    }
+    output=Path(output) if output is not None else analysis/"playability-evidence.json"
+    output.parent.mkdir(parents=True,exist_ok=True)
+    output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+    return report
 
 
 def _windowed_attack_metrics(reference, candidate, tolerance, window=4.0):

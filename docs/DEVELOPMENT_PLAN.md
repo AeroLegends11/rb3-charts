@@ -147,6 +147,11 @@ Status update (2026-10-02):
   cross-checks after generation. It records input hashes, Git state, alignment,
   exact unmatched events, weakest four-second windows, and per-authoring-stage
   metrics. Reference notes remain excluded from generation and training.
+- Added post-generation playability-evidence audits that join each attributed
+  removal to raw onset/level evidence, optional offline structure ranks,
+  source-mix versus guitar-stem onset prominence/width, and voice-continuity
+  windows. Optional reference labels measure separability only after generation
+  and remain excluded from authoring.
 
 ## 3. Consolidate motif understanding — architecture proposal
 

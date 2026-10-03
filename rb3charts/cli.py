@@ -70,6 +70,21 @@ def main():
     )
     midi_compare.add_argument("--tolerance-ms",type=int,default=80)
     midi_compare.add_argument("--offset",type=float)
+    evidence_audit=sub.add_parser(
+        "audit-playability-evidence",
+        help="Join playability removals to post-generation source evidence",
+    )
+    evidence_audit.add_argument("folder",type=Path)
+    evidence_audit.add_argument("--output",type=Path)
+    evidence_audit.add_argument("--structure-predictions",type=Path)
+    evidence_audit.add_argument("--reference",type=Path)
+    evidence_audit.add_argument(
+        "--reference-format",
+        choices=["rock_band_midi","frets_on_fire_midi","clone_hero_chart"],
+        default="rock_band_midi",
+    )
+    evidence_audit.add_argument("--tolerance-ms",type=int,default=80)
+    evidence_audit.add_argument("--offset",type=float)
     reference=sub.add_parser("analyze-reference",help="Learn style statistics from finished Rock Band MIDI charts")
     reference.add_argument("folder",type=Path)
     reference.add_argument("--output",type=Path,default=Path("reference")/"style-profile.json")
@@ -398,6 +413,23 @@ def main():
             )
         except TabCNNError as exc:
             print(f"TabCNN inference failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["summary"],indent=2))
+        return 0
+    if args.command=="audit-playability-evidence":
+        from .regression import audit_playability_evidence
+        try:
+            report=audit_playability_evidence(
+                args.folder,
+                args.output,
+                args.structure_predictions,
+                args.reference,
+                args.reference_format,
+                args.tolerance_ms/1000,
+                args.offset,
+            )
+        except (OSError,ValueError,KeyError,json.JSONDecodeError) as exc:
+            print(f"Playability evidence audit failed: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report["summary"],indent=2))
         return 0

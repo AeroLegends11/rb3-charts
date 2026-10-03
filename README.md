@@ -81,6 +81,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument all
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-midi 'C:\Path\To\Generated_Output' 'C:\Path\To\Evaluation\notes.mid'
+.\.venv\Scripts\python.exe -m rb3charts.cli audit-playability-evidence 'C:\Path\To\Generated_Output' --structure-predictions 'C:\Path\To\predictions.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli analyze-reference 'C:\Path\To\Reference_MIDI_Corpus'
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' --verify-hashes
@@ -126,6 +127,13 @@ provenance, reports unmatched attacks and weakest four-second windows, and
 attributes metrics to saved authoring stages when snapshots are present. It
 writes JSON plus a Markdown summary; reference notes are loaded only after
 generation and are never runtime inputs.
+
+`audit-playability-evidence` is also post-generation only. It joins attributed
+playability removals to cached transcription evidence, optional offline
+structure ranks, source-mix and guitar-stem onset height/prominence/width ranks,
+and voice-continuity windows. An optional `--reference` labels whether a removed
+attack could cover an otherwise unmatched evaluation onset and reports
+top-quartile feature separability; those labels never enter generation.
 
 New review drafts record hashes for `import/notes.mid`, `song.wav`, and
 `song.ini`. The `package` command rejects any of those inputs if they changed

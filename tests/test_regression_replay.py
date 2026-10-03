@@ -10,6 +10,7 @@ from rb3charts.model import Note, TempoMap
 from rb3charts.phrases import author_guitar_phrases
 from rb3charts.pipeline import replay_cached
 from rb3charts.regression import (
+    audit_playability_evidence,
     benchmark_all_replays,
     benchmark_replays,
     compare_chart_attacks,
@@ -563,3 +564,79 @@ def test_phrase_boundary_eight_beat_split():
     _,report=author_guitar_phrases(notes,tempo)
     assert len(report["phrases"])==2
     assert not report["phrases"][1]["joined_previous_phrase"]
+
+
+def test_playability_evidence_audit_joins_independent_diagnostics(tmp_path):
+    run=tmp_path/"run"
+    analysis=run/"analysis"
+    source=run/"source"
+    analysis.mkdir(parents=True)
+    source.mkdir()
+    audio=tmp_path/"audio.wav"
+    samples=np.zeros(22050,dtype=np.float32)
+    samples[10900:11050]=1
+    sf.write(audio,samples,22050)
+    (source/"source.json").write_text(json.dumps({
+        "path":str(audio),
+        "sha256":"unused",
+    }),encoding="utf-8")
+    (analysis/"stems.json").write_text(json.dumps({
+        "guitar":str(audio),
+    }),encoding="utf-8")
+    (analysis/"playability.json").write_text(json.dumps({
+        "guitar":{"removal_attribution":{
+            "per_beat_cap":{"count":1,"events":[{
+                "source_id":"candidate-1",
+                "start":.5,
+                "beat":1.0,
+                "confidence":.6,
+                "priority":.7,
+                "sixteenth_grid_alignment":1.0,
+                "duration_ms":65,
+                "sustain_supported":False,
+                "motif_supported":False,
+            }]},
+        }},
+    }),encoding="utf-8")
+    (analysis/"guitar-transcription.json").write_text(json.dumps([{
+        "source_id":"candidate-1",
+        "start":.5,
+        "end":.565,
+        "pitch":60,
+        "confidence":.6,
+        "model_onset_strength":.8,
+        "evidence":{
+            "attack_strength":.7,
+            "relative_level":1.4,
+            "evidence_score":.65,
+        },
+    }]),encoding="utf-8")
+    (analysis/"guitar-voice-continuity.json").write_text(json.dumps({
+        "windows":[{
+            "start_seconds":0,
+            "end_seconds":1,
+            "candidate_for_tracking":True,
+            "dominant_evidence_share":.7,
+            "register_separation":12,
+        }],
+    }),encoding="utf-8")
+    structure=tmp_path/"structure.json"
+    structure.write_text(json.dumps({"candidates":[{
+        "start":.5,
+        "attack_probability":.9,
+        "periodic_width_attack_rank_percentile":.8,
+        "peak_width_rank_percentile":.75,
+    }]}),encoding="utf-8")
+
+    report=audit_playability_evidence(
+        run,structure_predictions=structure
+    )
+
+    assert report["summary"]["removed_attacks"]==1
+    assert report["summary"]["structure_supported"]==1
+    assert report["independent_stem_mix_available"] is False
+    event=report["events"][0]
+    assert event["raw_evidence"]["model_onset_strength"]==.8
+    assert event["structure_evidence"]["found"] is True
+    assert event["voice_continuity"]["candidate_for_tracking"] is True
+    assert (analysis/"playability-evidence.json").is_file()
