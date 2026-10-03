@@ -196,6 +196,7 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     assert '"kind": "unusual chord"' in page
     assert '"kind": "motif lane mismatch"' in page
     assert '"kind": "repeated motif candidate"' in page
+    assert "family 1; 2 occurrences; instance 1" in page
     assert '"kind": "activity boundary"' in page
     assert "Difficulty attacks" in page
     assert "Review markers jump to low-confidence notes" in page

@@ -77,6 +77,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument drums
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output'
+.\.venv\Scripts\python.exe -m rb3charts.cli analyze-reference 'C:\Path\To\Reference_MIDI_Corpus'
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' --verify-hashes
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' 'C:\Path\To\AuthoringExamples'
@@ -428,6 +429,11 @@ reported as `compile_failed`, while keeping the authoring files and review page.
 - `tests/`: synthetic regression fixtures; no commercial audio required.
 - `reference/style-profile.json`: compact runtime statistics; full local reference
   reports and downloaded chart repositories are excluded from Git.
+
+Newly analyzed reference profiles include aggregate per-song
+Expert-to-Hard/Medium/Easy retention percentiles. The committed schema-1 profile
+continues to provide its existing Hard prior until its excluded source corpus is
+available for legitimate regeneration.
 
 `input/`, `cache/`, `output/`, `tools/`, `.research/` and `Ready for Xbox/` remain
 local. Git exclusions do not prevent normal reading, generation or packaging.

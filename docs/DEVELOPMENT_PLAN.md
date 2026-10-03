@@ -78,6 +78,10 @@ Status update (2026-10-02):
   review flag only. Hail measured 0.53 guitar retention (below the 0.60 p10)
   and 0.97 drum retention (above the 0.82 p90); changing reduction behavior
   remains gated on broader replay evidence.
+- Reference analyzer schema 2 now emits per-instrument Expert-to-Hard, Medium,
+  and Easy retention percentiles while retaining the old Hard-only key as a
+  compatibility alias. The committed schema-1 profile intentionally lacks
+  per-song records and was not reverse-engineered or overwritten.
   - A drum-specific grid-consistent accompaniment thinning candidate moved
     Hail/Less Talk Hard retention from 0.967/0.773 to 0.798/0.704 and retained
     46%/52% of accompaniment-only attacks. It was rejected from runtime because

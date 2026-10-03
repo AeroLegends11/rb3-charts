@@ -124,16 +124,29 @@ def analyze_reference_corpus(folder,output=None):
                      "lane_rates":{str(lane):round(count/max(1,sum(lanes.values())),4) for lane,count in sorted(lanes.items())},
                      "chord_shapes":dict(chord_shapes.most_common())}
     retention={}
+    retention_by_difficulty={}
     for instrument in ("guitar","bass","drums","keys"):
-        ratios=[]
-        for song in songs:
-            track=song.get("tracks",{}).get(instrument,{})
-            if track.get("expert") and track.get("hard"):
-                ratios.append(track["hard"]["attacks"]/max(1,track["expert"]["attacks"]))
-        if ratios:retention[instrument]=_percentiles(ratios)
-    report={"schema":1,"source_folder":str(folder),"midi_files":len(files),
+        instrument_retention={}
+        for difficulty in ("hard","medium","easy"):
+            ratios=[]
+            for song in songs:
+                track=song.get("tracks",{}).get(instrument,{})
+                if track.get("expert") and track.get(difficulty):
+                    ratios.append(
+                        track[difficulty]["attacks"]
+                        / max(1,track["expert"]["attacks"])
+                    )
+            if ratios:
+                instrument_retention[difficulty]=_percentiles(ratios)
+        if instrument_retention:
+            retention_by_difficulty[instrument]=instrument_retention
+        if "hard" in instrument_retention:
+            retention[instrument]=instrument_retention["hard"]
+    report={"schema":2,"source_folder":str(folder),"midi_files":len(files),
             "analyzed_files":sum("error" not in song for song in songs),"failed_files":sum("error" in song for song in songs),
-            "styles":styles,"expert_to_hard_retention":retention,"songs":songs}
+            "styles":styles,"expert_to_hard_retention":retention,
+            "expert_to_difficulty_retention":retention_by_difficulty,
+            "songs":songs}
     if output:
         Path(output).parent.mkdir(parents=True,exist_ok=True)
         Path(output).write_text(json.dumps(report,indent=2),encoding="utf-8")

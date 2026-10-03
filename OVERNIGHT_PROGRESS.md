@@ -515,6 +515,17 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Independent Hail roots matched exactly at 158 families, 442 occurrences,
   0.5619 supported-attack ratio, 0.993 contour agreement, and zero deltas across
   every pattern metric. Focused replay benchmark coverage passes 16 tests.
+
+### 2026-10-03 01:46 - Future difficulty priors made reproducible
+
+- Confirmed the committed compact style profile intentionally omits per-song
+  records, so Medium/Easy percentile ranges cannot be reconstructed safely from
+  aggregate totals.
+- Updated the reference analyzer to schema 2 so a legitimate future corpus run
+  emits Expert-to-Hard/Medium/Easy p10/median/p90 for every instrument, while
+  preserving the existing Hard-only compatibility key.
+- Did not overwrite the committed schema-1 profile or invent runtime priors.
+  Focused reference/integration validation passed 15 tests.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage
