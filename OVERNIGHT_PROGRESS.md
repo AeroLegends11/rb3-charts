@@ -1011,3 +1011,29 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   versions while playback continues.
 - Full validation passes: 210 tests, with the six existing dependency and
   deprecation warnings.
+
+### 2026-10-03 16:23 - Hail review feedback traced
+
+- Human review marked the current Hail draft as needs-work: Hard still appeared
+  under-dense; Expert remained over-dense in the intro; and a lane-pattern
+  descent near player 15 seconds was musically interesting but inconsistent
+  with the established opening phrase. The generated chart remains substantially
+  different from the official evaluation chart.
+- Fixed an independent A/B review bug discovered during that review. The page
+  had omitted colored strike targets and allowed note heads to continue below
+  the strike line. It now draws explicit targets, clamps attacks to the hit line,
+  removes passed attacks immediately, and displays both player and source time.
+- Player 15.0 seconds maps to source 11.16 seconds. The source-derived voice
+  diagnostic covering 8.36-12.43 seconds has 14.24-semitone register separation,
+  76.46% upper-register evidence, 78.38% weak events and 12 register switches.
+  The detector briefly reports 73→68→63; final phrase authoring expands that to
+  lanes 2→1→0.
+- Tested a post-mapping dominant-voice filter so removal could not alter the
+  song-wide pitch dictionary. It required at least 70% dominant evidence,
+  14-semitone separation, 70% weak events, sub-0.65 note confidence, no sustain,
+  and unanimous overlapping-window classification.
+- Rejected the filter on rights-cleared data before Hail evaluation. Certain
+  Death and There's Something Wrong were no-ops. Dirtbag removed three attacks
+  and slightly reduced movement agreement. Persephone removed 30 attacks,
+  lowering Expert attack F1 0.5537→0.5363 and exact lanes 0.2624→0.2523,
+  despite motif shape 0.2903→0.3103. No runtime music logic remains.

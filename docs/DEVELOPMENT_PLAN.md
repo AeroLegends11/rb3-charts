@@ -250,6 +250,14 @@ Status update (2026-09-20):
   now appear as amber regions in the offline review highway, with register
   separation and switch counts shown during playback so timestamped feedback
   maps directly to the responsible source-evidence region.
+- Hail listening feedback identified the unexpected player-time 15-second
+  descent inside one of these windows: its upper register has 76% of weighted
+  evidence, 78% of events are weak, and the detector briefly drops
+  73→68→63 before returning upward. A post-mapping minority-register filter was
+  tested so it could not perturb the song-wide pitch dictionary. It was rejected
+  on rights-cleared selection before Hail evaluation: Persephone Expert attack
+  F1 fell 0.5537→0.5363 and exact lanes 0.2624→0.2523. The diagnosis is retained;
+  confidence/register heuristics remain disabled.
 
 ## 4. Review and anomaly tools
 
