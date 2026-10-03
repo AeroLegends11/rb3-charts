@@ -344,14 +344,30 @@ def main():
         validate_existing_run,
     )
     if args.command=="validate-run":
-        report=validate_existing_run(args.folder)
+        try:
+            report=validate_existing_run(args.folder)
+        except (
+            FileNotFoundError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            print(
+                f"Existing run validation failed: {exc}",
+                file=sys.stderr,
+            )
+            return 1
         print(
             "Existing run validation: "
             + ("PASS" if report["passed"] else "FAIL")
         )
         return 0 if report["passed"] else 1
     if args.command=="package":
-        result=package_existing(args.folder,onyx=args.onyx)
+        try:
+            result=package_existing(args.folder,onyx=args.onyx)
+        except (FileNotFoundError,RuntimeError,ValueError) as exc:
+            print(f"Packaging failed: {exc}",file=sys.stderr)
+            return 1
     elif args.command=="replay":
         result=replay_cached(args.folder,output=args.output,onyx=args.onyx,compile=args.compile)
     elif args.command=="demo":

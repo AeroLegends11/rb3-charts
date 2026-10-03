@@ -577,6 +577,12 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   invalid entry types into failed validation reports, so `validate-run` and
   packaging fail cleanly instead of producing a traceback. Focused integration
   coverage passes 15 tests.
+- `validate-run` now converts incomplete or malformed saved chart/tempo metadata
+  into a concise exit-1 message. A missing-run probe returned the expected error
+  without a traceback.
+- `package` now provides the same concise nonzero CLI failure for incomplete,
+  invalid, or failed-revalidation folders; a missing-run probe also produced no
+  traceback.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage
