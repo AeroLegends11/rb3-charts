@@ -94,6 +94,9 @@ Status update (2026-10-02):
   attacks are reported independently from pitched-instrument chords. Two
   independent Hail replays produced exact zero bass and drum deltas, including
   drum reduction retention of 0.9672/0.5546/0.2991.
+- Reduction macro totals now include only songs whose baseline and candidate
+  both contain complete reduction snapshots. Asymmetric legacy coverage reports
+  unavailable retention instead of comparing different song sets.
 - Structural MIDI validation now enforces type 1, 960 PPQ, unique required
   tracks, EVENTS-local lifecycle markers, tempo/beat content, track-specific
   pitches, and exact serialized gem counts for every instrument/difficulty.
@@ -108,6 +111,9 @@ Status update (2026-10-02):
 - The BEAT track is also read back as paired note intervals and compared with
   the expected full grid, including onset ticks, 120-tick duration, downbeat
   pitches, meter phase, and terminal extent.
+- EVENTS lifecycle marker ticks, per-instrument `[play]`/`[idle]` ticks, and all
+  four drum mix markers are now validated against authored duration/lead. A
+  corruption test and production-sized Hail replay pass this gate.
 - New drafts hash the three reviewed package inputs after validation.
   Packaging rejects post-validation changes to MIDI, audio, or `song.ini`;
   legacy drafts without a manifest remain supported with an explicit warning.

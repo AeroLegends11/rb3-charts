@@ -262,6 +262,24 @@ def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
     assert legacy["macro"]["baseline"]["reduction_songs"]==0
     assert legacy["macro"]["baseline"]["hard_retention"] is None
 
+    write_run(tmp_path/"baseline"/"run",(0,1,2),instrument="keys")
+    write_run(tmp_path/"candidate"/"run",(0,1,2),instrument="keys")
+    candidate_keys=(
+        tmp_path/"candidate"/"run"/"analysis"
+        /"keys-stage-snapshots.json"
+    )
+    payload=json.loads(candidate_keys.read_text(encoding="utf-8"))
+    payload.pop("reductions")
+    candidate_keys.write_text(json.dumps(payload),encoding="utf-8")
+    unmatched=benchmark_replays(
+        tmp_path/"baseline",
+        tmp_path/"candidate",
+        tmp_path/"unmatched-keys-benchmark.json",
+        instrument="keys",
+    )
+    assert unmatched["macro"]["baseline"]["reduction_songs"]==0
+    assert unmatched["macro"]["baseline"]["hard_retention"] is None
+
 
 def test_human_chart_comparison_reports_timing_style_and_motifs():
     reference = [

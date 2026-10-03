@@ -184,6 +184,38 @@ def test_validator_checks_serialized_beat_grid(tmp_path):
         for error in result["errors"]
     )
 
+def test_validator_checks_serialized_lifecycle_markers(tmp_path):
+    tempo=TempoMap([0,.5,1,1.5,2,2.5,3])
+    charts=reductions(
+        [Note(.5,.6,(0,),source_id="original")],"guitar",tempo
+    )
+    path=tmp_path/"notes.mid"
+    write_midi(path,tempo,{"guitar":charts},2,{})
+    midi=mido.MidiFile(path)
+    events=next(track for track in midi.tracks if track.name=="EVENTS")
+    music_end=next(
+        message for message in events
+        if message.type=="text" and message.text=="[music_end]"
+    )
+    music_end.time+=1
+    guitar=next(track for track in midi.tracks if track.name=="PART GUITAR")
+    idle=next(
+        message for message in guitar
+        if message.type=="text" and message.text=="[idle]"
+    )
+    idle.text="[idle-corrupt]"
+    midi.save(path)
+    result=validate({"guitar":charts},tempo,2,path)
+    assert not result["passed"]
+    assert any(
+        "EVENTS marker [music_end]" in error
+        for error in result["errors"]
+    )
+    assert any(
+        "PART GUITAR: marker [idle]" in error
+        for error in result["errors"]
+    )
+
 def test_electronic_lead_prefers_high_hook_and_deduplicates_stems():
     guitar=[{"start":1.0,"end":1.2,"pitch":60,"confidence":.9,"source_id":"guitar-0","source":"guitar"}]
     synth=[{"start":1.01,"end":1.3,"pitch":72,"confidence":.84,"source_id":"other-0","source":"other"}]

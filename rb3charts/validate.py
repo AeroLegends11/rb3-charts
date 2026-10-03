@@ -70,16 +70,38 @@ def validate(charts, tempo, duration, midi_path=None):
             if text not in event_texts:
                 errors.append("Missing EVENTS marker: "+text)
         music_start_tick = None
+        event_text_ticks = {}
         if event_tracks:
             absolute = 0
             for message in event_tracks[0]:
                 absolute += message.time
-                if (
-                    message.type=="text"
-                    and message.text=="[music_start]"
-                ):
-                    music_start_tick = absolute
-                    break
+                if message.type=="text":
+                    event_text_ticks[message.text]=absolute
+                    if message.text=="[music_start]":
+                        music_start_tick=absolute
+        if music_start_tick is not None:
+            offset_tick = music_start_tick - round(
+                tempo.beat_at(0)*midi.ticks_per_beat
+            )
+            offset_beats=round(offset_tick/midi.ticks_per_beat)
+            expected_event_ticks={
+                "[music_start]":music_start_tick,
+                "[music_end]":offset_tick+round(
+                    tempo.beat_at(duration)*midi.ticks_per_beat
+                ),
+                "[end]":round(
+                    (
+                        tempo.beat_at(duration+2)+offset_beats
+                    )*midi.ticks_per_beat
+                ),
+            }
+            for text,expected_tick in expected_event_ticks.items():
+                actual_tick=event_text_ticks.get(text)
+                if actual_tick is not None and actual_tick!=expected_tick:
+                    errors.append(
+                        f"EVENTS marker {text} is at tick {actual_tick}, "
+                        f"expected {expected_tick}"
+                    )
         tempo_tracks = tracks_by_name.get("TEMPO", [])
         if tempo_tracks and not any(
             message.type=="set_tempo"
@@ -213,6 +235,32 @@ def validate(charts, tempo, duration, midi_path=None):
             if len(matching) != 1:
                 continue
             track = matching[0]
+            if music_start_tick is not None:
+                text_ticks={}
+                absolute=0
+                for message in track:
+                    absolute+=message.time
+                    if message.type=="text":
+                        text_ticks[message.text]=absolute
+                idle_tick=offset_tick+round(
+                    tempo.beat_at(duration)*midi.ticks_per_beat
+                )
+                for text,expected_tick in (
+                    ("[play]",music_start_tick),
+                    ("[idle]",idle_tick),
+                ):
+                    if text_ticks.get(text)!=expected_tick:
+                        errors.append(
+                            f"{TRACKS[instrument]}: marker {text} must be "
+                            f"at tick {expected_tick}"
+                        )
+                if instrument=="drums":
+                    for index in range(len(DIFFICULTIES)):
+                        text=f"[mix {index} drums0]"
+                        if text_ticks.get(text)!=0:
+                            errors.append(
+                                f"{TRACKS[instrument]}: missing marker {text}"
+                            )
             for difficulty,base in DIFFICULTIES.items():
                 actual = sum(
                     message.type=="note_on"

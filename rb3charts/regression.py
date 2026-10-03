@@ -370,9 +370,14 @@ def benchmark_replays(
             f"No matching replay songs with {instrument} stage snapshots"
         )
     songs=[]
-    total_keys=("attacks","single_notes","simultaneous_attacks","chords","holds",
-                "collapsed_pitch_changes","reversed_pitch_changes",
-                "expert_attacks","hard_attacks","medium_attacks","easy_attacks")
+    core_total_keys=(
+        "attacks","single_notes","simultaneous_attacks","chords","holds",
+        "collapsed_pitch_changes","reversed_pitch_changes",
+    )
+    reduction_total_keys=(
+        "expert_attacks","hard_attacks","medium_attacks","easy_attacks",
+    )
+    total_keys=core_total_keys+reduction_total_keys
     totals={
         "baseline":{key:0 for key in total_keys},
         "candidate":{key:0 for key in total_keys},
@@ -380,7 +385,7 @@ def benchmark_replays(
     densities={"baseline":[],"candidate":[]}
     lanes={"baseline":set(),"candidate":set()}
     statuses={"baseline":defaultdict(int),"candidate":defaultdict(int)}
-    reduction_songs={"baseline":0,"candidate":0}
+    reduction_pairs=0
     structure_pairs=[]
     for key in shared:
         baseline_folder,metadata=baseline[key]
@@ -389,16 +394,21 @@ def benchmark_replays(
         after=_benchmark_stage_metrics(candidate_folder,instrument)
         before_structure=_benchmark_structure_metrics(baseline_folder)
         after_structure=_benchmark_structure_metrics(candidate_folder)
-        for metric in total_keys:
-            if before[metric] is not None:
+        for metric in core_total_keys:
+            totals["baseline"][metric]+=before[metric]
+            totals["candidate"][metric]+=after[metric]
+        if (
+            before["reductions_available"]
+            and after["reductions_available"]
+        ):
+            reduction_pairs+=1
+            for metric in reduction_total_keys:
                 totals["baseline"][metric]+=before[metric]
-            if after[metric] is not None:
                 totals["candidate"][metric]+=after[metric]
         for label,metrics in (("baseline",before),("candidate",after)):
             densities[label].append(metrics["peak_four_second_nps"])
             lanes[label].update(metrics["lane_coverage"])
             statuses[label][metrics["assessment_status"] or "missing"]+=1
-            reduction_songs[label]+=int(metrics["reductions_available"])
         songs.append({
             "artist":metadata.get("artist",""),
             "title":metadata.get("title",""),
@@ -408,7 +418,12 @@ def benchmark_replays(
             "candidate":after,
             "delta":{
                 metric:round(after[metric]-before[metric],4)
-                for metric in before if isinstance(before[metric],(int,float))
+                for metric in before
+                if (
+                    isinstance(before[metric],(int,float))
+                    and not isinstance(before[metric],bool)
+                    and after[metric] is not None
+                )
             },
             "baseline_structure":before_structure,
             "candidate_structure":after_structure,
@@ -435,14 +450,18 @@ def benchmark_replays(
                     / max(1,totals[label]["expert_attacks"]),
                     4,
                 )
-                if reduction_songs[label] else None
+                if reduction_pairs else None
             )
-        totals[label]["reduction_songs"]=reduction_songs[label]
-    delta={
-        key:round(totals["candidate"][key]-totals["baseline"][key],4)
-        for key in totals["baseline"]
-        if isinstance(totals["baseline"][key],(int,float))
-    }
+        totals[label]["reduction_songs"]=reduction_pairs
+    delta={}
+    for key,value in totals["baseline"].items():
+        if not isinstance(value,(int,float)):
+            continue
+        delta[key]=(
+            None
+            if key in reduction_total_keys and not reduction_pairs
+            else round(totals["candidate"][key]-value,4)
+        )
     report={
         "schema_version":1,
         "instrument":instrument,

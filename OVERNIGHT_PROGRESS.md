@@ -476,3 +476,10 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Extended the same audit to every BEAT interval: onset, release, downbeat
   pitch, meter phase, and total grid extent. A deliberate five-tick shift fails,
   while a fresh Hail replay passes. Focused coverage increased to 68 tests.
+- Added exact EVENTS `[music_start]`/`[music_end]`/`[end]`, instrument
+  `[play]`/`[idle]`, and drum mix-marker validation. Corrupted timing/text fails;
+  a fresh Hail replay passes. Focused coverage increased to 69 tests.
+- Corrected corpus reduction aggregation to use only matched songs with complete
+  snapshots on both sides. Asymmetric legacy coverage now reports unavailable
+  retention/count deltas rather than a misleading comparison. Focused replay
+  benchmark coverage passes 16 tests.
