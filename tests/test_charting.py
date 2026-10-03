@@ -40,6 +40,8 @@ def test_hard_reduction_preserves_playable_point_four_beat_pattern():
     ]
     hard=reductions(expert,"guitar",tempo)["hard"]
     assert len(hard)==len(expert)
+    drum_hard=reductions(expert,"drums",tempo)["hard"]
+    assert len(drum_hard)<len(expert)
 
 def test_repeated_riff_has_identical_mapping():
     events=[{"start":i*0.5,"end":i*0.5+0.3,"pitch":p,"confidence":0.9,"source_id":str(i)} for i,p in enumerate([48,52,55,50]*3)]

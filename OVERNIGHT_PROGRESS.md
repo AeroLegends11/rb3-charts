@@ -435,3 +435,8 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   MIDI validation, and package-input integrity remained intact.
 - Hail's Hard chart is saved as a morning listening candidate under the local
   ignored `.research/hard-spacing-38` replay root. Work continues elsewhere.
+- Immediately after the checkpoint, the shared reduction loop was audited and
+  the 0.38 spacing was explicitly scoped to guitar. Bass, drums, and keys retain
+  their prior 0.46 spacing; a regression test prevents cross-instrument drift.
+  A fresh Hail replay confirmed guitar retention 0.6056 and unchanged drum
+  retention 0.9672.
