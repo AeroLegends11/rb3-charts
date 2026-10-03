@@ -69,6 +69,17 @@ def validate(charts, tempo, duration, midi_path=None):
         for text in ("[music_start]","[music_end]","[end]"):
             if text not in event_texts:
                 errors.append("Missing EVENTS marker: "+text)
+        music_start_tick = None
+        if event_tracks:
+            absolute = 0
+            for message in event_tracks[0]:
+                absolute += message.time
+                if (
+                    message.type=="text"
+                    and message.text=="[music_start]"
+                ):
+                    music_start_tick = absolute
+                    break
         tempo_tracks = tracks_by_name.get("TEMPO", [])
         if tempo_tracks and not any(
             message.type=="set_tempo"
@@ -137,6 +148,83 @@ def validate(charts, tempo, duration, midi_path=None):
                     errors.append(
                         f"{TRACKS[instrument]}/{difficulty}: MIDI has "
                         f"{actual} gems, expected {expected}"
+                    )
+                if music_start_tick is None:
+                    continue
+                offset_tick = music_start_tick - round(
+                    tempo.beat_at(0)*midi.ticks_per_beat
+                )
+                expected_intervals = sorted(
+                    (
+                        offset_tick
+                        + round(tempo.beat_at(note.start)*midi.ticks_per_beat),
+                        max(
+                            offset_tick
+                            + round(
+                                tempo.beat_at(note.start)
+                                * midi.ticks_per_beat
+                            )
+                            + 1,
+                            offset_tick
+                            + round(
+                                tempo.beat_at(note.end)
+                                * midi.ticks_per_beat
+                            ),
+                        ),
+                        base+lane,
+                    )
+                    for note in difficulties[difficulty]
+                    for lane in note.lanes
+                )
+                active = {}
+                actual_intervals = []
+                absolute = 0
+                for message in track:
+                    absolute += message.time
+                    if not hasattr(message,"note"):
+                        continue
+                    if (
+                        message.type=="note_on"
+                        and message.velocity
+                        and base<=message.note<=base+4
+                    ):
+                        active[message.note]=absolute
+                    elif (
+                        message.type=="note_off"
+                        or (
+                            message.type=="note_on"
+                            and not message.velocity
+                        )
+                    ) and message.note in active:
+                        actual_intervals.append(
+                            (
+                                active.pop(message.note),
+                                absolute,
+                                message.note,
+                            )
+                        )
+                actual_intervals.sort()
+                if actual_intervals != expected_intervals:
+                    mismatch = next(
+                        (
+                            (expected_item,actual_item)
+                            for expected_item,actual_item
+                            in zip(expected_intervals,actual_intervals)
+                            if expected_item!=actual_item
+                        ),
+                        (
+                            expected_intervals[len(actual_intervals)]
+                            if len(expected_intervals)>len(actual_intervals)
+                            else None,
+                            actual_intervals[len(expected_intervals)]
+                            if len(actual_intervals)>len(expected_intervals)
+                            else None,
+                        ),
+                    )
+                    errors.append(
+                        f"{TRACKS[instrument]}/{difficulty}: MIDI timing "
+                        f"differs from authored chart; expected {mismatch[0]}, "
+                        f"found {mismatch[1]}"
                     )
     warnings.append("Automatic transcription needs listening review. Structural validation does not certify musical accuracy or Xbox compatibility.")
     return {"passed":not errors,"errors":errors,"warnings":warnings,"counts":counts}

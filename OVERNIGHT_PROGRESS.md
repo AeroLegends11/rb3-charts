@@ -362,3 +362,33 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   an explicit zero-song coverage count rather than a misleading 0% result.
 - Focused benchmark validation: 15 tests passed; command help exposed all four
   supported instruments.
+
+### 2026-10-03 00:15 - MIDI export/readback timing audit retained
+
+- Structural validation now pairs serialized note-on/note-off events and
+  verifies each playable gem's absolute tick, release tick, and pitch against
+  the authored chart for every instrument and difficulty.
+- A corruption test shifts an Expert guitar attack without changing its gem
+  count and proves the validator rejects it.
+- A fresh production-sized cached Hail replay passed the new audit across all
+  instruments and difficulties. Focused charting/integration validation passed
+  64 tests.
+
+### 2026-10-03 00:21 - Reviewed package-input integrity retained
+
+- New generation and replay drafts record SHA-256 hashes for the exact
+  `notes.mid`, `song.wav`, and `song.ini` inputs that will be compiled.
+- `package` rejects an input changed after validation, preventing a stale green
+  validation report from authorizing modified content. Existing drafts without
+  the additive manifest remain packageable with an explicit warning.
+- A real cached Hail replay wrote and verified the manifest. Synthetic packaging
+  coverage passes, including deliberate post-validation MIDI mutation.
+
+### 2026-10-03 00:26 - Structure summaries exposed for review
+
+- Added neutral activity-block, ranked-boundary, repeated drum-groove family,
+  and groove-supported attack summaries to assessments and `review_notes.md`.
+- These fields do not change chart notes or automatic quality status.
+- A fresh Hail replay exposed 19 activity blocks, 19 repeated groove families,
+  and 63.0% supported Expert drum attacks directly in its review notes.
+- Focused assessment/integration validation passed 21 tests.

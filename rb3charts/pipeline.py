@@ -102,6 +102,58 @@ def _replay_provenance(source_folder: Path, consumed_inputs: list[Path], options
         "timestamp_utc":datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z"),
     }
 
+
+def _write_package_input_manifest(folder: Path):
+    folder=Path(folder).resolve()
+    paths=(
+        folder/"import"/"notes.mid",
+        folder/"import"/"song.wav",
+        folder/"import"/"song.ini",
+    )
+    save_json(folder/"analysis"/"package-inputs.json",{
+        "schema_version":1,
+        "files":[
+            {
+                "path":str(path.relative_to(folder)).replace("\\","/"),
+                "sha256":hash_file(path),
+            }
+            for path in paths
+        ],
+    })
+
+
+def _verify_package_input_manifest(folder: Path):
+    folder=Path(folder).resolve()
+    path=folder/"analysis"/"package-inputs.json"
+    if not path.is_file():
+        return False
+    payload=json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema_version")!=1 or not payload.get("files"):
+        raise RuntimeError("Package-input manifest is malformed")
+    expected_paths={
+        "import/notes.mid",
+        "import/song.wav",
+        "import/song.ini",
+    }
+    manifest_paths={
+        str(item.get("path","")).replace("\\","/")
+        for item in payload["files"]
+    }
+    if manifest_paths!=expected_paths or len(payload["files"])!=3:
+        raise RuntimeError("Package-input manifest is incomplete")
+    for item in payload["files"]:
+        relative=Path(str(item.get("path","")))
+        candidate=(folder/relative).resolve()
+        if folder not in candidate.parents:
+            raise RuntimeError("Package-input manifest path escapes the run folder")
+        if not candidate.is_file():
+            raise RuntimeError(f"Reviewed package input is missing: {relative}")
+        if hash_file(candidate)!=item.get("sha256"):
+            raise RuntimeError(
+                f"Reviewed package input changed after validation: {relative}"
+            )
+    return True
+
 def generate(options: Options, progress=print):
     source=options.source.resolve()
     if not source.is_file():
@@ -357,9 +409,17 @@ def generate(options: Options, progress=print):
             structure_diagnostics,
         )
         missing=[i for i in options.instruments if i not in charts]
-        assessment=assess_chart(charts,patterns,playability,resolved_profile,missing)
+        assessment=assess_chart(
+            charts,
+            patterns,
+            playability,
+            resolved_profile,
+            missing,
+            structure_diagnostics,
+        )
         difficulty_tiers={name:item["difficulty_tier"] for name,item in assessment["instruments"].items() if "difficulty_tier" in item}
         write_import(folder/"import",midi,folder/"audio"/"song.wav",metadata,charts,difficulty_tiers)
+        _write_package_input_manifest(folder)
         save_json(folder/"analysis"/"quality-assessment.json",assessment)
         write_song_review_notes(folder/"review_notes.md",metadata["title"],metadata["artist"],assessment)
         result={"status":"draft_ready","folder":str(folder),"review":str(folder/"review.html"),"review_notes":str(folder/"review_notes.md"),"title":metadata["title"],"artist":metadata["artist"],"chart_profile_requested":options.chart_profile,"chart_profile":resolved_profile,"analysis_mode":"complete_audio_reanalysis","assessment":assessment,"warnings":report["warnings"],"counts":report["counts"],"missing_instruments":missing,"package":None,"xbox_tested":False}
@@ -401,6 +461,13 @@ def package_existing(folder, progress=print, onyx=None):
         with logfile.open("a",encoding="utf-8") as stream:stream.write(text+"\n")
         try:progress(text)
         except UnicodeEncodeError:progress(text.encode("ascii",errors="replace").decode("ascii"))
+    if not _verify_package_input_manifest(folder):
+        warning=(
+            "Legacy run has no package-input manifest; package inputs could "
+            "not be checked for changes after validation."
+        )
+        result.setdefault("warnings",[]).append(warning)
+        log(warning)
     log("Packaging reviewed chart with Onyx and Magma")
     try:
         package=compile_rb3(folder/"import",folder,metadata["song_id"],onyx or find_onyx(),log)
@@ -693,9 +760,17 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
         structure_diagnostics,
     )
     missing=[instrument for instrument in instruments if instrument not in charts]
-    assessment=assess_chart(charts,patterns,playability,resolved_profile,missing)
+    assessment=assess_chart(
+        charts,
+        patterns,
+        playability,
+        resolved_profile,
+        missing,
+        structure_diagnostics,
+    )
     difficulty_tiers={name:item["difficulty_tier"] for name,item in assessment["instruments"].items() if "difficulty_tier" in item}
     write_import(folder/"import",midi,folder/"audio"/"song.wav",metadata,charts,difficulty_tiers)
+    _write_package_input_manifest(folder)
     save_json(analysis_folder/"quality-assessment.json",assessment)
     write_song_review_notes(folder/"review_notes.md",metadata["title"],metadata["artist"],assessment)
     result={"status":"draft_ready","folder":str(folder),"review":str(folder/"review.html"),

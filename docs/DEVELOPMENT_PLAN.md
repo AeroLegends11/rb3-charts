@@ -78,6 +78,13 @@ Status update (2026-10-02):
 - Structural MIDI validation now enforces type 1, 960 PPQ, unique required
   tracks, EVENTS-local lifecycle markers, tempo/beat content, track-specific
   pitches, and exact serialized gem counts for every instrument/difficulty.
+  It also reads every serialized gem interval back in tick space and compares
+  its attack, release, and pitch with the authored chart. A production-sized
+  cached Hail replay passed this export/readback audit across all instruments
+  and difficulties.
+- New drafts hash the three reviewed package inputs after validation.
+  Packaging rejects post-validation changes to MIDI, audio, or `song.ini`;
+  legacy drafts without a manifest remain supported with an explicit warning.
 
 ## 3. Consolidate motif understanding — architecture proposal
 
@@ -228,6 +235,9 @@ Status update (2026-10-02):
 - On the cached Hail replay, 19 repeated drum-groove families covered 62.99% of
   Expert drum attacks. This is descriptive evidence for future groove work, not
   permission to normalize drum patterns.
+- Song assessments and `review_notes.md` now surface neutral activity-block,
+  ranked-boundary, and repeated-groove counts plus supported drum-attack
+  coverage. This changes review visibility only, not assessment status or notes.
 
 ## 6. Remote work and provider flexibility
 

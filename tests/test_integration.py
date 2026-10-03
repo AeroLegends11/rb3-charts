@@ -113,6 +113,32 @@ def test_reviewed_run_packages_without_regenerating(tmp_path,monkeypatch):
     result=pipeline.package_existing(run,lambda message:None)
     assert result["status"]=="compiled_needs_playtest"
     assert result["package"]==str(package)
+    assert any("Legacy run" in warning for warning in result["warnings"])
+
+def test_reviewed_run_rejects_changed_package_input(tmp_path,monkeypatch):
+    from rb3charts import pipeline
+    run=tmp_path/"reviewed"
+    for folder in (run/"metadata",run/"import",run/"analysis",run/"logs"):
+        folder.mkdir(parents=True)
+    (run/"result.json").write_text(json.dumps({"status":"draft_ready"}))
+    (run/"metadata"/"song.json").write_text(
+        json.dumps({"song_id":"rb3c_test"})
+    )
+    (run/"validation_report.json").write_text(json.dumps({"passed":True}))
+    for name in ("notes.mid","song.wav","song.ini"):
+        (run/"import"/name).write_bytes(b"reviewed")
+    pipeline._write_package_input_manifest(run)
+    (run/"import"/"notes.mid").write_bytes(b"changed")
+    with pytest.raises(
+        RuntimeError,match="changed after validation: import.notes.mid"
+    ):
+        pipeline.package_existing(run,lambda message:None)
+    manifest=run/"analysis"/"package-inputs.json"
+    payload=json.loads(manifest.read_text(encoding="utf-8"))
+    payload["files"].pop()
+    manifest.write_text(json.dumps(payload),encoding="utf-8")
+    with pytest.raises(RuntimeError,match="manifest is incomplete"):
+        pipeline.package_existing(run,lambda message:None)
 
 def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     (tmp_path/"audio").mkdir()

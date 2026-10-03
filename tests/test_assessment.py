@@ -3,9 +3,9 @@ from rb3charts.assessment import (
     analyze_structure_diagnostics,
     assess_chart,
     write_batch_review,
+    write_song_review_notes,
 )
 from rb3charts.model import Note,TempoMap
-from rb3charts.model import Note
 
 
 def chart(count=40,lanes=(0,1,2,3,4)):
@@ -60,6 +60,40 @@ def test_structure_diagnostics_reports_neutral_sections_and_repeated_drum_groove
     assert report["drum_grooves"]["repeated_families"]==1
     assert report["drum_grooves"]["supported_attacks"]==16
     assert report["drum_grooves"]["supported_attack_ratio"]==1
+
+
+def test_assessment_exposes_structure_diagnostics_in_review_notes(tmp_path):
+    charts=chart()
+    patterns={"guitar":{
+        "lane_counts":{lane:8 for lane in range(5)},
+        "recurring_pattern_families":2,
+        "contour_agreement_ratio":1,
+        "flattened_change_ratio":0,
+    }}
+    playability={"guitar":{
+        "before":40,
+        "removed":0,
+        "holds":0,
+        "peak_four_second_nps":4,
+    }}
+    structure={
+        "sections":[{},{}],
+        "strongest_activity_boundaries":[{}],
+        "drum_grooves":{
+            "repeated_families":3,
+            "supported_attack_ratio":.625,
+        },
+    }
+    result=assess_chart(
+        charts,patterns,playability,"band",
+        structure_diagnostics=structure,
+    )
+    assert result["structure"]["activity_blocks"]==2
+    path=tmp_path/"review_notes.md"
+    write_song_review_notes(path,"Demo","Artist",result)
+    text=path.read_text(encoding="utf-8")
+    assert "Neutral structure diagnostics" in text
+    assert "62.5%" in text
 
 
 def test_assessment_rejects_forbidden_hard_chord():

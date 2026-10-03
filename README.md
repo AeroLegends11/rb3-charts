@@ -98,6 +98,11 @@ uses the removed `pkg_resources` compatibility module.
 Its macro report includes difficulty-retention totals; simultaneous drum hits
 are reported separately rather than classified as chords.
 
+New review drafts record hashes for `import/notes.mid`, `song.wav`, and
+`song.ini`. The `package` command rejects any of those inputs if they changed
+after validation; legacy drafts without a manifest remain packageable with an
+explicit warning.
+
 Useful options:
 
 - `--device cpu` / `--device cuda`

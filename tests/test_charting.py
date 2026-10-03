@@ -97,6 +97,33 @@ def test_validator_checks_serialized_gem_counts(tmp_path):
         for error in result["errors"]
     )
 
+def test_validator_checks_serialized_gem_timing(tmp_path):
+    tempo=TempoMap([0,.5,1,1.5,2,2.5,3])
+    charts=reductions(
+        [Note(.5,.6,(0,),source_id="original")],"guitar",tempo
+    )
+    path=tmp_path/"notes.mid"
+    write_midi(path,tempo,{"guitar":charts},2,{})
+    midi=mido.MidiFile(path)
+    guitar=next(track for track in midi.tracks if track.name=="PART GUITAR")
+    note_on=next(
+        message for message in guitar
+        if message.type=="note_on" and message.velocity and message.note==96
+    )
+    note_off=next(
+        message for message in guitar
+        if message.type=="note_off" and message.note==96
+    )
+    note_on.time+=10
+    note_off.time-=10
+    midi.save(path)
+    result=validate({"guitar":charts},tempo,2,path)
+    assert not result["passed"]
+    assert any(
+        "PART GUITAR/expert: MIDI timing differs" in error
+        for error in result["errors"]
+    )
+
 def test_electronic_lead_prefers_high_hook_and_deduplicates_stems():
     guitar=[{"start":1.0,"end":1.2,"pitch":60,"confidence":.9,"source_id":"guitar-0","source":"guitar"}]
     synth=[{"start":1.01,"end":1.3,"pitch":72,"confidence":.84,"source_id":"other-0","source":"other"}]

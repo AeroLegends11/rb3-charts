@@ -150,7 +150,14 @@ def _reference_style(key):
     except (OSError,ValueError):return {}
 
 
-def assess_chart(charts,patterns,playability,profile,missing=()):
+def assess_chart(
+    charts,
+    patterns,
+    playability,
+    profile,
+    missing=(),
+    structure_diagnostics=None,
+):
     concerns=[]
     severe=[]
     instruments={}
@@ -229,9 +236,27 @@ def assess_chart(charts,patterns,playability,profile,missing=()):
     for name in missing:
         severe.append(f"{name}: requested instrument is missing")
     status="needs_work" if severe else ("review_closely" if concerns else "close_enough")
+    structure={}
+    if structure_diagnostics:
+        grooves=structure_diagnostics.get("drum_grooves",{})
+        structure={
+            "activity_blocks":len(structure_diagnostics.get("sections",[])),
+            "activity_boundaries":len(
+                structure_diagnostics.get(
+                    "strongest_activity_boundaries",[]
+                )
+            ),
+            "repeated_drum_groove_families":grooves.get(
+                "repeated_families",0
+            ),
+            "drum_groove_supported_attack_ratio":grooves.get(
+                "supported_attack_ratio",0
+            ),
+        }
     return {"status":status,"label":LABELS[status],"profile":profile,
             "summary":severe+concerns or ["No automatic congestion, lane, contour, chord or sustain flags."],
             "severe":severe,"concerns":concerns,"instruments":instruments,
+            "structure":structure,
             "human_review_required":True}
 
 
@@ -239,6 +264,19 @@ def write_song_review_notes(path,title,artist,assessment):
     lines=[f"# Chart review notes — {title}","",f"Artist: {artist}",
            f"Automatic assessment: **{assessment['label']}**",""]
     lines += [f"- {note}" for note in assessment["summary"]]
+    structure=assessment.get("structure",{})
+    if structure:
+        lines += [
+            "",
+            "## Neutral structure diagnostics",
+            "",
+            f"- Activity blocks: {structure['activity_blocks']}",
+            f"- Ranked activity boundaries: {structure['activity_boundaries']}",
+            "- Repeated drum-groove families: "
+            f"{structure['repeated_drum_groove_families']}",
+            "- Expert drum attacks in repeated groove measures: "
+            f"{structure['drum_groove_supported_attack_ratio']:.1%}",
+        ]
     lines += ["","## Listening verdict","","- [ ] Close enough","- [ ] Review closely","- [ ] Needs work",
               "","## Timestamp notes","","- `00:00` — ","","## Instrument notes","",
               "- Guitar: ","- Bass: ","- Drums: ","- Keys: ",""]
