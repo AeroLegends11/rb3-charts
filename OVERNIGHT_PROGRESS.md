@@ -894,3 +894,48 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   sanitization. Runtime generation remains unchanged.
 - Validation: eight focused index/trend tests passed; full suite passed 205
   tests; CLI help was exercised.
+
+### 2026-10-03 16:00 - Extended autonomous checkpoint
+
+- Restored and expanded post-generation reference evaluation without allowing
+  reference notes into generation. `compare-midi` now provides automatic/manual
+  alignment, hashes, Git provenance, unmatched-event details, weakest windows,
+  per-authoring-stage attribution and sanitized Markdown.
+- Replayed the seven-song official-reference corpus through current code.
+  Playability improves or preserves final attack F1 on five songs but remains a
+  loss point on Hail and Cliffs. Two independently selected density/spacing
+  recovery gates were exact no-ops on the three rights-cleared development
+  songs and were removed before official evaluation.
+- Retained diagnostic attribution for per-beat-cap removals, spacing rejects,
+  replacements and cleanup. Rights-cleared evidence showed the same weak/plain
+  candidate class as the official matched removals, so no unsafe runtime
+  recovery rule was accepted.
+- Retained `audit-playability-evidence`. Cleared-song feature conjunctions
+  reached at most 8.6% precision and did not transfer safely to Persephone.
+  Stronger official-domain correlations remain evaluation-only and rejected for
+  threshold selection.
+- Established lawful independent-capture calibration. Guitar-TECHS mic/DI and
+  GuitarSet mic/pickup agreement consistently raised attack precision across
+  fixed tolerances and untouched splits. The 28 authorized chart pairs still
+  contain zero independent paired captures, so this evidence is external
+  calibration rather than per-song runtime permission.
+- Added provenance-validated source-agreement pinning/evaluation, additive
+  chart-pair lineage states, sanitized review Markdown, corpus comparison
+  indexes, stale-lineage rejection and paired index trend reports. Real
+  authorized trend generation correctly reports the rejected spacing candidate
+  as zero delta across all three development songs.
+- Fixed one-tick authored-versus-serialized MIDI disagreement on floating-point
+  half-tick boundaries by sharing the post-lead tick conversion. The real Jonas
+  replay now validates. Cached replay failures also return concise exit-1
+  messages rather than tracebacks.
+- Retained commits from this checkpoint:
+  `c494ce0`, `5af24ed`, `5e93528`, `43ebc79`, `27ed594`, `f329a72`,
+  `18da809`, `ce46916`, `6a79f57`, `c9e1fc6`, `97687f1`, `ccc5c57`,
+  and `01fb097`.
+- Final automated gate: 207 tests passed with six existing dependency/
+  deprecation warnings. The branch is synchronized with origin and only the
+  intentionally local `comparisons/` tree is untracked.
+- Human review remains limited to Hail Hard guitar density/feel in the saved
+  morning review. Less Talk remains informational: its Expert scaling-riff
+  attack/pitch sequence is still upstream-blocked, and no rejected recovery
+  hook was restored.
