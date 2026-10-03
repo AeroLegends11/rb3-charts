@@ -1091,3 +1091,23 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   defect is the selection, clustering, continuity and lane/play pattern of
   those attacks. Future experiments must not treat a blanket density reduction
   as the target.
+
+### 2026-10-03 17:09 - Traced repeated single-yellow runs
+
+- Traced the reported player-time windows near 17, 27, 30 and 32 seconds
+  (source time is player time minus the 3.844-second review lead-in).
+- The failure has more than one cause. From player 16.7-18.6 seconds, Expert
+  has 13 attacks and seven yellows; the five yellow attacks retained by Hard
+  all carry detected pitch 70. This is primarily repeated-pitch transcription
+  combined with same-pitch lane stability.
+- From player 31.8-33.0 seconds, Expert has eight attacks (six yellow, one red,
+  one blue), while Hard retains five attacks and every one is yellow. Those
+  five attacks carry detected pitches 63, 73, 73, 75 and 77, proving that this
+  run is not caused by absent pitch variation. Phrase authoring collapses the
+  distinct pitches onto yellow, then time-based Hard reduction removes the
+  remaining color anchors and exposes a monochrome line.
+- Hard inherits Expert lanes except for limited edge-jump normalization; it
+  does not re-author a coherent reduced fingering pattern. Future work should
+  distinguish same-pitch repetition from collapsed nonzero pitch intervals and
+  make reduction preserve supported contour anchors rather than merely sampling
+  attacks by spacing.

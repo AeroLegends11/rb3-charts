@@ -165,6 +165,14 @@ Status update (2026-10-02):
   generated Expert can approach reference attack density while choosing the
   wrong attacks and lane progression. Optimize source-supported selection and
   phrase continuity, not a blanket reduction in intro note count.
+- Saved-stage tracing of Hail's repeated-yellow windows identifies two separate
+  defects. The player 16.7-18.6 second run is dominated by repeated detected
+  pitch 70, but the player 31.8-33.0 second Hard run maps detected pitches
+  63/73/73/75/77 entirely to yellow. Expert still has one red and one blue in
+  that latter window; spacing-based Hard reduction drops them. Add diagnostics
+  for collapsed nonzero pitch intervals and evaluate contour-aware reduction
+  on rights-cleared material before changing either pitch selection or lane
+  authoring.
 - Added post-generation playability-evidence audits that join each attributed
   removal to raw onset/level evidence, optional offline structure ranks,
   source-mix versus guitar-stem onset prominence/width, and voice-continuity
