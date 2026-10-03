@@ -324,6 +324,27 @@ def test_band_profile_reduces_unpatterned_crowding():
     result,report=enforce_playability(notes,"guitar",tempo,"band")
     assert len(result)<len(notes)
     assert report["max_attacks_per_beat"]==4
+    reasons=report["removal_attribution"]
+    assert reasons["spacing_rejected_later"]["count"] > 0
+    assert sum(row["count"] for row in reasons.values()) == report["removed"]
+
+def test_playability_report_distinguishes_cap_and_spacing_replacement():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    notes=[
+        Note(1.01,1.075,(0,),confidence=.95,source_id="a",pitch=48),
+        Note(1.12,1.185,(1,),confidence=.90,source_id="b",pitch=50),
+        Note(1.23,1.295,(2,),confidence=.85,source_id="c",pitch=52),
+        Note(1.45,1.515,(4,),confidence=.40,source_id="cap",pitch=56),
+        Note(1.49,1.555,(0,),confidence=.50,source_id="earlier",pitch=58),
+        Note(1.51,1.575,(1,),confidence=.99,source_id="replacement",pitch=60),
+    ]
+    _,report=enforce_playability(notes,"guitar",tempo,"band")
+    reasons=report["removal_attribution"]
+    assert reasons["per_beat_cap"]["count"] == 1
+    assert reasons["spacing_replaced_earlier"]["count"] == 1
+    assert reasons["spacing_replaced_earlier"]["samples"][0]["source_id"]=="earlier"
+    assert reasons["spacing_replaced_earlier"]["samples"][0]["replaced_by_source_id"]=="replacement"
+    assert sum(row["count"] for row in reasons.values()) == report["removed"]
 
 def test_pitch_specific_reattack_splits_hold_and_preserves_releases():
     from basic_pitch.note_creation import model_frames_to_time,MIDI_OFFSET

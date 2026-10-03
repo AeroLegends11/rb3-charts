@@ -528,7 +528,13 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
     Confidence, grid alignment and detected sustain duration choose survivors.
     """
     if not notes:
-        return [],{"before":0,"after":0,"removed":0,"holds":0,"peak_four_second_nps":0.0,"minimum_gap_ms":None}
+        return [],{"before":0,"after":0,"removed":0,"holds":0,"peak_four_second_nps":0.0,
+                   "minimum_gap_ms":None,"removal_attribution":{
+                       "per_beat_cap":{"count":0,"samples":[],"events":[]},
+                       "spacing_rejected_later":{"count":0,"samples":[],"events":[]},
+                       "spacing_replaced_earlier":{"count":0,"samples":[],"events":[]},
+                       "cleanup_merged_or_dropped":{"count":0,"samples":[],"events":[]},
+                   },"removal_attribution_schema_version":1}
     beat_period=float(np.median(np.diff(tempo.beats)))
     pitched=instrument in ("guitar","bass","keys")
     if profile=="electronic" and pitched:
@@ -558,6 +564,27 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
         grid=1-abs(beat*4-round(beat*4))/.5
         duration=note.end-note.start
         return note.confidence+max(0,grid)*0.10+(0.18 if duration>=sustain_threshold else 0)+(0.08 if duration>=0.35 else 0)+motif_bonus.get(note.source_id,0)
+    def diagnostic(note):
+        beat=float(tempo.beat_at(note.start))
+        return {
+            "source_id":note.source_id,
+            "start":round(float(note.start),6),
+            "beat":round(beat,4),
+            "confidence":round(float(note.confidence),4),
+            "priority":round(float(priority(note)),4),
+            "sixteenth_grid_alignment":round(
+                max(0.0,1-abs(beat*4-round(beat*4))/.5),4
+            ),
+            "duration_ms":round(float(note.end-note.start)*1000,3),
+            "sustain_supported":bool(note.end-note.start>=sustain_threshold),
+            "motif_supported":bool(note.source_id in motif_bonus),
+        }
+    removal_rows={
+        "per_beat_cap":[],
+        "spacing_rejected_later":[],
+        "spacing_replaced_earlier":[],
+        "cleanup_merged_or_dropped":[],
+    }
     bins={}
     for note in notes:
         bins.setdefault(int(np.floor(tempo.beat_at(note.start))),[]).append(note)
@@ -577,6 +604,10 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
             # with an unrestricted density increase.
             chosen.extend(note for note in ranked[per_beat:]
                           if note.source_id in motif_bonus and len(chosen)<4)
+        chosen_ids={id(note) for note in chosen}
+        removal_rows["per_beat_cap"].extend(
+            diagnostic(note) for note in ranked if id(note) not in chosen_ids
+        )
         retained.extend(chosen)
     retained.sort(key=lambda note:note.start)
     spaced=[]
@@ -588,10 +619,33 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
             local_period=tempo.seconds_at(beat+1)-tempo.seconds_at(beat)
             required_gap=local_period/6
         if spaced and note.start-spaced[-1].start<required_gap:
-            if priority(note)>priority(spaced[-1]):spaced[-1]=note
+            if priority(note)>priority(spaced[-1]):
+                removed=spaced[-1]
+                row=diagnostic(removed)
+                row["replaced_by_source_id"]=note.source_id
+                row["gap_ms"]=round(float(note.start-removed.start)*1000,3)
+                removal_rows["spacing_replaced_earlier"].append(row)
+                spaced[-1]=note
+            else:
+                row=diagnostic(note)
+                row["blocked_by_source_id"]=spaced[-1].source_id
+                row["gap_ms"]=round(float(note.start-spaced[-1].start)*1000,3)
+                removal_rows["spacing_rejected_later"].append(row)
             continue
         spaced.append(note)
     result=clean(spaced,instrument)
+    result_components={
+        component
+        for note in result
+        for component in str(note.source_id).split("+")
+        if component
+    }
+    for note in spaced:
+        components={
+            component for component in str(note.source_id).split("+") if component
+        }
+        if components and not components.issubset(result_components):
+            removal_rows["cleanup_merged_or_dropped"].append(diagnostic(note))
     starts=np.asarray([n.start for n in result])
     gaps=np.diff(starts)
     peak=0
@@ -610,6 +664,29 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
             "sustain_threshold_ms":round(sustain_threshold*1000),
             "holds":sum(n.end-n.start>=sustain_threshold for n in result),
             "longest_hold_seconds":round(max((n.end-n.start for n in result),default=0),3)}
+    def summarize(rows):
+        if not rows:
+            return {"count":0}
+        return {
+            "count":len(rows),
+            "motif_supported":sum(row["motif_supported"] for row in rows),
+            "sustain_supported":sum(row["sustain_supported"] for row in rows),
+            "confidence_median":round(float(np.median(
+                [row["confidence"] for row in rows]
+            )),4),
+            "priority_median":round(float(np.median(
+                [row["priority"] for row in rows]
+            )),4),
+            "sixteenth_grid_alignment_median":round(float(np.median(
+                [row["sixteenth_grid_alignment"] for row in rows]
+            )),4),
+            "samples":sorted(rows,key=lambda row:row["start"])[:12],
+            "events":sorted(rows,key=lambda row:row["start"]),
+        }
+    report["removal_attribution"]={
+        reason:summarize(rows) for reason,rows in removal_rows.items()
+    }
+    report["removal_attribution_schema_version"]=1
     report["phrase_aware_guitar"]=bool(phrase_aware and instrument=="guitar")
     report["supported_phrase_attacks_per_beat"]=(
         6 if phrase_aware and instrument=="guitar" and profile=="band"

@@ -636,3 +636,47 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Cached replay now reports incomplete inputs and validation failures as concise
   exit-1 CLI errors rather than raw tracebacks, matching `validate-run` and
   packaging behavior.
+
+### 2026-10-03 06:35 - Playability removal attribution retained
+
+- Traced every current-code Band Guitar attack removed by
+  `enforce_playability` into four non-overlapping causes: per-beat cap, later
+  attack rejected by spacing, earlier attack replaced by a higher-priority
+  neighbor, and cleanup merge/drop. Reports preserve full source IDs/times plus
+  confidence, priority, sixteenth-grid alignment, sustain and motif evidence.
+  Chart behavior is unchanged.
+- On the rights-cleared selection, removals were:
+  - Certain Death: 33 cap, 52 later-spacing, 68 earlier-replaced (153 total).
+  - Dirtbag: 0 cap, 1 later-spacing, 2 earlier-replaced (3 total).
+  - There's Something Wrong: 5 cap, 34 later-spacing, 16 earlier-replaced
+    (55 total).
+  - Frozen Persephone: 6 cap, 10 later-spacing, 13 earlier-replaced (29 total).
+  - Cleanup removed zero attacks on all four.
+- Across those four lawful gates, 209/240 removals were the same weak/plain
+  observable class seen in the official failures: confidence below 0.75, no
+  sustain evidence and no recurring-motif support. Only one lawful removal had
+  confidence at least 0.75; 30 had motif support and 27 had at least 0.80
+  sixteenth-grid alignment. This confirms that relaxing the broad weak/plain
+  class would also affect cleared songs substantially.
+- Evaluation-only attribution of mapped attacks that matched the frozen
+  official references found 192 removed candidates: 118 cap, 27 later-spacing,
+  47 earlier-replaced, zero cleanup. Of these, 177 were weak/plain, none had
+  confidence at least 0.75, none had sustain evidence, only 15 had motif
+  support, and 28 had at least 0.80 grid alignment. Hail accounted for
+  56/7/17 and Cliffs for 22/12/15 respectively. These are removed mapped
+  matches, not net recall losses: a neighboring retained attack can still match
+  the same reference onset.
+- The seven frozen stage gates remained behavior-identical:
+  - Beast and the Harlot: 1234->1195 attacks, 771->756 matches,
+    F1 0.5392->0.5360.
+  - Hail to the King: 1496->1381, 808->746, F1 0.6107->0.5895.
+  - Cliffs of Dover: 1141->1050, 733->692, F1 0.6157->0.6044.
+  - Empty Walls: 870->867, 619->619, F1 0.7240->0.7252.
+  - Mr. Brightside: 1025->1004, 777->770, F1 0.7446->0.7454.
+  - When You Were Young: 907->848, 400->389, F1 0.5461->0.5533.
+  - My Name Is Jonas: 884->869, 604->601, F1 0.6975->0.7001.
+- No runtime recovery rule was retained. The official losses do not expose a
+  source-derived confidence/grid/sustain/motif class absent from the cleared
+  removals, and the two already-rejected high-confidence density exceptions
+  remain exact no-ops on the cleared selection. The next safe step is to seek
+  an independent attack/voice-continuity feature rather than relax density.
