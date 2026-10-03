@@ -95,6 +95,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli train-structure-baseline 'C:\Path\To\feature-index.json' 'C:\Path\To\baseline.pt' --device cuda
 .\.venv\Scripts\python.exe -m rb3charts.cli predict-structure 'C:\Path\To\baseline.pt' 'C:\Path\To\guitar.wav' 'C:\Path\To\predictions.json' --beats 'C:\Path\To\tempo.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli evaluate-structure-ranking 'C:\Path\To\predictions.json' 'C:\Path\To\labels.json'
+.\.venv\Scripts\python.exe -m rb3charts.cli pin-source-agreement 'C:\Path\To\manifest.json' 'C:\Path\To\alternate-audio' 'C:\Path\To\paired-manifest.json' --primary-suffix _mic.wav --alternate-suffix _mix.wav
 .\.venv\Scripts\python.exe -m rb3charts.cli evaluate-source-agreement 'C:\Path\To\paired-dataset-manifest.json' --output 'C:\Path\To\agreement.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli predict-tabcnn 'C:\Path\To\TabCNN.pt' 'C:\Path\To\guitar.wav' 'C:\Path\To\tabcnn.json' --attacks 'C:\Path\To\structure-predictions.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli demo --compile
@@ -235,7 +236,8 @@ The report records all matching parameters and can be saved with `--output`.
 
 `evaluate-source-agreement` validates a rights-cleared manifest and its hashes,
 then compares aligned recording channels such as Guitar-TECHS mic/amp and
-direct-input audio. Each channel contributes the same deterministic number of
+direct-input audio or GuitarSet microphone and pickup-mix audio. Each channel
+contributes the same deterministic number of
 prominence-ranked onset candidates as the authoritative label count. Reports
 separate shared, primary-only, and alternate-only precision/recall, retain
 group/performer split keys and both audio hashes, and reject missing, duplicated,
@@ -243,6 +245,13 @@ duration-mismatched, or provenance-mismatched pairs. It is offline evidence and
 does not change generation. Paired manifests may provide `alternate_audio` and
 `alternate_audio_sha256`; otherwise the alternate channel is derived from the
 primary channel layout and its computed hash is still recorded.
+
+`pin-source-agreement` reproducibly creates the explicit paired manifest. It
+maps a filename suffix into an aligned alternate-audio directory, pins every
+alternate SHA-256, preserves all existing artist/performer splits, and can
+verify and record a release archive's published MD5, byte size and source
+record. The source manifest, alternate recordings, archive and output must stay
+inside one ignored dataset root.
 
 `predict-tabcnn` evaluates the CC BY 4.0 augmented TabCNN checkpoint published
 with EGSet12. It writes string/fret, pitch and polyphony evidence and can sample

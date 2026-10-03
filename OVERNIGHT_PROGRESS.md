@@ -751,3 +751,34 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   modestly raises attack precision and that channel-only peaks are much weaker.
   It does not supply paired captures for the cleared chart songs, so no runtime
   recovery rule or threshold changed.
+
+### 2026-10-03 07:35 - GuitarSet pickup agreement verified
+
+- Authoritative Zenodo record `3371780` identifies GuitarSet v1.1.0 as open
+  access under CC BY 4.0. Existing `annotation.zip` and `audio_mono-mic.zip`
+  matched published MD5 values `b39b78e63d3446f2e54ddb7a54df9b10` and
+  `275966d6610ac34999b58426beb119c3`. The full original/debleeded hex archives
+  are 3,210,735,945 and 3,607,349,578 bytes; the sufficient official mono
+  pickup mix is 683,145,360 bytes.
+- Downloaded that archive only into ignored `.research/guitarset/`. Its local
+  MD5 exactly matched published value `aecce79f425a44e2055e46f680e10f6a`.
+  Added `pin-source-agreement` to deterministically map aligned filenames, pin
+  all 180 alternate SHA-256 hashes, preserve the existing performer split, and
+  verify/record archive MD5, byte size and release URL. The resulting ignored
+  manifest SHA-256 is
+  `5b2bbdd30284f12bc4aa3f42c37a6a3a8f880a61d7f7e6c1386ec7b2bbc21c2f`.
+- At 30 ms, shared precision versus best individual source was:
+  train 0.8120 vs 0.7845, validation 0.8435 vs 0.7991, and untouched test
+  0.9062 vs 0.8770. Shared lifts were +0.0275/+0.0444/+0.0292.
+- At 50 ms, train (15,124 labels) was mic 0.8141, pickup 0.8244 and shared
+  0.8527; validation (1,140) was 0.8360/0.8518/0.8996; untouched test (1,203)
+  was 0.8845/0.8919/0.9260. Shared lifts were +0.0283/+0.0478/+0.0341.
+  Channel-only precision was much weaker: train mic/pickup 0.4464/0.5938,
+  validation 0.3269/0.4712, and test 0.5474/0.7053.
+- At 80 ms, shared precision versus best source was train 0.8596 vs 0.8319,
+  validation 0.9040 vs 0.8588, and test 0.9306 vs 0.8969. Shared lifts were
+  +0.0277/+0.0452/+0.0337.
+- Agreement therefore gives stable lawful attack evidence across untouched
+  performers and fixed tolerances. It still does not create independent paired
+  captures for Certain Death, Dirtbag, There's Something Wrong or Persephone.
+  No chart-generation or playability-recovery rule changed.

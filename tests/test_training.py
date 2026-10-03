@@ -22,6 +22,7 @@ from rb3charts.training import (
     evaluate_structure_ranking,
     extract_structure_features,
     mix_slakh_guitar_stems,
+    pin_source_agreement_manifest,
     predict_structure,
     synthesize_egfxset_phrase,
     train_structure_baseline,
@@ -671,17 +672,31 @@ def test_source_agreement_preserves_provenance_and_scores_shared_attacks(tmp_pat
             "split":"train",
             "audio":"audio/micamp/micamp_take.wav",
             "audio_sha256":digest(primary),
-            "alternate_audio":"audio/directinput/directinput_take.wav",
-            "alternate_audio_sha256":digest(alternate),
             "annotations":"labels/take.json",
             "annotations_sha256":digest(labels_path),
         }],
     }),encoding="utf-8")
+    archive=tmp_path/"release.zip"
+    archive.write_bytes(b"official fixture archive")
+    pinned=tmp_path/"manifest-source-agreement.json"
+    pin_report=pin_source_agreement_manifest(
+        manifest,
+        alternate.parent,
+        pinned,
+        "micamp_take.wav",
+        "directinput_take.wav",
+        archive,
+        hashlib.md5(archive.read_bytes()).hexdigest(),
+        "https://example.invalid/fixture/record",
+    )
     output=tmp_path/"agreement.json"
 
-    report=evaluate_source_agreement(manifest,output)
+    report=evaluate_source_agreement(pinned,output)
 
-    assert report["manifest_sha256"]==digest(manifest)
+    assert pin_report["items"]==1
+    assert pin_report["release"]["archive_bytes"]==len(b"official fixture archive")
+    assert pin_report["release"]["record_url"].endswith("/record")
+    assert report["manifest_sha256"]==digest(pinned)
     assert report["items"][0]["split_keys"]==labels["split_keys"]
     assert report["items"][0]["primary"]["sha256"]==digest(primary)
     assert report["items"][0]["alternate"]["sha256"]==digest(alternate)

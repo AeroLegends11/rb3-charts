@@ -1,7 +1,7 @@
 """Rights-clean conversion into lane-independent structure-model labels."""
 
 from collections import Counter
-from hashlib import sha256
+from hashlib import md5, sha256
 import json
 from pathlib import Path
 import random
@@ -2043,3 +2043,109 @@ def evaluate_source_agreement(
         output.parent.mkdir(parents=True,exist_ok=True)
         output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
     return report
+
+
+def pin_source_agreement_manifest(
+    manifest,
+    alternate_root,
+    output,
+    primary_suffix,
+    alternate_suffix,
+    archive=None,
+    published_md5=None,
+    release_url=None,
+):
+    """Add hash-pinned aligned alternate recordings to a validated manifest."""
+    from .datasets import DatasetManifestError, validate_dataset_manifest
+
+    manifest=Path(manifest).resolve()
+    root=manifest.parent
+    output=Path(output).resolve()
+    alternate_root=Path(alternate_root).resolve()
+    try:
+        validate_dataset_manifest(manifest,verify_hashes=True)
+        alternate_root.relative_to(root)
+    except (DatasetManifestError,ValueError) as exc:
+        raise TrainingDataError(str(exc)) from exc
+    if output.parent!=root:
+        raise TrainingDataError(
+            "Pinned source-agreement manifest must stay beside its source manifest"
+        )
+    if not primary_suffix or not alternate_suffix:
+        raise TrainingDataError("Source-agreement filename suffixes cannot be empty")
+    payload=json.loads(manifest.read_text(encoding="utf-8"))
+    seen_hashes={}
+    for item in payload["items"]:
+        primary_name=Path(item["audio"]).name
+        if not primary_name.endswith(primary_suffix):
+            raise TrainingDataError(
+                f"{item['song_id']} audio filename does not end with "
+                f"{primary_suffix}"
+            )
+        alternate_name=(
+            primary_name[:-len(primary_suffix)]+alternate_suffix
+        )
+        alternate=(alternate_root/alternate_name).resolve()
+        try:
+            relative=alternate.relative_to(root)
+        except ValueError as exc:
+            raise TrainingDataError(
+                f"{item['song_id']} alternate audio escapes manifest root"
+            ) from exc
+        if not alternate.is_file():
+            raise TrainingDataError(
+                f"{item['song_id']} alternate audio is missing: {relative}"
+            )
+        digest=_hash_file(alternate)
+        previous=seen_hashes.setdefault(digest,item["song_id"])
+        if previous!=item["song_id"]:
+            raise TrainingDataError(
+                f"Alternate audio content is reused by {previous} "
+                f"and {item['song_id']}"
+            )
+        item["alternate_audio"]=str(relative).replace("\\","/")
+        item["alternate_audio_sha256"]=digest
+    if archive is not None or published_md5 is not None:
+        if archive is None or published_md5 is None:
+            raise TrainingDataError(
+                "Both archive and published MD5 are required together"
+            )
+        archive=Path(archive).resolve()
+        try:
+            archive_relative=archive.relative_to(root)
+        except ValueError as exc:
+            raise TrainingDataError(
+                "Release archive must stay inside the dataset root"
+            ) from exc
+        if not archive.is_file():
+            raise TrainingDataError(f"Release archive is missing: {archive_relative}")
+        digest=md5()
+        with archive.open("rb") as stream:
+            for chunk in iter(lambda:stream.read(1024*1024),b""):
+                digest.update(chunk)
+        actual_md5=digest.hexdigest()
+        expected_md5=str(published_md5).lower()
+        if actual_md5!=expected_md5:
+            raise TrainingDataError(
+                f"Release archive MD5 mismatch: expected {expected_md5}, "
+                f"got {actual_md5}"
+            )
+        payload["dataset"]["source_agreement_release"]={
+            "record_url":release_url or payload["dataset"]["source_url"],
+            "archive":str(archive_relative).replace("\\","/"),
+            "archive_bytes":archive.stat().st_size,
+            "published_md5":expected_md5,
+        }
+    output.write_text(json.dumps(payload,indent=2)+"\n",encoding="utf-8")
+    try:
+        validate_dataset_manifest(output,verify_hashes=True)
+    except DatasetManifestError as exc:
+        output.unlink(missing_ok=True)
+        raise TrainingDataError(str(exc)) from exc
+    return {
+        "output":str(output),
+        "manifest_sha256":_hash_file(output),
+        "items":len(payload["items"]),
+        "alternate_root":str(alternate_root),
+        "release":payload["dataset"].get("source_agreement_release"),
+    }

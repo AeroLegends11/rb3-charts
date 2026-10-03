@@ -161,6 +161,18 @@ def main():
     agreement.add_argument("--primary-channel",default="micamp")
     agreement.add_argument("--alternate-channel",default="directinput")
     agreement.add_argument("--tolerance-ms",type=int,default=50)
+    pin_agreement=sub.add_parser(
+        "pin-source-agreement",
+        help="Hash-pin aligned alternate recordings into a dataset manifest",
+    )
+    pin_agreement.add_argument("manifest",type=Path)
+    pin_agreement.add_argument("alternate_root",type=Path)
+    pin_agreement.add_argument("output",type=Path)
+    pin_agreement.add_argument("--primary-suffix",required=True)
+    pin_agreement.add_argument("--alternate-suffix",required=True)
+    pin_agreement.add_argument("--archive",type=Path)
+    pin_agreement.add_argument("--published-md5")
+    pin_agreement.add_argument("--release-url")
     tabcnn=sub.add_parser("predict-tabcnn",help="Run offline CC BY 4.0 TabCNN pitch/polyphony evaluation")
     tabcnn.add_argument("checkpoint",type=Path)
     tabcnn.add_argument("audio",type=Path)
@@ -428,6 +440,24 @@ def main():
             print(f"Source agreement evaluation failed: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report["splits"],indent=2))
+        return 0
+    if args.command=="pin-source-agreement":
+        from .training import TrainingDataError, pin_source_agreement_manifest
+        try:
+            report=pin_source_agreement_manifest(
+                args.manifest,
+                args.alternate_root,
+                args.output,
+                args.primary_suffix,
+                args.alternate_suffix,
+                args.archive,
+                args.published_md5,
+                args.release_url,
+            )
+        except TrainingDataError as exc:
+            print(f"Source agreement pinning failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report,indent=2))
         return 0
     if args.command=="predict-tabcnn":
         from .tabcnn import TabCNNError, predict_tabcnn

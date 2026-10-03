@@ -502,6 +502,14 @@ Status update (2026-09-22):
   independent captures of each labeled performance while preserving performer
   split keys. Shared onsets are measured separately from channel-only onsets;
   the evaluator remains offline and does not alter generation.
+- Verified GuitarSet v1.1.0 against its authoritative Zenodo CC BY 4.0 record
+  and published checksums. Added deterministic paired-manifest pinning for its
+  aligned microphone and mono pickup-mix recordings, including alternate
+  SHA-256 hashes and release-archive MD5/size evidence. Across the disjoint
+  train/validation/test performer splits at 50 ms, shared-onset precision was
+  0.8527/0.8996/0.9260 versus best-source 0.8244/0.8518/0.8919. The direction
+  persisted at 30 and 80 ms. This completes a second lawful independent-capture
+  calibration without changing runtime recovery.
 - Reframed EGFxSet as deterministic multi-attack phrase augmentation rather
   than one five-second optimizer item per isolated note. Twelve ten-second
   phrases contain 236 known attacks, use 280 ms source excerpts with 25 ms
