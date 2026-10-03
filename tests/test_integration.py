@@ -304,7 +304,10 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     assert "Review markers jump to low-confidence notes" in page
     assert "Amber regions mark conflicting guitar-register evidence" in page
     assert "voice conflict" in page
-    assert 'height="700"' in page and "NOTES APPROACH THIS LINE" in page
+    assert 'height="700"' in page and "NOTES HIT THIS LINE" in page
+    assert "activeHold=n.end-n.t>=.09&&n.t<time&&n.end>time" in page
+    assert "(!activeHold&&rawStart>strike+2)||rawEnd>strike+2" in page
+    assert "if(activeHold)continue" in page
     assert (tmp_path/"audio"/"timing-audit-guitar.wav").is_file()
 
 
@@ -332,7 +335,8 @@ def test_comparison_preview_keeps_versions_synchronized(tmp_path):
         (folder/"source").mkdir()
         (folder/"audio").mkdir()
         (folder/"analysis"/"charts.json").write_text(
-            json.dumps({"guitar":{"hard":hard}}),encoding="utf-8"
+            json.dumps({"guitar":{"expert":notes,"hard":hard}}),
+            encoding="utf-8",
         )
         (folder/"analysis"/"tempo.json").write_text(
             json.dumps({"beats":[0,.5,1,1.5,2],"numerator":4}),
@@ -367,6 +371,8 @@ def test_comparison_preview_keeps_versions_synchronized(tmp_path):
     assert "Playback speed" in page
     assert "NOTES HIT THIS LINE" in page
     assert "rawY>strike+2" in page
+    assert '"default_difficulties": {"guitar": "hard"}' in page
+    assert "diff.value||payload.default_difficulties[inst.value]||'expert'" in page
     assert '"lead": 2.0' in page and "song '+Math.max(0,time-payload.lead)" in page
     assert "../candidate/audio/song.wav" in page
 

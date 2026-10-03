@@ -1185,3 +1185,17 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   recomputing deterministic pYIN lead selection. Generated
   `comparisons/morning-review/Hail_Expert_Repeated_Riff_Recovery_AB.html`
   for synchronized Expert listening review.
+
+### 2026-10-03 18:40 - Review strike geometry corrected
+
+- Fixed the normal review highway retaining tap heads on the white strike line
+  after their authored onset. Tap heads now cross once and disappear; during a
+  pitched sustain, only the active tail remains pinned to the target until
+  release. Chart and audio timestamps are unchanged.
+- Synchronized A/B reviews now select the shared difficulty with the largest
+  attack-count delta for the chosen instrument. The Hail repeated-riff review
+  opens on Expert, while the earlier Hard-density comparison still opens on
+  Hard.
+- Regenerated
+  `comparisons/morning-review/Hail_Expert_Repeated_Riff_Recovery_AB.html`
+  with Guitar/Expert as its default review surface.
