@@ -1819,28 +1819,19 @@ def evaluate_source_agreement(
     items=[]
     split_keys={}
     alternate_hashes={}
+    primary_hashes={
+        str(item["audio_sha256"]):str(item["song_id"])
+        for item in payload["items"]
+    }
     for item in payload["items"]:
         primary_relative=Path(item["audio"])
         explicit_alternate=item.get("alternate_audio")
-        if explicit_alternate is not None:
-            alternate_relative=Path(str(explicit_alternate))
-        else:
-            parts=list(primary_relative.parts)
-            try:
-                channel_index=parts.index(primary_channel)
-            except ValueError as exc:
-                raise TrainingDataError(
-                    f"{item['song_id']} audio path has no {primary_channel} channel"
-                ) from exc
-            parts[channel_index]=alternate_channel
-            filename=parts[-1]
-            prefix=f"{primary_channel}_"
-            if not filename.startswith(prefix):
-                raise TrainingDataError(
-                    f"{item['song_id']} audio filename does not start with {prefix}"
-                )
-            parts[-1]=f"{alternate_channel}_{filename[len(prefix):]}"
-            alternate_relative=Path(*parts)
+        expected_alternate_hash=item.get("alternate_audio_sha256")
+        if explicit_alternate is None or expected_alternate_hash is None:
+            raise TrainingDataError(
+                f"{item['song_id']} requires a hash-pinned alternate recording"
+            )
+        alternate_relative=Path(str(explicit_alternate))
         primary=(root/primary_relative).resolve()
         alternate=(root/alternate_relative).resolve()
         labels_path=(root/Path(item["annotations"])).resolve()
@@ -1924,13 +1915,14 @@ def evaluate_source_agreement(
                 ),
             }
         alternate_hash=_hash_file(alternate)
-        expected_alternate_hash=item.get("alternate_audio_sha256")
-        if (
-            expected_alternate_hash is not None
-            and alternate_hash!=expected_alternate_hash
-        ):
+        if alternate_hash!=expected_alternate_hash:
             raise TrainingDataError(
                 f"{item['song_id']} alternate audio hash does not match manifest"
+            )
+        if alternate_hash in primary_hashes:
+            raise TrainingDataError(
+                f"{item['song_id']} alternate audio duplicates primary content "
+                f"from {primary_hashes[alternate_hash]}"
             )
         previous=alternate_hashes.setdefault(
             alternate_hash,item["song_id"]
@@ -1963,7 +1955,7 @@ def evaluate_source_agreement(
                 "channel":alternate_channel,
                 "path":str(alternate_relative),
                 "sha256":alternate_hash,
-                "hash_manifested":expected_alternate_hash is not None,
+                "hash_manifested":True,
                 "candidate_peaks":alternate_onsets["candidate_peaks"],
                 **alternate_score,
             },
@@ -2075,6 +2067,10 @@ def pin_source_agreement_manifest(
         raise TrainingDataError("Source-agreement filename suffixes cannot be empty")
     payload=json.loads(manifest.read_text(encoding="utf-8"))
     seen_hashes={}
+    primary_hashes={
+        str(item["audio_sha256"]):str(item["song_id"])
+        for item in payload["items"]
+    }
     for item in payload["items"]:
         primary_name=Path(item["audio"]).name
         if not primary_name.endswith(primary_suffix):
@@ -2097,6 +2093,11 @@ def pin_source_agreement_manifest(
                 f"{item['song_id']} alternate audio is missing: {relative}"
             )
         digest=_hash_file(alternate)
+        if digest in primary_hashes:
+            raise TrainingDataError(
+                f"{item['song_id']} alternate audio duplicates primary content "
+                f"from {primary_hashes[digest]}"
+            )
         previous=seen_hashes.setdefault(digest,item["song_id"])
         if previous!=item["song_id"]:
             raise TrainingDataError(

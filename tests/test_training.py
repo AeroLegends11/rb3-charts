@@ -679,6 +679,10 @@ def test_source_agreement_preserves_provenance_and_scores_shared_attacks(tmp_pat
     archive=tmp_path/"release.zip"
     archive.write_bytes(b"official fixture archive")
     pinned=tmp_path/"manifest-source-agreement.json"
+    with pytest.raises(
+        TrainingDataError,match="hash-pinned alternate recording"
+    ):
+        evaluate_source_agreement(manifest)
     pin_report=pin_source_agreement_manifest(
         manifest,
         alternate.parent,
@@ -705,3 +709,15 @@ def test_source_agreement_preserves_provenance_and_scores_shared_attacks(tmp_pat
     assert report["splits"]["train"]["shared"]["label_matches"]==2
     assert report["splits"]["train"]["shared_precision_lift_vs_best_source"]==0
     assert output.is_file()
+
+    alternate.write_bytes(primary.read_bytes())
+    with pytest.raises(
+        TrainingDataError,match="duplicates primary content"
+    ):
+        pin_source_agreement_manifest(
+            manifest,
+            alternate.parent,
+            tmp_path/"duplicate-source-manifest.json",
+            "micamp_take.wav",
+            "directinput_take.wav",
+        )

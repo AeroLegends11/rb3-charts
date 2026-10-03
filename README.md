@@ -284,9 +284,9 @@ prominence-ranked onset candidates as the authoritative label count. Reports
 separate shared, primary-only, and alternate-only precision/recall, retain
 group/performer split keys and both audio hashes, and reject missing, duplicated,
 duration-mismatched, or provenance-mismatched pairs. It is offline evidence and
-does not change generation. Paired manifests may provide `alternate_audio` and
-`alternate_audio_sha256`; otherwise the alternate channel is derived from the
-primary channel layout and its computed hash is still recorded.
+does not change generation. Every paired-manifest item must explicitly provide
+`alternate_audio` and `alternate_audio_sha256`; evaluation rejects unpinned
+alternates and alternate content identical to any primary recording.
 
 `pin-source-agreement` reproducibly creates the explicit paired manifest. It
 maps a filename suffix into an aligned alternate-audio directory, pins every

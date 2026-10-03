@@ -956,3 +956,16 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   than formatting them as numbers.
 - Focused index/trend validation passes 11 tests; the full suite passes 209
   tests with six existing dependency/deprecation warnings.
+
+### 2026-10-03 16:20 - Independent-source provenance tightened
+
+- Source-agreement evaluation now requires every alternate recording path and
+  SHA-256 to be explicit in the validated paired manifest. The prior fallback
+  could derive an alternate path and compute its hash without making that input
+  part of the predeclared manifest lineage.
+- Pinning and evaluation both reject alternate audio whose bytes equal any
+  primary recording in the manifest. Identical files can no longer appear as
+  perfect agreement between supposedly independent captures.
+- Existing GuitarSet and Guitar-TECHS measurements already use explicit pinned
+  alternates and remain unchanged. Focused provenance tests and the 209-test
+  full suite pass.
