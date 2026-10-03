@@ -17,6 +17,7 @@ from rb3charts.regression import (
     estimate_attack_offset,
     _authorized_comparison_markdown,
     _paired_source_evidence_markdown,
+    _reference_comparison_markdown,
     _snapshot_attacks,
     compute_regression_metrics,
     stage_entry,
@@ -513,6 +514,56 @@ def test_authorized_comparison_markdown_includes_paired_source_state():
     assert "Authorized human-chart comparison" in markdown
     assert "authorized human notes were not generation inputs" in markdown
     assert "Lineage status: **unavailable**" in markdown
+
+
+def test_reference_comparison_markdown_omits_local_paths_and_note_rows():
+    report={
+        "provenance":{
+            "generated_midi":r"C:\private\generated\notes.mid",
+            "generated_sha256":"a"*64,
+            "reference_midi":r"C:\excluded\official\reference.mid",
+            "reference_sha256":"b"*64,
+            "difficulty":"expert",
+            "alignment":"automatic-onsets-only",
+            "alignment_offset_seconds":.125,
+        },
+        "metrics":{
+            "attack":{
+                "reference":100,
+                "candidate":90,
+                "matched":80,
+                "precision":.8889,
+                "recall":.8,
+                "f1":.8421,
+            },
+            "lane":{
+                "exact_agreement":.75,
+                "movement_direction_agreement":.7,
+            },
+            "attack_windows":{
+                "windows":[{
+                    "start":0,
+                    "end":4,
+                    "reference":10,
+                    "candidate":9,
+                    "matched":8,
+                    "precision":.8889,
+                    "recall":.8,
+                    "f1":.8421,
+                }],
+            },
+        },
+        "stage_metrics":[],
+    }
+
+    markdown=_reference_comparison_markdown(report)
+
+    assert "Generated MIDI: `notes.mid`" in markdown
+    assert "Reference MIDI: `reference.mid`" in markdown
+    assert "Generated SHA-256" in markdown
+    assert "reference note rows are not embedded" in markdown
+    assert r"C:\private" not in markdown
+    assert r"C:\excluded" not in markdown
 
 
 def test_attack_alignment_and_unmatched_events_are_reported():

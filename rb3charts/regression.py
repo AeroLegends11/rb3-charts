@@ -1300,6 +1300,8 @@ def _reference_comparison_markdown(report):
     provenance=report["provenance"]
     metrics=report["metrics"]
     attack=metrics["attack"]
+    generated_name=Path(provenance["generated_midi"]).name
+    reference_name=Path(provenance["reference_midi"]).name
     lines=[
         "# Reference chart comparison",
         "",
@@ -1308,12 +1310,18 @@ def _reference_comparison_markdown(report):
             "and were not generation inputs."
         ),
         "",
-        f"- Generated: `{provenance['generated_midi']}`",
-        f"- Reference: `{provenance['reference_midi']}`",
+        f"- Generated MIDI: `{generated_name}`",
+        f"- Generated SHA-256: `{provenance['generated_sha256']}`",
+        f"- Reference MIDI: `{reference_name}`",
+        f"- Reference SHA-256: `{provenance['reference_sha256']}`",
         f"- Difficulty: **{provenance['difficulty'].title()} Guitar**",
         (
             f"- Alignment: **{provenance['alignment']}**, "
             f"{provenance['alignment_offset_seconds']:+.3f} seconds"
+        ),
+        (
+            "- Disclosure: summary metrics only; local paths and reference "
+            "note rows are not embedded."
         ),
         "",
         "| Metric | Value |",

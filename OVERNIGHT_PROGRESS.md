@@ -823,3 +823,15 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   generation and reference loading remain unchanged.
 - Validation: four focused comparison/lineage tests passed and the full suite
   passed 196 tests.
+
+### 2026-10-03 07:08 - Reference Markdown disclosure minimized
+
+- As the next independent evaluation cleanup, `compare-midi` Markdown now shows
+  only MIDI basenames and content hashes, not local generated/reference paths.
+  It explicitly states that individual reference-note rows are not embedded.
+- JSON remains the local auditable artifact with existing provenance and
+  unmatched-event detail; generation and comparison metrics are unchanged.
+- Added a rendering regression test covering path omission, hash disclosure and
+  summary-only labeling.
+- Validation: four focused comparison Markdown tests passed; full suite passed
+  197 tests.

@@ -128,7 +128,8 @@ onset offset unless `--offset` is supplied, records hashes and alignment
 provenance, reports unmatched attacks and weakest four-second windows, and
 attributes metrics to saved authoring stages when snapshots are present. It
 writes JSON plus a Markdown summary; reference notes are loaded only after
-generation and are never runtime inputs.
+generation and are never runtime inputs. The Markdown includes content hashes
+but omits local paths and individual reference-note rows.
 
 `audit-playability-evidence` is also post-generation only. It joins attributed
 playability removals to cached transcription evidence, optional offline
