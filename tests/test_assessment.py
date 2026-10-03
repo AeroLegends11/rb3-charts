@@ -26,9 +26,13 @@ def test_batch_review_lists_song_rating(tmp_path):
     path=tmp_path/"batch.md"
     write_batch_review(path,[{"status":"draft_ready","title":"Test Song","folder":str(tmp_path),
                               "review":str(tmp_path/"review.html"),"chart_profile":"band",
-                              "assessment":{"label":"Close enough to review","summary":["No flags."]}}])
+                              "assessment":{"label":"Close enough to review","summary":["No flags."],
+                                            "structure":{"activity_blocks":3,
+                                                         "repeated_drum_groove_families":2,
+                                                         "drum_groove_supported_attack_ratio":.625}}}])
     text=path.read_text(encoding="utf-8")
     assert "Test Song" in text and "Close enough to review" in text and "Open review" in text
+    assert "3 blocks; 2 drum grooves (62%)" in text
 
 
 def test_structure_diagnostics_reports_neutral_sections_and_repeated_drum_grooves():

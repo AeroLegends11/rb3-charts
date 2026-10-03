@@ -460,3 +460,19 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   under ignored `.research/drum-hard-grid`; the runtime rule was removed.
 - Focused replay/chart validation passed 69 tests before rejection; the retained
   replay-harness change has dedicated stale-reduction coverage.
+
+### 2026-10-03 01:24 - Review UX and tempo readback hardened
+
+- Batch review indexes now expose neutral activity-block, repeated drum-groove,
+  and supported-attack coverage beside each song. Review-page guidance now
+  names motif-lane and activity-boundary markers.
+- MIDI validation now compares the full serialized tempo-event sequence and
+  time signature with the authored `TempoMap`; matching gem ticks alone can no
+  longer hide incorrect playback timing.
+- A variable-tempo corruption test proves a changed tempo value fails. A fresh
+  production-sized Hail replay passed the complete tempo/readback gate.
+- Focused assessment/integration tests passed 22; focused charting/integration
+  tests passed 67.
+- Extended the same audit to every BEAT interval: onset, release, downbeat
+  pitch, meter phase, and total grid extent. A deliberate five-tick shift fails,
+  while a fresh Hail replay passes. Focused coverage increased to 68 tests.

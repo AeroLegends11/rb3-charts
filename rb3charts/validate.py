@@ -86,6 +86,44 @@ def validate(charts, tempo, duration, midi_path=None):
             for message in tempo_tracks[0]
         ):
             errors.append("TEMPO track has no tempo events")
+        if tempo_tracks and music_start_tick is not None:
+            actual_tempos = []
+            actual_signatures = []
+            absolute = 0
+            for message in tempo_tracks[0]:
+                absolute += message.time
+                if message.type=="set_tempo":
+                    actual_tempos.append((absolute,message.tempo))
+                elif message.type=="time_signature":
+                    actual_signatures.append((
+                        absolute,
+                        message.numerator,
+                        message.denominator,
+                    ))
+            offset_tick = music_start_tick - round(
+                tempo.beat_at(0)*midi.ticks_per_beat
+            )
+            expected_tempos=[(
+                0,
+                round((tempo.beats[1]-tempo.beats[0])*1_000_000),
+            )]
+            expected_tempos.extend(
+                (
+                    offset_tick+i*midi.ticks_per_beat,
+                    round(
+                        (tempo.beats[i+1]-tempo.beats[i])*1_000_000
+                    ),
+                )
+                for i in range(len(tempo.beats)-1)
+            )
+            if actual_tempos!=expected_tempos:
+                errors.append(
+                    "TEMPO events differ from the authored tempo map"
+                )
+            if actual_signatures!=[(0,tempo.numerator,4)]:
+                errors.append(
+                    "TEMPO time signature differs from the authored meter"
+                )
         beat_tracks = tracks_by_name.get("BEAT", [])
         if beat_tracks:
             beat_pitches = {
@@ -99,6 +137,48 @@ def validate(charts, tempo, duration, midi_path=None):
                 errors.append(
                     "BEAT track contains pitches other than 12 and 13"
                 )
+            if music_start_tick is not None:
+                offset_tick = music_start_tick - round(
+                    tempo.beat_at(0)*midi.ticks_per_beat
+                )
+                offset_beats=round(offset_tick/midi.ticks_per_beat)
+                end_beat=tempo.beat_at(duration+2)+offset_beats
+                expected_beats=[
+                    (
+                        beat*midi.ticks_per_beat,
+                        beat*midi.ticks_per_beat+120,
+                        12
+                        if (beat-offset_beats)%tempo.numerator==0
+                        else 13,
+                    )
+                    for beat in range(math.floor(end_beat))
+                ]
+                actual_beats=[]
+                active={}
+                absolute=0
+                for message in beat_tracks[0]:
+                    absolute+=message.time
+                    if (
+                        message.type=="note_on"
+                        and message.velocity
+                    ):
+                        active[message.note]=absolute
+                    elif (
+                        message.type=="note_off"
+                        or (
+                            message.type=="note_on"
+                            and not message.velocity
+                        )
+                    ) and message.note in active:
+                        actual_beats.append((
+                            active.pop(message.note),
+                            absolute,
+                            message.note,
+                        ))
+                if actual_beats!=expected_beats:
+                    errors.append(
+                        "BEAT track timing differs from the authored beat grid"
+                    )
         for tr in midi.tracks:
             active=set()
             instrument = next(

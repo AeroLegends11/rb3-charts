@@ -135,6 +135,55 @@ def test_validator_checks_serialized_gem_timing(tmp_path):
         for error in result["errors"]
     )
 
+def test_validator_checks_serialized_tempo_map(tmp_path):
+    tempo=TempoMap([0,.5,1.01,1.53,2.06,2.6,3.15])
+    charts=reductions(
+        [Note(.5,.6,(0,),source_id="original")],"guitar",tempo
+    )
+    path=tmp_path/"notes.mid"
+    write_midi(path,tempo,{"guitar":charts},2,{})
+    midi=mido.MidiFile(path)
+    tempo_track=next(track for track in midi.tracks if track.name=="TEMPO")
+    tempo_event=next(
+        message for message in tempo_track
+        if message.type=="set_tempo"
+    )
+    tempo_event.tempo+=1000
+    midi.save(path)
+    result=validate({"guitar":charts},tempo,2,path)
+    assert not result["passed"]
+    assert any(
+        "TEMPO events differ from the authored tempo map" in error
+        for error in result["errors"]
+    )
+
+def test_validator_checks_serialized_beat_grid(tmp_path):
+    tempo=TempoMap([0,.5,1.01,1.53,2.06,2.6,3.15])
+    charts=reductions(
+        [Note(.5,.6,(0,),source_id="original")],"guitar",tempo
+    )
+    path=tmp_path/"notes.mid"
+    write_midi(path,tempo,{"guitar":charts},2,{})
+    midi=mido.MidiFile(path)
+    beat_track=next(track for track in midi.tracks if track.name=="BEAT")
+    beat_on=next(
+        message for message in beat_track
+        if message.type=="note_on" and message.velocity
+    )
+    beat_off=next(
+        message for message in beat_track
+        if message.type=="note_off"
+    )
+    beat_on.time+=5
+    beat_off.time-=5
+    midi.save(path)
+    result=validate({"guitar":charts},tempo,2,path)
+    assert not result["passed"]
+    assert any(
+        "BEAT track timing differs from the authored beat grid" in error
+        for error in result["errors"]
+    )
+
 def test_electronic_lead_prefers_high_hook_and_deduplicates_stems():
     guitar=[{"start":1.0,"end":1.2,"pitch":60,"confidence":.9,"source_id":"guitar-0","source":"guitar"}]
     synth=[{"start":1.01,"end":1.3,"pitch":72,"confidence":.84,"source_id":"other-0","source":"other"}]

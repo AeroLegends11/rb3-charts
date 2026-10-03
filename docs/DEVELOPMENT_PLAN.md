@@ -101,6 +101,13 @@ Status update (2026-10-02):
   its attack, release, and pitch with the authored chart. A production-sized
   cached Hail replay passed this export/readback audit across all instruments
   and difficulties.
+- Validation now compares every serialized tempo event and the time signature
+  with the authored `TempoMap`, closing the gap where correct gem ticks could
+  still play at incorrect wall-clock times. A variable-tempo corruption test
+  and a fresh Hail replay pass this gate.
+- The BEAT track is also read back as paired note intervals and compared with
+  the expected full grid, including onset ticks, 120-tick duration, downbeat
+  pitches, meter phase, and terminal extent.
 - New drafts hash the three reviewed package inputs after validation.
   Packaging rejects post-validation changes to MIDI, audio, or `song.ini`;
   legacy drafts without a manifest remain supported with an explicit warning.

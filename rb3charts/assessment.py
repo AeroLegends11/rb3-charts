@@ -323,11 +323,11 @@ def write_song_review_notes(path,title,artist,assessment):
 def write_batch_review(path,results):
     lines=["# Batch chart review","",
            "Use the automatic assessment to choose where to listen first. Record your own verdict and timestamp notes in each song folder's `review_notes.md`.","",
-           "| Song | Automatic assessment | Profile | Review | Main note |",
-           "|---|---|---|---|---|"]
+           "| Song | Automatic assessment | Profile | Structure evidence | Review | Main note |",
+           "|---|---|---|---|---|---|"]
     for result in results:
         if result.get("status")=="failed":
-            lines.append(f"| {result.get('source','Unknown')} | Needs work | — | — | Generation failed: {result.get('error','unknown error')} |")
+            lines.append(f"| {result.get('source','Unknown')} | Needs work | — | — | — | Generation failed: {result.get('error','unknown error')} |")
             continue
         assessment=result.get("assessment",{})
         folder=result.get("folder","")
@@ -335,7 +335,14 @@ def write_batch_review(path,results):
         review=Path(result["review"]).as_posix() if result.get("review") else ""
         review_link=f"[Open review]({review})" if review else "—"
         note=(assessment.get("summary") or ["Listening review required."])[0].replace("|","/")
-        lines.append(f"| {title} | {assessment.get('label','Unrated')} | {result.get('chart_profile','—')} | {review_link} | {note} |")
+        structure=assessment.get("structure",{})
+        structure_note=(
+            f"{structure.get('activity_blocks',0)} blocks; "
+            f"{structure.get('repeated_drum_groove_families',0)} drum grooves "
+            f"({structure.get('drum_groove_supported_attack_ratio',0):.0%})"
+            if structure else "—"
+        )
+        lines.append(f"| {title} | {assessment.get('label','Unrated')} | {result.get('chart_profile','—')} | {structure_note} | {review_link} | {note} |")
     lines += ["","## Batch observations","","- Closest charts: ","- Charts needing the most work: ",
               "- Repeated problem across songs: ","- Useful timestamps: ",""]
     Path(path).write_text("\n".join(lines),encoding="utf-8")
