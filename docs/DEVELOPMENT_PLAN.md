@@ -70,6 +70,14 @@ Status update (2026-10-02):
   retention, retained/orphan source IDs, lane changes from Expert, and timing
   error. These are observability checks; intended lane simplification remains
   part of reduction behavior.
+- Corpus `benchmark-replays` comparisons now select guitar, bass, drums, or
+  keys and aggregate Expert-to-Hard/Medium/Easy retention. Simultaneous drum
+  attacks are reported independently from pitched-instrument chords. Two
+  independent Hail replays produced exact zero bass and drum deltas, including
+  drum reduction retention of 0.9672/0.5546/0.2991.
+- Structural MIDI validation now enforces type 1, 960 PPQ, unique required
+  tracks, EVENTS-local lifecycle markers, tempo/beat content, track-specific
+  pitches, and exact serialized gem counts for every instrument/difficulty.
 
 ## 3. Consolidate motif understanding — architecture proposal
 
@@ -209,6 +217,17 @@ voice evidence produces a stable repeated attack/pitch sequence.
 
 Next explore sections, phrase vocabulary, drum grooves and richer human priors.
 Validate one subsystem at a time rather than rewriting the entire engine.
+
+Status update (2026-10-02):
+
+- Added post-authoring `structure-diagnostics.json` with neutral eight-measure
+  activity blocks, ranked unlabeled activity boundaries, and repeated
+  measure-level drum-groove families. The review page links the eight strongest
+  activity boundaries for focused listening. These diagnostics never name
+  verse/chorus sections and do not alter charts.
+- On the cached Hail replay, 19 repeated drum-groove families covered 62.99% of
+  Expert drum attacks. This is descriptive evidence for future groove work, not
+  permission to normalize drum patterns.
 
 ## 6. Remote work and provider flexibility
 

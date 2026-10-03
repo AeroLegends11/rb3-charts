@@ -328,3 +328,37 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Added Expert-to-Hard/Medium/Easy attack retention, retained/orphan source IDs,
   lane-change counts, and timing-error metrics for every instrument.
 - Focused replay coverage passes and verifies no orphan IDs or timing changes.
+
+### 2026-10-02 23:56 - Neutral section and drum-groove diagnostics retained
+
+- Added final-chart `structure-diagnostics.json` with neutral eight-measure
+  activity blocks, ranked unlabeled boundaries, and repeated measure-level drum
+  groove families.
+- Review pages expose the eight strongest activity boundaries as clickable
+  listening markers. No verse/chorus label is inferred and no note is changed.
+- Real Hail replay found 19 repeated drum-groove families covering 62.99% of
+  Expert drum attacks. Less Talk correctly made no drum-groove claim.
+
+### 2026-10-03 00:01 - MIDI structural validation hardened
+
+- Added checks for type-1/960-PPQ output, unique required tracks, EVENTS-local
+  lifecycle markers, tempo/beat content, instrument-specific pitches, and exact
+  serialized gem counts per difficulty.
+- Synthetic corruption tests prove invalid track pitches and missing serialized
+  Expert gems fail validation. Existing integration output remains valid.
+
+### 2026-10-03 00:08 - Multi-instrument corpus benchmarks retained
+
+- Expanded `benchmark-replays` from guitar-only comparison to explicit guitar,
+  bass, drums, or keys selection while preserving guitar as the default.
+- Added macro Expert-to-Hard/Medium/Easy attack retention so corpus comparisons
+  cannot hide reduction regressions behind unchanged Expert output.
+- Separated simultaneous drum attacks from pitched-instrument chords. A real
+  Hail comparison reports a 0.5895 simultaneous-attack rate and zero chord rate,
+  instead of the former misleading 0.5895 drum chord rate.
+- Independent Hail replay roots produced exact zero deltas for bass and drums.
+  Drum retention was 0.9672 Hard, 0.5546 Medium, and 0.2991 Easy in both roots.
+- Legacy snapshots without reduction payloads report unavailable retention and
+  an explicit zero-song coverage count rather than a misleading 0% result.
+- Focused benchmark validation: 15 tests passed; command help exposed all four
+  supported instruments.

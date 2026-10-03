@@ -151,6 +151,12 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
         {"title":"Review","artist":"Tester"},
         voice,
         patterns=patterns,
+        structure_diagnostics={
+            "strongest_activity_boundaries":[{
+                "seconds":1.5,
+                "activity_change":.75,
+            }]
+        },
     )
     page=(tmp_path/"review.html").read_text(encoding="utf-8")
     assert "Play / Pause" in page and "−5 seconds" in page
@@ -161,6 +167,7 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     assert '"kind": "low confidence"' in page
     assert '"kind": "unusual chord"' in page
     assert '"kind": "motif lane mismatch"' in page
+    assert '"kind": "activity boundary"' in page
     assert "Review markers jump to low-confidence notes" in page
     assert "Amber regions mark conflicting guitar-register evidence" in page
     assert "voice conflict" in page

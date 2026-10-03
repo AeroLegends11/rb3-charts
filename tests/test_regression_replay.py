@@ -120,19 +120,32 @@ def test_cached_replay_requires_event_reports_for_electronic_roles(tmp_path):
 
 
 def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
-    def write_run(root,lanes):
-        (root/"metadata").mkdir(parents=True)
-        (root/"analysis").mkdir()
+    def write_run(root,lanes,instrument="guitar"):
+        (root/"metadata").mkdir(parents=True,exist_ok=True)
+        (root/"analysis").mkdir(exist_ok=True)
         (root/"metadata"/"song.json").write_text(
             json.dumps({"artist":"RB3 Charts","title":"Benchmark Demo"}),encoding="utf-8"
         )
         notes=[
             {"source_id":str(index),"start":index*.2,"end":index*.2+.065,
-             "lanes":[lane],"pitch":pitch}
+             "lanes":list(lane) if isinstance(lane,tuple) else [lane],
+             "pitch":pitch}
             for index,(lane,pitch) in enumerate(zip(lanes,(48,50,52)))
         ]
-        (root/"analysis"/"guitar-stage-snapshots.json").write_text(
-            json.dumps({"instrument":"guitar","stages":[{"stage":"final","notes":notes}]}),
+        reductions={
+            "difficulties":{
+                "expert":{"notes":notes},
+                "hard":{"notes":notes[:2]},
+                "medium":{"notes":notes[:1]},
+                "easy":{"notes":notes[:1]},
+            }
+        }
+        (root/"analysis"/f"{instrument}-stage-snapshots.json").write_text(
+            json.dumps({
+                "instrument":instrument,
+                "stages":[{"stage":"final","notes":notes}],
+                "reductions":reductions,
+            }),
             encoding="utf-8",
         )
 
@@ -144,11 +157,54 @@ def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
     )
 
     assert report["songs_matched"]==1
+    assert report["instrument"]=="guitar"
     assert report["macro"]["delta"]["attacks"]==0
     assert report["macro"]["delta"]["collapsed_pitch_changes"]==1
     assert report["macro"]["baseline"]["lane_coverage"]==[0,1,2]
+    assert report["macro"]["baseline"]["hard_retention"]==.6667
     assert report["macro"]["candidate"]["assessment_status_counts"]=={"missing":1}
     assert (tmp_path/"benchmark.json").is_file()
+
+    write_run(tmp_path/"baseline"/"run",(0,1,2),instrument="bass")
+    write_run(tmp_path/"candidate"/"run",(0,1,1),instrument="bass")
+    bass=benchmark_replays(
+        tmp_path/"baseline",
+        tmp_path/"candidate",
+        tmp_path/"bass-benchmark.json",
+        instrument="bass",
+    )
+    assert bass["instrument"]=="bass"
+    assert bass["macro"]["delta"]["collapsed_pitch_changes"]==1
+
+    write_run(
+        tmp_path/"baseline"/"run",((0,2),(1,3),2),instrument="drums"
+    )
+    write_run(
+        tmp_path/"candidate"/"run",((0,2),(1,3),2),instrument="drums"
+    )
+    drums=benchmark_replays(
+        tmp_path/"baseline",
+        tmp_path/"candidate",
+        tmp_path/"drums-benchmark.json",
+        instrument="drums",
+    )
+    assert drums["macro"]["baseline"]["chords"]==0
+    assert drums["macro"]["baseline"]["chord_rate"]==0
+    assert drums["macro"]["baseline"]["simultaneous_attacks"]==2
+
+    for root in (tmp_path/"baseline"/"run",tmp_path/"candidate"/"run"):
+        snapshot=root/"analysis"/"drums-stage-snapshots.json"
+        payload=json.loads(snapshot.read_text(encoding="utf-8"))
+        payload.pop("reductions")
+        snapshot.write_text(json.dumps(payload),encoding="utf-8")
+    legacy=benchmark_replays(
+        tmp_path/"baseline",
+        tmp_path/"candidate",
+        tmp_path/"legacy-drums-benchmark.json",
+        instrument="drums",
+    )
+    assert legacy["macro"]["baseline"]["reduction_songs"]==0
+    assert legacy["macro"]["baseline"]["hard_retention"] is None
 
 
 def test_human_chart_comparison_reports_timing_style_and_motifs():

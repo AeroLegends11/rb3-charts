@@ -14,7 +14,12 @@ from .midi import write_midi
 from .validate import validate, report_text
 from .export import write_import, compile_rb3, find_onyx
 from .preview import create_preview
-from .assessment import assess_chart, write_song_review_notes, write_batch_review
+from .assessment import (
+    analyze_structure_diagnostics,
+    assess_chart,
+    write_song_review_notes,
+    write_batch_review,
+)
 from .events import write_event_trace
 from .phrases import select_lead_phrases, author_guitar_phrases
 from .regression import (
@@ -307,7 +312,14 @@ def generate(options: Options, progress=print):
         if resolved_profile=="electronic":
             warnings.append("Electronic profile maps lead synth/piano hooks to Guitar and low synth plus kick-supported pulses to Bass. Review role choices by listening.")
         corrections=align_drum_activations(charts["drums"],tempo,phrases.get("drums",[]),duration) if "drums" in charts else []
+        structure_diagnostics=analyze_structure_diagnostics(
+            charts,tempo,duration
+        )
         save_json(folder/"analysis"/"timing-adjustments.json",corrections)
+        save_json(
+            folder/"analysis"/"structure-diagnostics.json",
+            structure_diagnostics,
+        )
         save_json(folder/"analysis"/"playability.json",playability)
         save_json(folder/"analysis"/"patterns.json",patterns)
         save_json(folder/"analysis"/"reference-conformance.json",reference_conformance)
@@ -334,7 +346,15 @@ def generate(options: Options, progress=print):
             raise RuntimeError("Chart validation failed. See validation_report.txt")
         log("Creating audible timing check and chart review")
         create_preview(
-            folder,charts,tempo,lead,metadata,voice_continuity,resolved_profile,patterns
+            folder,
+            charts,
+            tempo,
+            lead,
+            metadata,
+            voice_continuity,
+            resolved_profile,
+            patterns,
+            structure_diagnostics,
         )
         missing=[i for i in options.instruments if i not in charts]
         assessment=assess_chart(charts,patterns,playability,resolved_profile,missing)
@@ -598,7 +618,14 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
     # Replay starts from already-authored drum charts from analysis/charts.json.
     # Reapplying activation alignment would shift drums twice.
     corrections=[]
+    structure_diagnostics=analyze_structure_diagnostics(
+        charts,tempo,duration
+    )
     save_json(analysis_folder/"timing-adjustments.json",corrections)
+    save_json(
+        analysis_folder/"structure-diagnostics.json",
+        structure_diagnostics,
+    )
     save_json(analysis_folder/"playability.json",playability)
     save_json(analysis_folder/"patterns.json",patterns)
     save_json(analysis_folder/"reference-conformance.json",reference_conformance)
@@ -655,7 +682,15 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
     if not report["passed"]:
         raise RuntimeError("Cached replay validation failed. See validation_report.txt")
     create_preview(
-        folder,charts,tempo,lead,metadata,voice_continuity,resolved_profile,patterns
+        folder,
+        charts,
+        tempo,
+        lead,
+        metadata,
+        voice_continuity,
+        resolved_profile,
+        patterns,
+        structure_diagnostics,
     )
     missing=[instrument for instrument in instruments if instrument not in charts]
     assessment=assess_chart(charts,patterns,playability,resolved_profile,missing)

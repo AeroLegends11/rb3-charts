@@ -9,6 +9,123 @@ LABELS={"close_enough":"Close enough to review","review_closely":"Review closely
 DIFFICULTY_LABELS=("Warmup","Apprentice","Solid","Moderate","Challenging","Nightmare","Impossible")
 
 
+def analyze_structure_diagnostics(charts,tempo,duration):
+    """Summarize neutral activity sections and repeated drum measures."""
+    section_beats=tempo.numerator*8
+    end_beat=max(1,int(np.ceil(tempo.beat_at(duration))))
+    sections=[]
+    for start_beat in range(0,end_beat,section_beats):
+        end_section_beat=min(end_beat,start_beat+section_beats)
+        start=(
+            0.0
+            if start_beat==0
+            else max(0.0,float(tempo.seconds_at(start_beat)))
+        )
+        end=(
+            float(duration)
+            if end_section_beat>=end_beat
+            else min(float(duration),float(tempo.seconds_at(end_section_beat)))
+        )
+        if end<=start:
+            continue
+        instruments={}
+        for instrument,parts in charts.items():
+            notes=[
+                note for note in parts["expert"]
+                if start<=note.start<end
+            ]
+            instruments[instrument]={
+                "attacks":len(notes),
+                "attacks_per_second":round(len(notes)/(end-start),3),
+                "chord_rate":round(
+                    sum(len(note.lanes)>1 for note in notes)/max(1,len(notes)),4
+                ) if instrument!="drums" else 0.0,
+                "hold_rate":round(
+                    sum(note.end-note.start>=.22 for note in notes)/max(1,len(notes)),4
+                ) if instrument!="drums" else 0.0,
+                "lane_counts":{
+                    str(lane):sum(lane in note.lanes for note in notes)
+                    for lane in range(5)
+                },
+            }
+        sections.append({
+            "index":len(sections)+1,
+            "start_beat":start_beat,
+            "end_beat":end_section_beat,
+            "start_seconds":round(start,3),
+            "end_seconds":round(end,3),
+            "instruments":instruments,
+        })
+    boundaries=[]
+    names=sorted(charts)
+    for left,right in zip(sections,sections[1:]):
+        left_rates=np.asarray([
+            left["instruments"][name]["attacks_per_second"] for name in names
+        ])
+        right_rates=np.asarray([
+            right["instruments"][name]["attacks_per_second"] for name in names
+        ])
+        change=float(np.sum(np.abs(right_rates-left_rates))/max(.001,np.sum(left_rates+right_rates)))
+        boundaries.append({
+            "seconds":right["start_seconds"],
+            "beat":right["start_beat"],
+            "activity_change":round(change,4),
+        })
+    grooves={}
+    if "drums" in charts:
+        measures={}
+        for note in charts["drums"]["expert"]:
+            beat=float(tempo.beat_at(note.start))
+            measure=int(np.floor(beat/tempo.numerator))
+            relative=beat-measure*tempo.numerator
+            slot=int(round(relative*4))
+            measures.setdefault(measure,[]).append((slot,tuple(note.lanes)))
+        signatures={}
+        for measure,events in measures.items():
+            signature=tuple(sorted(events))
+            if len(signature)>=2:
+                signatures.setdefault(signature,[]).append(measure)
+        repeated=[
+            (signature,occurrences)
+            for signature,occurrences in signatures.items()
+            if len(occurrences)>=2
+        ]
+        repeated.sort(key=lambda row:(-len(row[1]),row[1][0],row[0]))
+        repeated_measures={
+            measure for _,occurrences in repeated for measure in occurrences
+        }
+        drum_notes=charts["drums"]["expert"]
+        supported=sum(
+            int(np.floor(tempo.beat_at(note.start)/tempo.numerator))
+            in repeated_measures
+            for note in drum_notes
+        )
+        grooves={
+            "analyzed_measures":len(measures),
+            "repeated_families":len(repeated),
+            "supported_attacks":supported,
+            "supported_attack_ratio":round(supported/max(1,len(drum_notes)),4),
+            "top_families":[{
+                "occurrences":len(occurrences),
+                "measure_indices":occurrences[:16],
+                "events":[{
+                    "sixteenth_slot":slot,
+                    "lanes":list(lanes),
+                } for slot,lanes in signature],
+            } for signature,occurrences in repeated[:12]],
+        }
+    return {
+        "schema_version":1,
+        "scope":"post-authoring neutral diagnostics; no automatic section labels",
+        "section_beats":section_beats,
+        "sections":sections,
+        "strongest_activity_boundaries":sorted(
+            boundaries,key=lambda row:(-row["activity_change"],row["seconds"])
+        )[:12],
+        "drum_grooves":grooves,
+    }
+
+
 def _guitar_difficulty(attacks,chord_ratio,triad_ratio,peak,pattern):
     # RB3 stores a human-authored rank rather than calculating one. This
     # estimate uses the hardest four-second density, chord complexity and the

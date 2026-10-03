@@ -32,6 +32,11 @@ def main():
     benchmark.add_argument("baseline",type=Path)
     benchmark.add_argument("candidate",type=Path)
     benchmark.add_argument("--output",type=Path,default=Path("output")/"replay-benchmark.json")
+    benchmark.add_argument(
+        "--instrument",
+        choices=["guitar","bass","drums","keys"],
+        default="guitar",
+    )
     human_compare=sub.add_parser("compare-human-chart",help="Compare generated guitar with an authorized held-out chart")
     human_compare.add_argument("manifest",type=Path)
     human_compare.add_argument("song_id")
@@ -167,7 +172,12 @@ def main():
     if args.command=="benchmark-replays":
         from .regression import benchmark_replays
         try:
-            report=benchmark_replays(args.baseline,args.candidate,args.output)
+            report=benchmark_replays(
+                args.baseline,
+                args.candidate,
+                args.output,
+                instrument=args.instrument,
+            )
         except (FileNotFoundError,ValueError) as exc:
             print(f"Replay benchmark failed: {exc}",file=sys.stderr)
             return 1

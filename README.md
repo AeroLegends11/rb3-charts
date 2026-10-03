@@ -75,6 +75,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli package 'C:\Path\To\Reviewed_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli replay 'C:\Path\To\Existing_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays'
+.\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument drums
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' --verify-hashes
@@ -92,6 +93,10 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli demo --compile
 .\.venv\Scripts\python.exe -m pytest -q
 ```
+
+`benchmark-replays` defaults to guitar and also supports bass, drums, and keys.
+Its macro report includes difficulty-retention totals; simultaneous drum hits
+are reported separately rather than classified as chords.
 
 Useful options:
 
@@ -358,6 +363,11 @@ triads, merged four-second density spikes, and up to 20 repeated-source motifs
 whose final lane pattern differs from the family majority. Marker thresholds
 follow the selected Band or Electronic chart profile; they guide listening and
 never alter the authored chart.
+
+`analysis/structure-diagnostics.json` records neutral eight-measure activity
+blocks, strongest unlabeled activity boundaries and repeated measure-level drum
+grooves. Review pages link the eight strongest boundaries. These reports do not
+invent verse/chorus names or rewrite notes.
 
 `cache/stems` is keyed by decoded-audio hash and quality settings. Source/stems
 are retained, which uses disk space but permits troubleshooting without repeating

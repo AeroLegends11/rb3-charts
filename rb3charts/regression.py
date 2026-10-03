@@ -267,7 +267,7 @@ def summarize_metrics(metrics: dict):
     return f"Regression metrics: {len(transitions)} transitions, mean attack retention {retention:.3f}, mean matched timing error {timing:.2f} ms."
 
 
-def _benchmark_runs(root: Path):
+def _benchmark_runs(root: Path, instrument: str):
     runs={}
     for metadata_path in sorted(Path(root).rglob("metadata/song.json")):
         metadata=json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -276,21 +276,25 @@ def _benchmark_runs(root: Path):
             str(metadata.get("title","")).strip().casefold(),
         )
         folder=metadata_path.parents[1]
-        if (folder/"analysis"/"guitar-stage-snapshots.json").is_file():
+        if (folder/"analysis"/f"{instrument}-stage-snapshots.json").is_file():
             runs[key]=(folder,metadata)
     return runs
 
 
-def _benchmark_stage_metrics(folder: Path):
+def _benchmark_stage_metrics(folder: Path, instrument: str):
     payload=json.loads(
-        (folder/"analysis"/"guitar-stage-snapshots.json").read_text(encoding="utf-8")
+        (folder/"analysis"/f"{instrument}-stage-snapshots.json").read_text(
+            encoding="utf-8"
+        )
     )
     stages=[stage for stage in payload.get("stages",[]) if "notes" in stage]
     if not stages:
-        raise ValueError(f"No guitar note stages in {folder}")
+        raise ValueError(f"No {instrument} note stages in {folder}")
     notes=_snapshots_to_notes(stages[-1]["notes"])
     shape=_shape_metrics(notes)
-    shape["chords"]=sum(len(note.lanes)>1 for note in notes)
+    simultaneous=sum(len(note.lanes)>1 for note in notes)
+    shape["simultaneous_attacks"]=simultaneous
+    shape["chords"]=simultaneous if instrument!="drums" else 0
     shape["holds"]=sum(note.end-note.start>=.22 for note in notes)
     starts=np.asarray(sorted(note.start for note in notes),dtype=float)
     peak=0
@@ -304,6 +308,17 @@ def _benchmark_stage_metrics(folder: Path):
         "lane_coverage":sorted({lane for note in notes for lane in note.lanes}),
         "peak_four_second_nps":round(peak/4,3),
     })
+    reductions=payload.get("reductions",{}).get("difficulties",{})
+    shape["reductions_available"]=all(
+        difficulty in reductions
+        for difficulty in ("expert","hard","medium","easy")
+    )
+    for difficulty in ("expert","hard","medium","easy"):
+        reduction=reductions.get(difficulty,{})
+        shape[f"{difficulty}_attacks"]=(
+            len(reduction.get("notes",[]))
+            if shape["reductions_available"] else None
+        )
     assessment_path=folder/"analysis"/"quality-assessment.json"
     shape["assessment_status"]=(
         json.loads(assessment_path.read_text(encoding="utf-8")).get("status")
@@ -312,15 +327,25 @@ def _benchmark_stage_metrics(folder: Path):
     return shape
 
 
-def benchmark_replays(baseline_root: Path, candidate_root: Path, output: Path):
-    baseline=_benchmark_runs(Path(baseline_root))
-    candidate=_benchmark_runs(Path(candidate_root))
+def benchmark_replays(
+    baseline_root: Path,
+    candidate_root: Path,
+    output: Path,
+    instrument: str = "guitar",
+):
+    if instrument not in ("guitar","bass","drums","keys"):
+        raise ValueError(f"Unsupported benchmark instrument: {instrument}")
+    baseline=_benchmark_runs(Path(baseline_root),instrument)
+    candidate=_benchmark_runs(Path(candidate_root),instrument)
     shared=sorted(set(baseline)&set(candidate))
     if not shared:
-        raise ValueError("No matching replay songs with guitar stage snapshots")
+        raise ValueError(
+            f"No matching replay songs with {instrument} stage snapshots"
+        )
     songs=[]
-    total_keys=("attacks","single_notes","chords","holds",
-                "collapsed_pitch_changes","reversed_pitch_changes")
+    total_keys=("attacks","single_notes","simultaneous_attacks","chords","holds",
+                "collapsed_pitch_changes","reversed_pitch_changes",
+                "expert_attacks","hard_attacks","medium_attacks","easy_attacks")
     totals={
         "baseline":{key:0 for key in total_keys},
         "candidate":{key:0 for key in total_keys},
@@ -328,18 +353,22 @@ def benchmark_replays(baseline_root: Path, candidate_root: Path, output: Path):
     densities={"baseline":[],"candidate":[]}
     lanes={"baseline":set(),"candidate":set()}
     statuses={"baseline":defaultdict(int),"candidate":defaultdict(int)}
+    reduction_songs={"baseline":0,"candidate":0}
     for key in shared:
         baseline_folder,metadata=baseline[key]
         candidate_folder,_=candidate[key]
-        before=_benchmark_stage_metrics(baseline_folder)
-        after=_benchmark_stage_metrics(candidate_folder)
+        before=_benchmark_stage_metrics(baseline_folder,instrument)
+        after=_benchmark_stage_metrics(candidate_folder,instrument)
         for metric in total_keys:
-            totals["baseline"][metric]+=before[metric]
-            totals["candidate"][metric]+=after[metric]
+            if before[metric] is not None:
+                totals["baseline"][metric]+=before[metric]
+            if after[metric] is not None:
+                totals["candidate"][metric]+=after[metric]
         for label,metrics in (("baseline",before),("candidate",after)):
             densities[label].append(metrics["peak_four_second_nps"])
             lanes[label].update(metrics["lane_coverage"])
             statuses[label][metrics["assessment_status"] or "missing"]+=1
+            reduction_songs[label]+=int(metrics["reductions_available"])
         songs.append({
             "artist":metadata.get("artist",""),
             "title":metadata.get("title",""),
@@ -356,12 +385,25 @@ def benchmark_replays(baseline_root: Path, candidate_root: Path, output: Path):
         total_attacks=max(1,totals[label]["attacks"])
         totals[label].update({
             "chord_rate":round(totals[label]["chords"]/total_attacks,4),
+            "simultaneous_attack_rate":round(
+                totals[label]["simultaneous_attacks"]/total_attacks,4
+            ),
             "hold_rate":round(totals[label]["holds"]/total_attacks,4),
             "mean_peak_four_second_nps":round(float(np.mean(densities[label])),3),
             "max_peak_four_second_nps":round(float(np.max(densities[label])),3),
             "lane_coverage":sorted(lanes[label]),
             "assessment_status_counts":dict(sorted(statuses[label].items())),
         })
+        for difficulty in ("hard","medium","easy"):
+            totals[label][f"{difficulty}_retention"]=(
+                round(
+                    totals[label][f"{difficulty}_attacks"]
+                    / max(1,totals[label]["expert_attacks"]),
+                    4,
+                )
+                if reduction_songs[label] else None
+            )
+        totals[label]["reduction_songs"]=reduction_songs[label]
     delta={
         key:round(totals["candidate"][key]-totals["baseline"][key],4)
         for key in totals["baseline"]
@@ -369,6 +411,7 @@ def benchmark_replays(baseline_root: Path, candidate_root: Path, output: Path):
     }
     report={
         "schema_version":1,
+        "instrument":instrument,
         "baseline_root":str(Path(baseline_root).resolve()),
         "candidate_root":str(Path(candidate_root).resolve()),
         "songs_matched":len(shared),

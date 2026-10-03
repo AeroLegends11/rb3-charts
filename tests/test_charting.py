@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import mido
 from rb3charts.model import Note,TempoMap
 from rb3charts.chart import reductions,map_pitched,clean,enforce_playability,analyze_patterns,refine_band_guitar,conform_expert_to_reference,stabilize_repeated_phrases
 from rb3charts.midi import write_midi,note_times
@@ -55,6 +56,46 @@ def test_validator_rejects_new_reduction_note():
     charts=reductions([Note(0.5,0.6,(0,),source_id="original")],"guitar",tempo)
     charts["easy"][0].source_id="invented"
     assert not validate({"guitar":charts},tempo,2)["passed"]
+
+def test_validator_checks_track_specific_midi_pitches(tmp_path):
+    tempo=TempoMap([0,.5,1,1.5,2,2.5,3])
+    charts=reductions(
+        [Note(.5,.6,(0,),source_id="original")],"guitar",tempo
+    )
+    path=tmp_path/"notes.mid"
+    write_midi(path,tempo,{"guitar":charts},2,{})
+    midi=mido.MidiFile(path)
+    guitar=next(track for track in midi.tracks if track.name=="PART GUITAR")
+    guitar.insert(1,mido.Message("note_on",note=120,velocity=96,time=0))
+    guitar.insert(2,mido.Message("note_off",note=120,velocity=0,time=1))
+    midi.save(path)
+    result=validate({"guitar":charts},tempo,2,path)
+    assert not result["passed"]
+    assert any("invalid MIDI pitch 120" in error for error in result["errors"])
+
+def test_validator_checks_serialized_gem_counts(tmp_path):
+    tempo=TempoMap([0,.5,1,1.5,2,2.5,3])
+    charts=reductions(
+        [Note(.5,.6,(0,),source_id="original")],"guitar",tempo
+    )
+    path=tmp_path/"notes.mid"
+    write_midi(path,tempo,{"guitar":charts},2,{})
+    midi=mido.MidiFile(path)
+    guitar=next(track for track in midi.tracks if track.name=="PART GUITAR")
+    guitar[:]=[
+        message for message in guitar
+        if not (
+            message.type in ("note_on","note_off")
+            and message.note==96
+        )
+    ]
+    midi.save(path)
+    result=validate({"guitar":charts},tempo,2,path)
+    assert not result["passed"]
+    assert any(
+        "PART GUITAR/expert: MIDI has 0 gems, expected 1" in error
+        for error in result["errors"]
+    )
 
 def test_electronic_lead_prefers_high_hook_and_deduplicates_stems():
     guitar=[{"start":1.0,"end":1.2,"pitch":60,"confidence":.9,"source_id":"guitar-0","source":"guitar"}]

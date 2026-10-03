@@ -44,17 +44,66 @@ def validate(charts, tempo, duration, midi_path=None):
         errors.append("No playable instruments generated")
     if midi_path:
         midi = mido.MidiFile(midi_path)
-        names = {t.name for t in midi.tracks}
+        if midi.type != 1:
+            errors.append(f"MIDI type must be 1, found {midi.type}")
+        if midi.ticks_per_beat != 960:
+            errors.append(
+                f"MIDI ticks per beat must be 960, found {midi.ticks_per_beat}"
+            )
+        tracks_by_name = {}
+        for track in midi.tracks:
+            tracks_by_name.setdefault(track.name, []).append(track)
+        names = set(tracks_by_name)
         for required in ["TEMPO", "EVENTS", "BEAT"] + [TRACKS[x] for x in charts]:
             if required not in names:
                 errors.append("Missing MIDI track: "+required)
-        event_texts = {m.text for t in midi.tracks for m in t if m.type=="text"}
+            elif len(tracks_by_name[required]) != 1:
+                errors.append("Duplicate MIDI track: "+required)
+        event_tracks = tracks_by_name.get("EVENTS", [])
+        event_texts = {
+            message.text
+            for track in event_tracks
+            for message in track
+            if message.type=="text"
+        }
         for text in ("[music_start]","[music_end]","[end]"):
             if text not in event_texts:
-                errors.append("Missing event: "+text)
+                errors.append("Missing EVENTS marker: "+text)
+        tempo_tracks = tracks_by_name.get("TEMPO", [])
+        if tempo_tracks and not any(
+            message.type=="set_tempo"
+            for message in tempo_tracks[0]
+        ):
+            errors.append("TEMPO track has no tempo events")
+        beat_tracks = tracks_by_name.get("BEAT", [])
+        if beat_tracks:
+            beat_pitches = {
+                message.note
+                for message in beat_tracks[0]
+                if message.type=="note_on" and message.velocity
+            }
+            if not beat_pitches:
+                errors.append("BEAT track has no beat notes")
+            elif not beat_pitches <= {12,13}:
+                errors.append(
+                    "BEAT track contains pitches other than 12 and 13"
+                )
         for tr in midi.tracks:
             active=set()
-            allowed = {b+l for b in DIFFICULTIES.values() for l in range(7)} | {103,110,111,112,116,120,121,122,123,124}
+            instrument = next(
+                (
+                    name for name,track_name in TRACKS.items()
+                    if track_name==tr.name
+                ),
+                None,
+            )
+            allowed = {
+                base+lane
+                for base in DIFFICULTIES.values()
+                for lane in range(5)
+            } | {116}
+            if instrument=="drums":
+                allowed |= {109,110,111,112,120,121,122,123,124}
             for msg in tr:
                 if msg.type=="note_on" and msg.velocity:
                     if tr.name.startswith("PART") and msg.note not in allowed:
@@ -68,6 +117,27 @@ def validate(charts, tempo, duration, midi_path=None):
                     active.discard(msg.note)
             if active:
                 errors.append(f"{tr.name}: missing note-offs")
+        for instrument,difficulties in charts.items():
+            matching = tracks_by_name.get(TRACKS[instrument], [])
+            if len(matching) != 1:
+                continue
+            track = matching[0]
+            for difficulty,base in DIFFICULTIES.items():
+                actual = sum(
+                    message.type=="note_on"
+                    and bool(message.velocity)
+                    and base<=message.note<=base+4
+                    for message in track
+                )
+                expected = sum(
+                    len(note.lanes)
+                    for note in difficulties[difficulty]
+                )
+                if actual != expected:
+                    errors.append(
+                        f"{TRACKS[instrument]}/{difficulty}: MIDI has "
+                        f"{actual} gems, expected {expected}"
+                    )
     warnings.append("Automatic transcription needs listening review. Structural validation does not certify musical accuracy or Xbox compatibility.")
     return {"passed":not errors,"errors":errors,"warnings":warnings,"counts":counts}
 

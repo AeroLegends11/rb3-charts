@@ -5,7 +5,9 @@ import numpy as np
 import soundfile as sf
 
 
-def _review_diagnostics(charts, lead, profile, patterns):
+def _review_diagnostics(
+    charts,lead,profile,patterns,structure_diagnostics
+):
     diagnostics = {}
     for instrument, parts in charts.items():
         notes = sorted(parts["expert"], key=lambda note: note.start)
@@ -74,6 +76,13 @@ def _review_diagnostics(charts, lead, profile, patterns):
                 for start in pattern.get("lane_mismatch_times", [])
             )
         markers.extend(sorted(motif_mismatches, key=lambda marker: marker["time"])[:20])
+        markers.extend({
+            "time":float(boundary["seconds"])+lead,
+            "kind":"activity boundary",
+            "detail":f"{float(boundary['activity_change']):.2f} change",
+        } for boundary in (
+            structure_diagnostics or {}
+        ).get("strongest_activity_boundaries",[])[:8])
         if markers:
             unique = {
                 (round(marker["time"], 3), marker["kind"]): marker
@@ -94,6 +103,7 @@ def create_preview(
     voice_continuity=None,
     profile="band",
     patterns=None,
+    structure_diagnostics=None,
 ):
     y,sr = sf.read(folder/"audio"/"song.wav",dtype="float32",always_2d=True)
     for instrument, parts in charts.items():
@@ -131,7 +141,9 @@ def create_preview(
         "meter":tempo.numerator,
         "lead":lead,
         "overlays":overlays,
-        "diagnostics":_review_diagnostics(charts,lead,profile,patterns),
+        "diagnostics":_review_diagnostics(
+            charts,lead,profile,patterns,structure_diagnostics
+        ),
     }).replace("<","\\u003c")
     title=html.escape(metadata["title"])
     artist=html.escape(metadata["artist"])

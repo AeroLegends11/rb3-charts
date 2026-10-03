@@ -1,4 +1,10 @@
-from rb3charts.assessment import assess_chart,write_batch_review,_guitar_difficulty
+from rb3charts.assessment import (
+    _guitar_difficulty,
+    analyze_structure_diagnostics,
+    assess_chart,
+    write_batch_review,
+)
+from rb3charts.model import Note,TempoMap
 from rb3charts.model import Note
 
 
@@ -23,6 +29,37 @@ def test_batch_review_lists_song_rating(tmp_path):
                               "assessment":{"label":"Close enough to review","summary":["No flags."]}}])
     text=path.read_text(encoding="utf-8")
     assert "Test Song" in text and "Close enough to review" in text and "Open review" in text
+
+
+def test_structure_diagnostics_reports_neutral_sections_and_repeated_drum_grooves():
+    tempo=TempoMap([beat*.5 for beat in range(81)])
+    guitar=[
+        Note(1+i*.5,1+i*.5+.1,(i%5,),source_id=f"g-{i}")
+        for i in range(24)
+    ]
+    drums=[]
+    for measure in (0,1,4,5):
+        start=measure*2
+        drums.extend([
+            Note(start,start+.05,(0,),source_id=f"d-{measure}-0"),
+            Note(start+.5,start+.55,(1,),source_id=f"d-{measure}-1"),
+            Note(start+1,start+1.05,(0,),source_id=f"d-{measure}-2"),
+            Note(start+1.5,start+1.55,(2,),source_id=f"d-{measure}-3"),
+        ])
+    charts={
+        "guitar":{"expert":guitar},
+        "drums":{"expert":drums},
+    }
+    report=analyze_structure_diagnostics(charts,tempo,40)
+    assert report["scope"].startswith("post-authoring neutral")
+    assert report["section_beats"]==32
+    assert len(report["sections"])==3
+    assert report["sections"][0]["start_seconds"]==0
+    assert report["sections"][-1]["end_seconds"]==40
+    assert report["strongest_activity_boundaries"]
+    assert report["drum_grooves"]["repeated_families"]==1
+    assert report["drum_grooves"]["supported_attacks"]==16
+    assert report["drum_grooves"]["supported_attack_ratio"]==1
 
 
 def test_assessment_rejects_forbidden_hard_chord():
