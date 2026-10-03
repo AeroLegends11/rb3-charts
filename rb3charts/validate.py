@@ -60,15 +60,20 @@ def validate(charts, tempo, duration, midi_path=None):
             elif len(tracks_by_name[required]) != 1:
                 errors.append("Duplicate MIDI track: "+required)
         event_tracks = tracks_by_name.get("EVENTS", [])
-        event_texts = {
+        event_text_rows = [
             message.text
             for track in event_tracks
             for message in track
             if message.type=="text"
-        }
+        ]
+        event_texts=set(event_text_rows)
         for text in ("[music_start]","[music_end]","[end]"):
             if text not in event_texts:
                 errors.append("Missing EVENTS marker: "+text)
+            elif event_text_rows.count(text)!=1:
+                errors.append(
+                    "Duplicate EVENTS marker: "+text
+                )
         music_start_tick = None
         event_text_ticks = {}
         if event_tracks:
@@ -237,11 +242,15 @@ def validate(charts, tempo, duration, midi_path=None):
             track = matching[0]
             if music_start_tick is not None:
                 text_ticks={}
+                text_counts={}
                 absolute=0
                 for message in track:
                     absolute+=message.time
                     if message.type=="text":
                         text_ticks[message.text]=absolute
+                        text_counts[message.text]=(
+                            text_counts.get(message.text,0)+1
+                        )
                 idle_tick=offset_tick+round(
                     tempo.beat_at(duration)*midi.ticks_per_beat
                 )
@@ -249,17 +258,24 @@ def validate(charts, tempo, duration, midi_path=None):
                     ("[play]",music_start_tick),
                     ("[idle]",idle_tick),
                 ):
-                    if text_ticks.get(text)!=expected_tick:
+                    if (
+                        text_counts.get(text)!=1
+                        or text_ticks.get(text)!=expected_tick
+                    ):
                         errors.append(
-                            f"{TRACKS[instrument]}: marker {text} must be "
-                            f"at tick {expected_tick}"
+                            f"{TRACKS[instrument]}: marker {text} must occur "
+                            f"exactly once at tick {expected_tick}"
                         )
                 if instrument=="drums":
                     for index in range(len(DIFFICULTIES)):
                         text=f"[mix {index} drums0]"
-                        if text_ticks.get(text)!=0:
+                        if (
+                            text_counts.get(text)!=1
+                            or text_ticks.get(text)!=0
+                        ):
                             errors.append(
-                                f"{TRACKS[instrument]}: missing marker {text}"
+                                f"{TRACKS[instrument]}: marker {text} must "
+                                "occur exactly once at tick 0"
                             )
             for difficulty,base in DIFFICULTIES.items():
                 actual = sum(

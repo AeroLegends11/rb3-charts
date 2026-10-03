@@ -555,6 +555,9 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   report path. Legacy manifest-only and unavailable states are explicit rather
   than inferable only from logs.
 - The current Less Talk motif-review draft also passes `validate-run`.
+- Required EVENTS lifecycle, instrument play/idle, and drum mix markers now
+  require exact uniqueness as well as correct ticks. Duplicate corruption is
+  rejected; focused charting/integration coverage passes 71 tests.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage

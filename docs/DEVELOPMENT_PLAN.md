@@ -132,6 +132,8 @@ Status update (2026-10-02):
 - EVENTS lifecycle marker ticks, per-instrument `[play]`/`[idle]` ticks, and all
   four drum mix markers are now validated against authored duration/lead. A
   corruption test and production-sized Hail replay pass this gate.
+- Those required lifecycle/mix markers must each occur exactly once; duplicates
+  can no longer be hidden by set/dictionary-based marker lookup.
 - New drafts hash the three reviewed package inputs after validation.
   Packaging rejects post-validation changes to MIDI, audio, or `song.ini`;
   legacy drafts without a manifest remain supported with an explicit warning.
