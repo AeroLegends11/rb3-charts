@@ -621,3 +621,18 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   MIDI writing rounded after adding lead beats while validation rounded before
   adding them. Both now use the shared `authored_tick` conversion. The real
   Jonas replay passes, and 56 focused charting tests pass.
+- Current-code replays across seven official-reference evaluation songs improve
+  or preserve final attack F1 versus mapped notes on five songs. Hail and Cliffs
+  remain playability-loss outliers: the pass removes 115/91 attacks and 62/41
+  reference-matched attacks respectively. A rights-cleared selection experiment
+  allowed one additional >=0.80-confidence sixteenth-grid fifth attack per beat;
+  it was an exact no-op on Certain Death, Dirtbag, and There's Something Wrong,
+  so the candidate was removed without consulting official results.
+- A second rights-cleared gate reduced the minimum gap from one eighth to one
+  tenth beat only for adjacent >=0.75-confidence, sixteenth-grid-aligned Band
+  Guitar attacks. It was also an exact three-song no-op and was removed. These
+  results indicate the official-song losses are not recoverable through another
+  generic density exception without stronger source evidence.
+- Cached replay now reports incomplete inputs and validation failures as concise
+  exit-1 CLI errors rather than raw tracebacks, matching `validate-run` and
+  packaging behavior.

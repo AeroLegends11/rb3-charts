@@ -448,7 +448,18 @@ def main():
             print(f"Packaging failed: {exc}",file=sys.stderr)
             return 1
     elif args.command=="replay":
-        result=replay_cached(args.folder,output=args.output,onyx=args.onyx,compile=args.compile)
+        try:
+            result=replay_cached(
+                args.folder,
+                output=args.output,
+                onyx=args.onyx,
+                compile=args.compile,
+            )
+        except (
+            FileNotFoundError,KeyError,RuntimeError,TypeError,ValueError
+        ) as exc:
+            print(f"Cached replay failed: {exc}",file=sys.stderr)
+            return 1
     elif args.command=="demo":
         from .demo import make_demo
         source,stems=make_demo(Path("input")/"demo")
