@@ -481,6 +481,62 @@ def package_existing(folder, progress=print, onyx=None):
     return result
 
 
+def validate_existing_run(folder):
+    """Recheck an existing draft without changing its authored artifacts."""
+    folder=Path(folder).resolve()
+    charts_path=folder/"analysis"/"charts.json"
+    tempo_path=folder/"analysis"/"tempo.json"
+    metadata_path=folder/"metadata"/"song.json"
+    midi_path=folder/"import"/"notes.mid"
+    required=(charts_path,tempo_path,metadata_path,midi_path)
+    missing=[str(path) for path in required if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(
+            "Run validation inputs are incomplete: "+", ".join(missing)
+        )
+    chart_payload=json.loads(charts_path.read_text(encoding="utf-8"))
+    charts={
+        instrument:{
+            difficulty:_notes_from_payload(notes)
+            for difficulty,notes in difficulties.items()
+        }
+        for instrument,difficulties in chart_payload.items()
+    }
+    tempo=_tempo_from_payload(
+        json.loads(tempo_path.read_text(encoding="utf-8"))
+    )
+    metadata=json.loads(metadata_path.read_text(encoding="utf-8"))
+    duration=float(metadata.get("source_seconds",0))
+    if duration<=0:
+        raise ValueError(
+            "Run metadata requires a positive source_seconds value"
+        )
+    report=validate(charts,tempo,duration,midi_path)
+    try:
+        manifest_verified=_verify_package_input_manifest(folder)
+    except RuntimeError as exc:
+        manifest_verified=False
+        report["errors"].append(str(exc))
+    if manifest_verified:
+        report["package_input_manifest"]="verified"
+    else:
+        report["package_input_manifest"]="missing_or_invalid"
+        if not any(
+            "package input" in error.lower()
+            for error in report["errors"]
+        ):
+            report["warnings"].append(
+                "Package-input manifest is missing; audio and song.ini "
+                "post-validation integrity could not be verified."
+            )
+    report["passed"]=not report["errors"]
+    (folder/"validation_recheck_report.txt").write_text(
+        report_text(report),encoding="utf-8"
+    )
+    save_json(folder/"validation_recheck_report.json",report)
+    return report
+
+
 def replay_cached(folder, output=None, progress=print, compile=False, onyx=None):
     """Replay authoring from cached analysis artifacts without new audio inference."""
     source_folder=Path(folder).resolve()

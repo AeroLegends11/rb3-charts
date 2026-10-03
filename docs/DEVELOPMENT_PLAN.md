@@ -135,6 +135,9 @@ Status update (2026-10-02):
 - New drafts hash the three reviewed package inputs after validation.
   Packaging rejects post-validation changes to MIDI, audio, or `song.ini`;
   legacy drafts without a manifest remain supported with an explicit warning.
+- `validate-run` now applies the current structural/readback validator and
+  package-input manifest check to an existing draft without replaying authoring.
+  It writes separate recheck reports, preserving the original validation record.
 
 ## 3. Consolidate motif understanding — architecture proposal
 

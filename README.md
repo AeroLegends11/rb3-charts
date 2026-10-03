@@ -73,6 +73,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli generate 'C:\Music\EDM Track.flac' --chart-profile electronic
 .\.venv\Scripts\python.exe -m rb3charts.cli batch 'C:\Music\To Chart'
 .\.venv\Scripts\python.exe -m rb3charts.cli package 'C:\Path\To\Reviewed_Output'
+.\.venv\Scripts\python.exe -m rb3charts.cli validate-run 'C:\Path\To\Existing_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli replay 'C:\Path\To\Existing_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument drums
@@ -441,6 +442,11 @@ available for legitimate regeneration.
 `analyze-reference` writes only compact aggregate statistics to `--output`.
 Use `--full-output` for an optional per-song report with source paths, and keep
 that report local.
+
+`validate-run` rechecks an existing draft's package MIDI against its saved
+charts and tempo map, verifies the package-input manifest when present, and
+writes separate `validation_recheck_report.json`/`.txt` files without rerunning
+authoring or overwriting the original validation report.
 
 `input/`, `cache/`, `output/`, `tools/`, `.research/` and `Ready for Xbox/` remain
 local. Git exclusions do not prevent normal reading, generation or packaging.

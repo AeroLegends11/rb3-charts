@@ -536,6 +536,17 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   omits `source_folder` plus per-song records. An explicit distinct
   `--full-output` writes the local detailed report and is documented as
   unstageable. Focused reference tests and CLI help pass.
+
+### 2026-10-03 01:58 - Existing-run revalidation retained
+
+- Added `validate-run` to apply the current MIDI structure, tempo, beat,
+  lifecycle, gem timing/count, and package-input integrity checks to an existing
+  draft without rerunning inference or authoring.
+- Recheck results are written separately as `validation_recheck_report.json`
+  and `.txt`; original validation and review drafts remain untouched.
+- A real Hail motif-review draft passed with a verified manifest and zero errors.
+  A synthetic post-validation `song.ini` change fails as expected.
+- Focused integration coverage passes 15 tests; CLI help passes.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage

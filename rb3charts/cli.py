@@ -23,6 +23,11 @@ def main():
     package=sub.add_parser("package",help="Compile an already reviewed output folder without reanalysis")
     package.add_argument("folder",type=Path)
     package.add_argument("--onyx",type=Path)
+    validate_run=sub.add_parser(
+        "validate-run",
+        help="Recheck an existing draft without rerunning authoring",
+    )
+    validate_run.add_argument("folder",type=Path)
     replay=sub.add_parser("replay",help="Cached replay: rerun authoring from saved analysis (no new audio reanalysis)")
     replay.add_argument("folder",type=Path,help="Existing output run folder with analysis candidates and tempo")
     replay.add_argument("--output",type=Path,default=None,help="Destination root for the replay run folder")
@@ -331,7 +336,20 @@ def main():
             return 1
         print(json.dumps(report["summary"],indent=2))
         return 0
-    from .pipeline import generate,batch,package_existing,replay_cached
+    from .pipeline import (
+        batch,
+        generate,
+        package_existing,
+        replay_cached,
+        validate_existing_run,
+    )
+    if args.command=="validate-run":
+        report=validate_existing_run(args.folder)
+        print(
+            "Existing run validation: "
+            + ("PASS" if report["passed"] else "FAIL")
+        )
+        return 0 if report["passed"] else 1
     if args.command=="package":
         result=package_existing(args.folder,onyx=args.onyx)
     elif args.command=="replay":

@@ -140,6 +140,48 @@ def test_reviewed_run_rejects_changed_package_input(tmp_path,monkeypatch):
     with pytest.raises(RuntimeError,match="manifest is incomplete"):
         pipeline.package_existing(run,lambda message:None)
 
+def test_existing_run_validation_rechecks_midi_and_manifest(tmp_path):
+    from rb3charts import pipeline
+    run=tmp_path/"draft"
+    for folder in (
+        run/"analysis",run/"metadata",run/"import"
+    ):
+        folder.mkdir(parents=True)
+    tempo=TempoMap([0,.5,1,1.5,2,2.5,3])
+    charts=reductions(
+        [Note(.5,.6,(0,),source_id="original")],"guitar",tempo
+    )
+    (run/"analysis"/"charts.json").write_text(
+        json.dumps({"guitar":{
+            difficulty:[note.__dict__ for note in notes]
+            for difficulty,notes in charts.items()
+        }}),
+        encoding="utf-8",
+    )
+    (run/"analysis"/"tempo.json").write_text(
+        json.dumps({"beats":tempo.beats,"numerator":4}),
+        encoding="utf-8",
+    )
+    (run/"metadata"/"song.json").write_text(
+        json.dumps({"source_seconds":2}),
+        encoding="utf-8",
+    )
+    write_midi(run/"import"/"notes.mid",tempo,{"guitar":charts},2,{})
+    (run/"import"/"song.wav").write_bytes(b"reviewed audio")
+    (run/"import"/"song.ini").write_text("[song]\nname=Demo\n")
+    pipeline._write_package_input_manifest(run)
+    report=pipeline.validate_existing_run(run)
+    assert report["passed"]
+    assert report["package_input_manifest"]=="verified"
+    assert (run/"validation_recheck_report.json").is_file()
+    (run/"import"/"song.ini").write_text("[song]\nname=Changed\n")
+    changed=pipeline.validate_existing_run(run)
+    assert not changed["passed"]
+    assert any(
+        "changed after validation" in error
+        for error in changed["errors"]
+    )
+
 def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     (tmp_path/"audio").mkdir()
     sf.write(tmp_path/"audio"/"song.wav",np.zeros((44100*2,2),dtype=np.float32),44100)
