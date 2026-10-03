@@ -526,6 +526,12 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   preserving the existing Hard-only compatibility key.
 - Did not overwrite the committed schema-1 profile or invent runtime priors.
   Focused reference/integration validation passed 15 tests.
+- Versioned the expanded replay benchmark report as schema 2 now that it carries
+  instrument, paired-reduction density, structure, and pattern-vocabulary
+  sections. Original guitar macro/song fields remain additive-compatible.
+- Prevented instrument runs from overwriting the default guitar report: bass,
+  drums, and keys now default to instrument-specific output filenames. A real
+  bass comparison wrote `output/bass-replay-benchmark.json`.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage

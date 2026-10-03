@@ -28,10 +28,13 @@ def main():
     replay.add_argument("--output",type=Path,default=None,help="Destination root for the replay run folder")
     replay.add_argument("--onyx",type=Path)
     replay.add_argument("--compile",action="store_true",help="Compile replay output with Onyx/Magma after validation")
-    benchmark=sub.add_parser("benchmark-replays",help="Compare guitar metrics across two replay corpora")
+    benchmark=sub.add_parser(
+        "benchmark-replays",
+        help="Compare one instrument across two replay corpora",
+    )
     benchmark.add_argument("baseline",type=Path)
     benchmark.add_argument("candidate",type=Path)
-    benchmark.add_argument("--output",type=Path,default=Path("output")/"replay-benchmark.json")
+    benchmark.add_argument("--output",type=Path)
     benchmark.add_argument(
         "--instrument",
         choices=["guitar","bass","drums","keys"],
@@ -171,18 +174,26 @@ def main():
         return 0
     if args.command=="benchmark-replays":
         from .regression import benchmark_replays
+        output=(
+            args.output
+            or Path("output")/(
+                "replay-benchmark.json"
+                if args.instrument=="guitar"
+                else f"{args.instrument}-replay-benchmark.json"
+            )
+        )
         try:
             report=benchmark_replays(
                 args.baseline,
                 args.candidate,
-                args.output,
+                output,
                 instrument=args.instrument,
             )
         except (FileNotFoundError,ValueError) as exc:
             print(f"Replay benchmark failed: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report["macro"],indent=2))
-        print(f"Compared {report['songs_matched']} songs -> {args.output}")
+        print(f"Compared {report['songs_matched']} songs -> {output}")
         return 0
     if args.command=="compare-human-chart":
         from .datasets import DatasetManifestError

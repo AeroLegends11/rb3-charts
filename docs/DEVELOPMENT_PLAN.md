@@ -104,6 +104,9 @@ Status update (2026-10-02):
 - Corpus discovery rejects duplicate artist/title keys within either root and
   reports both conflicting paths. This prevents broad experiment folders from
   silently selecting an arbitrary run as the baseline.
+- The expanded replay benchmark contract is schema 2. It remains additive for
+  the original guitar macro/song fields while explicitly versioning instrument,
+  reduction-density, structure, and pattern sections.
 - Complete reduction pairs also aggregate mean/max four-second density for all
   four difficulties. The retained Hail guitar Hard change is now reproducible
   directly in `benchmark-replays`: retention 0.5312 to 0.6056 and max density

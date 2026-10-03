@@ -546,7 +546,7 @@ def benchmark_replays(
             else round(totals["candidate"][key]-value,4)
         )
     report={
-        "schema_version":1,
+        "schema_version":2,
         "instrument":instrument,
         "baseline_root":str(Path(baseline_root).resolve()),
         "candidate_root":str(Path(candidate_root).resolve()),

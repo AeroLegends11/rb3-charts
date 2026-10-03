@@ -107,6 +107,10 @@ metrics.
 Each root must contain at most one run for a given artist/title; ambiguous
 duplicate song keys and missing artist/title metadata are rejected instead of
 selecting or matching a run implicitly.
+Expanded multi-instrument, reduction-density, structure, and pattern reports use
+benchmark schema 2; guitar remains the default instrument. Without `--output`,
+guitar writes `output/replay-benchmark.json` and other instruments write
+`output/<instrument>-replay-benchmark.json`.
 
 New review drafts record hashes for `import/notes.mid`, `song.wav`, and
 `song.ini`. The `package` command rejects any of those inputs if they changed

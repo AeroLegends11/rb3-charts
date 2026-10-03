@@ -218,6 +218,7 @@ def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
     )
 
     assert report["songs_matched"]==1
+    assert report["schema_version"]==2
     assert report["instrument"]=="guitar"
     assert report["macro"]["delta"]["attacks"]==0
     assert report["macro"]["delta"]["collapsed_pitch_changes"]==1
