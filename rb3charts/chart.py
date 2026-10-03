@@ -473,6 +473,98 @@ def _reduce_fast_hard_eighths(notes,tempo):
     flush()
     return result
 
+
+def _preserve_hard_contour_anchors(expert,hard,tempo,spacing):
+    result=list(hard)
+    runs=[]
+    run=[]
+
+    def finish():
+        if len(run)>=5:
+            pitches=[note.pitch for note in run if note.pitch is not None]
+            if (
+                len(pitches)==len(run)
+                and len(set(pitches))>=3
+                and max(pitches)-min(pitches)>=4
+            ):
+                runs.append(list(run))
+
+    for note in result:
+        same_lane=(
+            len(note.lanes)==1
+            and run
+            and note.lanes==run[-1].lanes
+            and tempo.beat_at(note.start)-tempo.beat_at(run[-1].start)<=.75
+        )
+        if same_lane:
+            run.append(note)
+            continue
+        finish()
+        run=[note] if len(note.lanes)==1 else []
+    finish()
+    for collapsed in runs:
+        lane=collapsed[0].lanes[0]
+        selected_ids={note.source_id for note in result}
+        alternatives=[
+            note for note in expert
+            if collapsed[0].start<=note.start<=collapsed[-1].start
+            and len(note.lanes)==1
+            and note.lanes[0]!=lane
+            and note.source_id not in selected_ids
+        ]
+        swaps=max(1,len(collapsed)//3)
+        anchor_spacing=max(.32,spacing*.84)
+        while swaps and alternatives:
+            choices=[]
+            for alternative in alternatives:
+                available=[note for note in collapsed if note in result]
+                for target in available:
+                    trial=sorted(
+                        [note for note in result if note is not target]
+                        +[alternative],
+                        key=lambda note:note.start,
+                    )
+                    index=trial.index(alternative)
+                    previous=trial[index-1] if index else None
+                    following=trial[index+1] if index+1<len(trial) else None
+                    if (
+                        (previous is not None and
+                         tempo.beat_at(alternative.start)
+                         -tempo.beat_at(previous.start)<anchor_spacing)
+                        or
+                        (following is not None and
+                         tempo.beat_at(following.start)
+                         -tempo.beat_at(alternative.start)<anchor_spacing)
+                    ):
+                        continue
+                    local=[
+                        note.pitch for note in trial
+                        if collapsed[0].start<=note.start<=collapsed[-1].start
+                        and note.pitch is not None
+                    ]
+                    choices.append((
+                        (
+                            max(local)-min(local),
+                            abs(alternative.lanes[0]-lane),
+                            alternative.confidence,
+                            -abs(alternative.start-target.start),
+                        ),
+                        alternative,
+                        target,
+                    ))
+            if not choices:
+                break
+            _,alternative,replacement=max(
+                choices,key=lambda choice:choice[0]
+            )
+            result.remove(replacement)
+            result.append(alternative)
+            result.sort(key=lambda note:note.start)
+            alternatives.remove(alternative)
+            swaps-=1
+    return result
+
+
 def conform_expert_to_reference(notes,tempo,instrument):
     """Bring ambiguous generated details inside finished-chart style bands."""
     style=_reference_style(f"{instrument}.expert")
@@ -726,6 +818,10 @@ def reductions(expert, instrument, tempo):
             last_beat = beat
         if difficulty=="hard" and instrument in ("guitar","bass","keys"):
             candidates=_reduce_fast_hard_eighths(candidates,tempo)
+            if instrument=="guitar":
+                candidates=_preserve_hard_contour_anchors(
+                    expert,candidates,tempo,hard_spacing
+                )
             normalized=[]
             for note in candidates:
                 lanes=list(note.lanes)

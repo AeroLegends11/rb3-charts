@@ -37,8 +37,8 @@ branch, then starts the GUI).
   highways provide Normal plus Hyper 1-5 visual speeds independently of audio
   playback speed. Tap heads cross the strike line once at their authored onset;
   active pitched-instrument sustains keep only their tail at the line until
-  release. A/B reviews open on the shared difficulty with the largest attack
-  delta. Difficulty-specific review markers identify long same-lane runs and
+  release. A/B reviews open on the shared difficulty with the most changed
+  attacks. Difficulty-specific review markers identify long same-lane runs and
   distinguish repeated detected pitch from multiple pitches collapsed onto one
   color. These are review prompts, not automatic correctness failures. Highway
   speeds are consistent look-ahead levels, not a claim of pixel-for-pixel

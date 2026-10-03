@@ -823,3 +823,28 @@ def test_fast_hard_reduction_breaks_long_eighth_note_runs():
     hard=reductions(expert,"guitar",tempo)["hard"]
     assert len(hard)==12
     assert all(note.lanes!=(0,4) for note in hard)
+
+
+def test_hard_reduction_preserves_omitted_contour_anchors():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    expert=[]
+    for index in range(18):
+        lane=2 if index%2==0 else (3 if index<9 else 1)
+        pitch=(70,77,73,75,58,73)[index%6]
+        start=1+(index//2)*.35+(index%2)*.12
+        expert.append(Note(
+            start,start+.065,(lane,),
+            confidence=.5+(index%3)*.05,
+            source_id=str(index),
+            pitch=pitch,
+        ))
+
+    hard=reductions(expert,"guitar",tempo)["hard"]
+
+    assert len(hard)==9
+    assert len({note.lanes for note in hard})>=2
+    assert {note.source_id for note in hard}<={note.source_id for note in expert}
+    assert min(
+        tempo.beat_at(b.start)-tempo.beat_at(a.start)
+        for a,b in zip(hard,hard[1:])
+    )>=.32

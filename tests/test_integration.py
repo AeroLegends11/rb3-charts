@@ -363,8 +363,17 @@ def test_comparison_preview_keeps_versions_synchronized(tmp_path):
         (folder/"metadata").mkdir()
         (folder/"source").mkdir()
         (folder/"audio").mkdir()
+        medium=[
+            dict(notes[0],source_id=f"{name}-medium")
+        ]
         (folder/"analysis"/"charts.json").write_text(
-            json.dumps({"guitar":{"expert":notes,"hard":hard}}),
+            json.dumps({
+                "guitar":{
+                    "expert":notes,
+                    "hard":hard,
+                    "medium":medium,
+                }
+            }),
             encoding="utf-8",
         )
         (folder/"analysis"/"tempo.json").write_text(
@@ -400,7 +409,7 @@ def test_comparison_preview_keeps_versions_synchronized(tmp_path):
     assert "Playback speed" in page
     assert "NOTES HIT THIS LINE" in page
     assert "rawY>strike+2" in page
-    assert '"default_difficulties": {"guitar": "hard"}' in page
+    assert '"default_difficulties": {"guitar": "medium"}' in page
     assert "diff.value||payload.default_difficulties[inst.value]||'expert'" in page
     assert '"lead": 2.0' in page and "song '+Math.max(0,time-payload.lead)" in page
     assert "../candidate/audio/song.wav" in page

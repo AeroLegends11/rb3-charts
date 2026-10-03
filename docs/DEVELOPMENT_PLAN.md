@@ -194,6 +194,18 @@ Status update (2026-10-02):
   second window recovered alternating 51/58 pedal notes instead of a repeated
   pitch-70 line. This is source-derived voice evidence, not permission to use
   reference-chart notes for register selection.
+- Hard guitar reduction now checks only five-plus-note same-lane runs whose
+  retained source pitches span at least four semitones. It may swap up to three
+  retained attacks for omitted Expert contour anchors when the resulting Hard
+  chart keeps at least 0.32 beats between attacks. It never adds attacks or
+  invents lanes/source IDs. The rule was an exact no-op on all four
+  rights-cleared replay songs, including held-out Persephone. On Hail it
+  replaced three yellow selections with existing blue Expert anchors, retained
+  the recovered low pedal notes, and removed the player-17 collapsed-contour
+  review marker. Frozen post-generation Hard-versus-Expert timing F1 remained
+  0.5212; movement improved 0.3692 to 0.3728 while exact lanes shifted 0.1588
+  to 0.1570. Keep the saved A/B as a required feel review rather than treating
+  the official chart as runtime evidence.
 - Added post-generation playability-evidence audits that join each attributed
   removal to raw onset/level evidence, optional offline structure ranks,
   source-mix versus guitar-stem onset prominence/width, and voice-continuity

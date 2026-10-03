@@ -1192,8 +1192,8 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   after their authored onset. Tap heads now cross once and disappear; during a
   pitched sustain, only the active tail remains pinned to the target until
   release. Chart and audio timestamps are unchanged.
-- Synchronized A/B reviews now select the shared difficulty with the largest
-  attack-count delta for the chosen instrument. The Hail repeated-riff review
+- Synchronized A/B reviews now select the shared difficulty with the most
+  changed attacks for the chosen instrument. The Hail repeated-riff review
   opens on Expert, while the earlier Hard-density comparison still opens on
   Hard.
 - Regenerated
@@ -1215,3 +1215,29 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   remaining failure to difficulty reduction rather than lead selection.
 - Generated the current normal review at
   `comparisons/review-markers/hail/Avenged_sevenfold_Hail_To_The_King_20261003_183319_643726/review.html`.
+
+### 2026-10-03 19:00 - Hard contour anchors preserved
+
+- The player-17 Hard marker traced to greedy spacing selection, not lane
+  remapping: Hard retained nine yellow Expert attacks with pitches 51-70 while
+  skipping the interleaved blue/red Expert anchors.
+- Added a bounded Hard-guitar reduction safeguard only for five-plus-note
+  same-lane runs with at least three retained pitches spanning four semitones.
+  It swaps retained attacks for omitted Expert attacks of another lane, keeps
+  attack count fixed, preserves source IDs/times, allows at most one swap per
+  three collapsed attacks and enforces a 0.32-beat local spacing floor.
+- Confidence-first selection was rejected because it removed recovered pitch
+  51. The retained selector maximizes pitch-span preservation before lane
+  contrast and confidence. Hail keeps pitches 51/58 and now charts blue anchors
+  at player 17.12, 17.48 and 18.81 seconds; no collapsed-contour marker remains
+  in that reviewed Hard span.
+- The candidate changed zero Hard attacks on Certain Death, There's Something
+  Wrong, Dirtbag and held-out Persephone compared with the current committed
+  replay baseline.
+- Frozen post-generation Hail Hard-versus-official-Expert evaluation kept 976
+  attacks, 554 matches and 0.5212 attack F1. Movement improved 0.3692 to 0.3728;
+  exact lanes shifted 0.1588 to 0.1570 and mean interval error 1.6302 to
+  1.6350. Reference notes did not select the rule.
+- Generated
+  `comparisons/morning-review/Hail_Hard_Contour_Anchors_AB.html`; it opens on
+  Guitar/Hard and highlights the three same-count replacements.

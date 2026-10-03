@@ -434,6 +434,11 @@ def create_comparison_preview(
         default_difficulties[instrument]=max(
             available,
             key=lambda difficulty:(
+                sum(
+                    int(note["different"])
+                    for version in ("baseline","candidate")
+                    for note in charts[version][instrument][difficulty]
+                ),
                 abs(
                     counts["candidate"][instrument][difficulty]
                     -counts["baseline"][instrument][difficulty]
