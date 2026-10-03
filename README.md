@@ -81,6 +81,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument all
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output' --source-agreement-report 'C:\Path\To\agreement.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-midi 'C:\Path\To\Generated_Output' 'C:\Path\To\Evaluation\notes.mid'
+.\.venv\Scripts\python.exe -m rb3charts.cli index-comparisons 'C:\Path\To\Generated_Corpus'
 .\.venv\Scripts\python.exe -m rb3charts.cli audit-playability-evidence 'C:\Path\To\Generated_Output' --structure-predictions 'C:\Path\To\predictions.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli analyze-reference 'C:\Path\To\Reference_MIDI_Corpus'
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
@@ -130,6 +131,16 @@ attributes metrics to saved authoring stages when snapshots are present. It
 writes JSON plus a Markdown summary; reference notes are loaded only after
 generation and are never runtime inputs. The Markdown includes content hashes
 but omits local paths and individual reference-note rows.
+
+`index-comparisons` scans generated runs below one local corpus root and writes
+`comparison-index.json` plus Markdown. It indexes either authorized-chart or
+reference-MIDI comparisons, never a mixture. Entries contain display identity,
+run basename, comparison/validation status, compact attack/chord/sustain/lane/
+motif/weak-window summaries, paired-source status and relative local links.
+Runs with no comparison remain explicitly `missing`; duplicate song IDs,
+mixed schemas and malformed metadata/reports are rejected before either index
+is written. Source paths, unmatched/reference note rows and detailed authorized
+records are excluded.
 
 `audit-playability-evidence` is also post-generation only. It joins attributed
 playability removals to cached transcription evidence, optional offline

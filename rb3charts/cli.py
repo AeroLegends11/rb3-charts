@@ -75,6 +75,12 @@ def main():
     )
     midi_compare.add_argument("--tolerance-ms",type=int,default=80)
     midi_compare.add_argument("--offset",type=float)
+    comparison_index=sub.add_parser(
+        "index-comparisons",
+        help="Build a sanitized local corpus index of comparison reports",
+    )
+    comparison_index.add_argument("root",type=Path)
+    comparison_index.add_argument("--output",type=Path)
     evidence_audit=sub.add_parser(
         "audit-playability-evidence",
         help="Join playability removals to post-generation source evidence",
@@ -336,6 +342,22 @@ def main():
             "worst_reference_recall":
                 report["metrics"]["attack_windows"]
                 ["worst_reference_recall"],
+        },indent=2))
+        return 0
+    if args.command=="index-comparisons":
+        from .regression import build_comparison_index
+        try:
+            report=build_comparison_index(args.root,args.output)
+        except (FileNotFoundError,KeyError,TypeError,ValueError) as exc:
+            print(f"Comparison indexing failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps({
+            "comparison_schema":report["comparison_schema"],
+            "runs":len(report["entries"]),
+            "available":sum(
+                row["comparison_status"]=="available"
+                for row in report["entries"]
+            ),
         },indent=2))
         return 0
     if args.command=="convert-guitarset":

@@ -13,6 +13,7 @@ from rb3charts.regression import (
     audit_playability_evidence,
     benchmark_all_replays,
     benchmark_replays,
+    build_comparison_index,
     compare_chart_attacks,
     estimate_attack_offset,
     _authorized_comparison_markdown,
@@ -564,6 +565,115 @@ def test_reference_comparison_markdown_omits_local_paths_and_note_rows():
     assert "reference note rows are not embedded" in markdown
     assert r"C:\private" not in markdown
     assert r"C:\excluded" not in markdown
+
+
+def _write_index_run(root, name, song_id, schema=None, title="Song", artist="Artist"):
+    run=root/name
+    (run/"metadata").mkdir(parents=True)
+    (run/"analysis").mkdir()
+    (run/"metadata"/"song.json").write_text(json.dumps({
+        "song_id":song_id,
+        "title":title,
+        "artist":artist,
+    }),encoding="utf-8")
+    (run/"validation_report.json").write_text(
+        json.dumps({"passed":True}),encoding="utf-8"
+    )
+    if schema is not None:
+        metrics=compare_chart_attacks(
+            [{"time":0.0,"lanes":(0,),"duration":.5}],
+            [{"time":0.02,"lanes":(0,),"duration":.5}],
+        )
+        if schema=="rb3charts-authorized-chart-comparison":
+            report={
+                "schema":schema,
+                "schema_version":1,
+                "song_id":song_id,
+                "generated_folder":str(run),
+                "difficulties":{"expert":metrics},
+                "paired_source_agreement":{
+                    "status":"available",
+                    "scope":"external_rights_cleared_calibration",
+                },
+            }
+            filename="human-chart-comparison.json"
+        else:
+            report={
+                "schema":schema,
+                "schema_version":1,
+                "provenance":{
+                    "generated_midi":str(run/"midi"/"notes.mid"),
+                    "reference_midi":r"C:\excluded\reference.mid",
+                },
+                "metrics":metrics,
+                "stage_metrics":[],
+            }
+            filename="reference-comparison.json"
+        path=run/"analysis"/filename
+        path.write_text(json.dumps(report),encoding="utf-8")
+        path.with_suffix(".md").write_text("# Local review\n",encoding="utf-8")
+    return run
+
+
+def test_comparison_index_sanitizes_reports_and_keeps_missing_runs(tmp_path):
+    _write_index_run(
+        tmp_path,
+        "run one",
+        "song-one",
+        "rb3charts-authorized-chart-comparison",
+        title="Pipe | Song\nSecond line",
+        artist="Safe Artist",
+    )
+    _write_index_run(tmp_path,"run-two","song-two")
+
+    index=build_comparison_index(tmp_path)
+    json_text=(tmp_path/"comparison-index.json").read_text(encoding="utf-8")
+    markdown=(tmp_path/"comparison-index.md").read_text(encoding="utf-8")
+
+    assert index["comparison_schema"]=="rb3charts-authorized-chart-comparison"
+    entries={row["identity"]["song_id"]:row for row in index["entries"]}
+    assert entries["song-one"]["comparison_status"]=="available"
+    assert entries["song-one"]["summary"]["paired_source_status"]=="available"
+    assert entries["song-two"]["comparison_status"]=="missing"
+    assert entries["song-two"]["summary"] is None
+    assert "unmatched" not in json_text
+    assert str(tmp_path) not in json_text
+    assert "C:\\\\excluded" not in json_text
+    assert "Pipe \\| Song Second line" in markdown
+    assert "run%20one/analysis/human-chart-comparison.md" in markdown
+    assert "Reference-note rows" in markdown
+
+
+def test_comparison_index_rejects_duplicate_song_identities(tmp_path):
+    _write_index_run(
+        tmp_path,"run-a","duplicate","rb3charts-reference-comparison"
+    )
+    _write_index_run(tmp_path,"run-b","duplicate")
+
+    with pytest.raises(ValueError,match="Duplicate song identity duplicate"):
+        build_comparison_index(tmp_path)
+
+    assert not (tmp_path/"comparison-index.json").exists()
+
+
+def test_comparison_index_rejects_mixed_and_malformed_schemas(tmp_path):
+    _write_index_run(
+        tmp_path,"run-a","one","rb3charts-reference-comparison"
+    )
+    _write_index_run(
+        tmp_path,"run-b","two","rb3charts-authorized-chart-comparison"
+    )
+    with pytest.raises(ValueError,match="mixes authorized and reference"):
+        build_comparison_index(tmp_path)
+
+    root=tmp_path/"malformed"
+    run=_write_index_run(root,"run","three")
+    (run/"analysis"/"reference-comparison.json").write_text(
+        json.dumps({"schema":"unknown","schema_version":1}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError,match="Malformed comparison schema"):
+        build_comparison_index(root)
 
 
 def test_attack_alignment_and_unmatched_events_are_reported():

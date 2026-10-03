@@ -835,3 +835,24 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   summary-only labeling.
 - Validation: four focused comparison Markdown tests passed; full suite passed
   197 tests.
+
+### 2026-10-03 07:18 - Sanitized comparison corpus indexes added
+
+- Added `index-comparisons`, which discovers generated runs from
+  `metadata/song.json` and writes deterministic JSON plus Markdown for one
+  comparison schema. Current comparison writers now identify authorized and
+  reference reports with explicit additive schema names.
+- Safe entries contain song display identity, generated run basename,
+  comparison and validation status, aggregate attack/chord/sustain/lane/motif
+  and weakest-window metrics, paired-source status, and relative local report
+  links. Missing comparisons remain visible rather than disappearing.
+- Indexes omit source/generated absolute paths, unmatched/reference note rows,
+  detailed authorized records and per-event data. Markdown escapes display
+  delimiters and URL-encodes local links.
+- Duplicate song IDs, mixed authorized/reference corpora, malformed metadata,
+  malformed validation reports and unknown comparison schemas abort before
+  outputs are written.
+- Focused tests cover sanitization, missing comparisons, duplicate identities,
+  mixed schemas and malformed schemas. Runtime generation remains unchanged.
+- Validation: seven focused comparison/reporting tests passed; full suite
+  passed 200 tests; CLI help was exercised.

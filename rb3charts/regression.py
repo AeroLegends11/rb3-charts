@@ -5,8 +5,10 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 import hashlib
 import json
+import os
 import platform
 import subprocess
+from urllib.parse import quote
 
 import numpy as np
 
@@ -980,6 +982,7 @@ def audit_playability_evidence(
                 "positive_recall":round(hits/max(1,positives),4),
             }
     report={
+        "schema":"rb3charts-reference-comparison",
         "schema_version":1,
         "scope":(
             "post-generation diagnostics; reference data, when supplied, "
@@ -1599,6 +1602,7 @@ def compare_authorized_chart(
         difficulties[difficulty] = compare_chart_attacks(reference, candidate)
     expert_attacks = difficulties["expert"]["attack"]["reference"]
     report = {
+        "schema": "rb3charts-authorized-chart-comparison",
         "schema_version": 1,
         "scope": (
             "post-generation evaluation only; authorized human notes were not "
@@ -1636,6 +1640,248 @@ def compare_authorized_chart(
         encoding="utf-8",
     )
     return report
+
+
+def _comparison_index_summary(report):
+    schema=report["schema"]
+    if schema=="rb3charts-authorized-chart-comparison":
+        metrics=report["difficulties"]["expert"]
+        paired=(report.get("paired_source_agreement") or {}).get(
+            "status","unavailable"
+        )
+    elif schema=="rb3charts-reference-comparison":
+        metrics=report["metrics"]
+        paired="unavailable"
+    else:
+        raise ValueError(f"Unsupported comparison schema: {schema}")
+    worst=metrics["attack_windows"].get("worst_reference_recall")
+    if worst is not None:
+        worst={
+            key:worst[key]
+            for key in (
+                "start","end","reference","candidate","matched",
+                "precision","recall","f1",
+            )
+        }
+    return {
+        "attack":metrics["attack"],
+        "chord":metrics["chord"],
+        "sustain":metrics["sustain"],
+        "lane":{
+            key:metrics["lane"].get(key)
+            for key in (
+                "exact_agreement",
+                "movement_direction_agreement",
+                "mean_interval_error",
+            )
+        },
+        "motif":{
+            key:metrics["motifs"].get(key)
+            for key in (
+                "families",
+                "reference_occurrences",
+                "covered_occurrences",
+                "coverage",
+                "relative_lane_shape_agreement",
+            )
+        },
+        "weakest_window":worst,
+        "paired_source_status":paired,
+    }
+
+
+def _comparison_index_markdown(index):
+    def cell(value):
+        text=" ".join(str(value).split())
+        for source,replacement in (
+            ("\\",r"\\"),
+            ("|",r"\|"),
+            ("[",r"\["),
+            ("]",r"\]"),
+            ("`",r"\`"),
+            ("<","&lt;"),
+            (">","&gt;"),
+        ):
+            text=text.replace(source,replacement)
+        return text
+
+    lines=[
+        "# Comparison corpus index",
+        "",
+        (
+            "Local summary links only. Reference-note rows, source paths and "
+            "detailed authorized records are not embedded."
+        ),
+        "",
+        f"- Comparison schema: **{index['comparison_schema']}**",
+        f"- Generated runs: **{len(index['entries'])}**",
+        "",
+        (
+            "| Song | Run | Comparison | Validation | Attack F1 | Chord F1 | "
+            "Sustain F1 | Lane exact | Motif coverage | Weakest recall | "
+            "Paired source | Report |"
+        ),
+        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---|",
+    ]
+    for entry in index["entries"]:
+        summary=entry.get("summary")
+        if summary is None:
+            values=["—"]*6
+            paired="unavailable"
+        else:
+            weakest=summary["weakest_window"]
+            values=[
+                f"{summary['attack']['f1']:.4f}",
+                f"{summary['chord']['f1']:.4f}",
+                f"{summary['sustain']['f1']:.4f}",
+                f"{summary['lane']['exact_agreement']:.4f}",
+                f"{summary['motif']['coverage']:.4f}",
+                f"{weakest['recall']:.4f}" if weakest else "—",
+            ]
+            paired=summary["paired_source_status"]
+        link=entry.get("links",{}).get("markdown")
+        if link is None:
+            link=entry.get("links",{}).get("json")
+        report_link=f"[local]({quote(link,safe='/..')})" if link else "—"
+        identity=entry["identity"]
+        song=cell(f"{identity['artist']} — {identity['title']}")
+        run=cell(entry["run_basename"]).replace("`","'")
+        lines.append(
+            f"| {song} | `{run}` | "
+            f"{entry['comparison_status']} | {entry['validation_status']} | "
+            f"{' | '.join(values)} | {paired} | {report_link} |"
+        )
+    return "\n".join(lines)+"\n"
+
+
+def build_comparison_index(root, output=None):
+    """Build a sanitized deterministic index of local post-generation reports."""
+    root=Path(root).resolve()
+    if not root.is_dir():
+        raise FileNotFoundError(f"Comparison root does not exist: {root}")
+    output=Path(output).resolve() if output else root/"comparison-index.json"
+    try:
+        output.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("Comparison index output must stay inside the corpus root") from exc
+    metadata_paths=sorted(root.glob("**/metadata/song.json"))
+    if not metadata_paths:
+        raise ValueError("No generated runs with metadata/song.json were found")
+    entries=[]
+    identities={}
+    schemas=set()
+    for metadata_path in metadata_paths:
+        run=metadata_path.parent.parent
+        try:
+            metadata=json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError,json.JSONDecodeError) as exc:
+            raise ValueError(f"Malformed generated metadata in {run.name}: {exc}") from exc
+        for key in ("song_id","title","artist"):
+            if metadata.get(key) in (None,""):
+                raise ValueError(f"Generated metadata in {run.name} requires {key}")
+        song_id=str(metadata["song_id"])
+        if song_id in identities:
+            raise ValueError(
+                f"Duplicate song identity {song_id}: "
+                f"{identities[song_id]} and {run.name}"
+            )
+        identities[song_id]=run.name
+        reports=[
+            path for path in (
+                run/"analysis"/"human-chart-comparison.json",
+                run/"analysis"/"reference-comparison.json",
+            )
+            if path.is_file()
+        ]
+        if len(reports)>1:
+            raise ValueError(f"Mixed comparison schemas in generated run {run.name}")
+        validation_path=run/"validation_report.json"
+        if validation_path.is_file():
+            try:
+                validation=json.loads(
+                    validation_path.read_text(encoding="utf-8")
+                )
+            except (OSError,json.JSONDecodeError) as exc:
+                raise ValueError(
+                    f"Malformed validation report in {run.name}: {exc}"
+                ) from exc
+            if not isinstance(validation.get("passed"),bool):
+                raise ValueError(
+                    f"Validation report in {run.name} has no boolean passed status"
+                )
+            validation_status="passed" if validation["passed"] else "failed"
+        else:
+            validation_status="unavailable"
+        entry={
+            "identity":{
+                "song_id":song_id,
+                "title":str(metadata["title"]),
+                "artist":str(metadata["artist"]),
+            },
+            "run_basename":run.name,
+            "comparison_status":"missing",
+            "validation_status":validation_status,
+            "links":{},
+            "summary":None,
+        }
+        if reports:
+            report_path=reports[0]
+            try:
+                report=json.loads(report_path.read_text(encoding="utf-8"))
+            except (OSError,json.JSONDecodeError) as exc:
+                raise ValueError(
+                    f"Malformed comparison report in {run.name}: {exc}"
+                ) from exc
+            schema=report.get("schema")
+            if schema not in {
+                "rb3charts-authorized-chart-comparison",
+                "rb3charts-reference-comparison",
+            } or report.get("schema_version")!=1:
+                raise ValueError(
+                    f"Malformed comparison schema in generated run {run.name}"
+                )
+            schemas.add(schema)
+            relative_json=Path(os.path.relpath(
+                report_path,output.parent
+            )).as_posix()
+            links={"json":relative_json}
+            markdown_path=report_path.with_suffix(".md")
+            if markdown_path.is_file():
+                links["markdown"]=Path(os.path.relpath(
+                    markdown_path,output.parent
+                )).as_posix()
+            entry.update({
+                "comparison_status":"available",
+                "links":links,
+                "summary":_comparison_index_summary(report),
+            })
+        entries.append(entry)
+    if not schemas:
+        raise ValueError("No comparison reports were found")
+    if len(schemas)>1:
+        raise ValueError("Corpus mixes authorized and reference comparison schemas")
+    entries.sort(key=lambda row:(
+        row["identity"]["artist"].casefold(),
+        row["identity"]["title"].casefold(),
+        row["identity"]["song_id"],
+        row["run_basename"],
+    ))
+    index={
+        "schema":"rb3charts-comparison-corpus-index",
+        "schema_version":1,
+        "scope":(
+            "sanitized local post-generation summary; no reference notes, "
+            "source paths or detailed authorized records"
+        ),
+        "comparison_schema":next(iter(schemas)),
+        "entries":entries,
+    }
+    output.parent.mkdir(parents=True,exist_ok=True)
+    output.write_text(json.dumps(index,indent=2)+"\n",encoding="utf-8")
+    output.with_suffix(".md").write_text(
+        _comparison_index_markdown(index),encoding="utf-8"
+    )
+    return index
 
 
 def hash_file(path: Path):
