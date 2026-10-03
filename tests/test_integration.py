@@ -355,6 +355,8 @@ def test_comparison_preview_keeps_versions_synchronized(tmp_path):
     assert "A · Baseline" in page and "B · Candidate" in page
     assert '"different": true' in page
     assert "A/B keys switch versions" in page
+    assert "NOTES HIT THIS LINE" in page
+    assert "rawY>strike+2" in page
     assert "../candidate/audio/song.wav" in page
 
 
