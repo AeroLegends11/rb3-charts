@@ -80,6 +80,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument drums
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument all
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output'
+.\.venv\Scripts\python.exe -m rb3charts.cli compare-midi 'C:\Path\To\Generated_Output' 'C:\Path\To\Evaluation\notes.mid'
 .\.venv\Scripts\python.exe -m rb3charts.cli analyze-reference 'C:\Path\To\Reference_MIDI_Corpus'
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' --verify-hashes
@@ -117,6 +118,14 @@ guitar writes `output/replay-benchmark.json` and other instruments write
 `output/<instrument>-replay-benchmark.json`. The all-instrument mode writes
 `output/all-instruments-replay-benchmark.json` and lists instruments that were
 unavailable in either replay root.
+
+`compare-midi` is an evaluation-only cross-check for a completed generated
+guitar chart and a local reference MIDI. It automatically estimates a global
+onset offset unless `--offset` is supplied, records hashes and alignment
+provenance, reports unmatched attacks and weakest four-second windows, and
+attributes metrics to saved authoring stages when snapshots are present. It
+writes JSON plus a Markdown summary; reference notes are loaded only after
+generation and are never runtime inputs.
 
 New review drafts record hashes for `import/notes.mid`, `song.wav`, and
 `song.ini`. The `package` command rejects any of those inputs if they changed

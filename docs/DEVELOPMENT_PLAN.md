@@ -143,6 +143,10 @@ Status update (2026-10-02):
 - Packaging now invokes that current recheck automatically for complete run
   folders and stops before compilation on any failure. Older folders missing
   charts/tempo retain the explicit legacy manifest/report fallback.
+- Added evaluation-only `compare-midi` for arbitrary local reference MIDI
+  cross-checks after generation. It records input hashes, Git state, alignment,
+  exact unmatched events, weakest four-second windows, and per-authoring-stage
+  metrics. Reference notes remain excluded from generation and training.
 
 ## 3. Consolidate motif understanding — architecture proposal
 

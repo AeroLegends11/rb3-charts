@@ -682,6 +682,34 @@ def _match_attacks(reference, candidate, tolerance):
     return matches
 
 
+def estimate_attack_offset(reference, candidate, tolerance=0.08, limit=10.0):
+    """Estimate a global candidate-to-reference offset from attack onsets."""
+    if not reference or not candidate:
+        return 0.0
+    bins=defaultdict(int)
+    for left in reference:
+        for right in candidate:
+            offset=left["time"]-right["time"]
+            if abs(offset)<=limit:
+                bins[round(offset,2)]+=1
+    best_score=None
+    best_offset=0.0
+    for coarse,_ in sorted(
+        bins.items(),key=lambda item:(-item[1],abs(item[0]),item[0])
+    )[:40]:
+        shifted=[
+            {**row,"time":row["time"]+coarse}
+            for row in candidate
+        ]
+        matches=_match_attacks(reference,shifted,tolerance)
+        error=sum(abs(delta) for _,_,delta in matches)
+        score=(len(matches),-error,-abs(coarse),-coarse)
+        if best_score is None or score>best_score:
+            best_score=score
+            best_offset=coarse
+    return round(float(best_offset),6)
+
+
 def _windowed_attack_metrics(reference, candidate, tolerance, window=4.0):
     if not reference and not candidate:
         return {"window_seconds": window, "worst_reference_recall": None, "windows": []}
@@ -795,6 +823,8 @@ def _motif_agreement(reference, matches, window=4):
 
 def compare_chart_attacks(reference, candidate, tolerance=0.08, hold_seconds=0.35):
     matches = _match_attacks(reference, candidate, tolerance)
+    matched_reference={id(left) for left,_,_ in matches}
+    matched_candidate={id(right) for _,right,_ in matches}
     errors = [abs(error) * 1000 for _, _, error in matches]
     precision = len(matches) / max(1, len(candidate))
     recall = len(matches) / max(1, len(reference))
@@ -885,7 +915,225 @@ def compare_chart_attacks(reference, candidate, tolerance=0.08, hold_seconds=0.3
             ),
         },
         "motifs": _motif_agreement(reference, matches),
+        "unmatched": {
+            "reference": [
+                row for row in reference
+                if id(row) not in matched_reference
+            ],
+            "candidate": [
+                row for row in candidate
+                if id(row) not in matched_candidate
+            ],
+        },
     }
+
+
+def _resolve_midi(path):
+    path=Path(path).resolve()
+    if path.is_file():
+        return path,None
+    for relative in (Path("midi")/"notes.mid",Path("import")/"notes.mid"):
+        candidate=path/relative
+        if candidate.is_file():
+            return candidate,path
+    raise FileNotFoundError(f"No notes.mid found in: {path}")
+
+
+def _snapshot_attacks(notes, offset=0.0):
+    grouped=defaultdict(list)
+    for note in notes:
+        grouped[round(float(note["start"])+offset,6)].append(note)
+    return [
+        {
+            "time":time,
+            "lanes":tuple(sorted({
+                int(lane) for note in rows for lane in note.get("lanes",[])
+            })),
+            "duration":max(
+                float(note.get("end",note["start"]))-float(note["start"])
+                for note in rows
+            ),
+        }
+        for time,rows in sorted(grouped.items())
+    ]
+
+
+def _reference_stage_metrics(folder, reference, offset, tolerance):
+    snapshots=folder/"analysis"/"guitar-stage-snapshots.json"
+    if not snapshots.is_file():
+        return []
+    payload=json.loads(snapshots.read_text(encoding="utf-8"))
+    stages=[]
+    for stage in payload.get("stages",[]):
+        notes=stage.get("notes")
+        if not isinstance(notes,list):
+            continue
+        candidate=_snapshot_attacks(notes,offset)
+        metrics=compare_chart_attacks(
+            reference,candidate,tolerance=tolerance
+        )
+        stages.append({
+            "stage":str(stage.get("stage","unknown")),
+            "attack":metrics["attack"],
+            "lane":metrics["lane"],
+            "density":metrics["density"],
+            "worst_reference_recall":
+                metrics["attack_windows"]["worst_reference_recall"],
+        })
+    return stages
+
+
+def _reference_comparison_markdown(report):
+    provenance=report["provenance"]
+    metrics=report["metrics"]
+    attack=metrics["attack"]
+    lines=[
+        "# Reference chart comparison",
+        "",
+        (
+            "Evaluation only: reference notes were loaded after generation "
+            "and were not generation inputs."
+        ),
+        "",
+        f"- Generated: `{provenance['generated_midi']}`",
+        f"- Reference: `{provenance['reference_midi']}`",
+        f"- Difficulty: **{provenance['difficulty'].title()} Guitar**",
+        (
+            f"- Alignment: **{provenance['alignment']}**, "
+            f"{provenance['alignment_offset_seconds']:+.3f} seconds"
+        ),
+        "",
+        "| Metric | Value |",
+        "|---|---:|",
+        f"| Reference attacks | {attack['reference']} |",
+        f"| Generated attacks | {attack['candidate']} |",
+        f"| Matched attacks | {attack['matched']} |",
+        f"| Attack precision | {attack['precision']:.4f} |",
+        f"| Attack recall | {attack['recall']:.4f} |",
+        f"| Attack F1 | {attack['f1']:.4f} |",
+        f"| Exact lane agreement | {metrics['lane']['exact_agreement']:.4f} |",
+        (
+            "| Movement direction agreement | "
+            f"{metrics['lane']['movement_direction_agreement']:.4f} |"
+        ),
+        "",
+    ]
+    if report["stage_metrics"]:
+        lines.extend([
+            "## Stage attribution",
+            "",
+            "| Stage | Attacks | Matched | Precision | Recall | F1 |",
+            "|---|---:|---:|---:|---:|---:|",
+        ])
+        for stage in report["stage_metrics"]:
+            row=stage["attack"]
+            lines.append(
+                f"| {stage['stage']} | {row['candidate']} | "
+                f"{row['matched']} | {row['precision']:.4f} | "
+                f"{row['recall']:.4f} | {row['f1']:.4f} |"
+            )
+        lines.append("")
+    worst=sorted(
+        metrics["attack_windows"]["windows"],
+        key=lambda row:(row["f1"],row["start"]),
+    )[:12]
+    lines.extend([
+        "## Weakest four-second windows",
+        "",
+        "| Seconds | Reference | Generated | Matched | Precision | Recall | F1 |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ])
+    for row in worst:
+        lines.append(
+            f"| {row['start']:.0f}-{row['end']:.0f} | "
+            f"{row['reference']} | {row['candidate']} | {row['matched']} | "
+            f"{row['precision']:.4f} | {row['recall']:.4f} | "
+            f"{row['f1']:.4f} |"
+        )
+    return "\n".join(lines)+"\n"
+
+
+def compare_reference_midi(
+    generated,
+    reference,
+    output=None,
+    difficulty="expert",
+    tolerance=0.08,
+    offset=None,
+):
+    """Compare a completed guitar chart with evaluation-only reference MIDI."""
+    from .datasets import _read_expert_gems
+
+    generated_midi,generated_folder=_resolve_midi(generated)
+    reference_midi,_=_resolve_midi(reference)
+    lead=0.0
+    if generated_folder is not None:
+        metadata_path=generated_folder/"metadata"/"song.json"
+        if metadata_path.is_file():
+            metadata=json.loads(metadata_path.read_text(encoding="utf-8"))
+            lead=float(metadata.get("lead_seconds",0))
+    reference_attacks=_chart_attacks(
+        _read_expert_gems(reference_midi,"rock_band_midi",difficulty)
+    )
+    candidate_attacks=_chart_attacks(
+        _read_expert_gems(generated_midi,"rock_band_midi",difficulty),
+        offset=-lead,
+    )
+    if offset is None:
+        offset=estimate_attack_offset(
+            reference_attacks,candidate_attacks,tolerance
+        )
+        alignment="automatic-onsets-only"
+    else:
+        offset=float(offset)
+        alignment="manual"
+    aligned=[
+        {**row,"time":round(row["time"]+offset,6)}
+        for row in candidate_attacks
+    ]
+    metrics=compare_chart_attacks(
+        reference_attacks,aligned,tolerance=tolerance
+    )
+    report={
+        "schema_version":1,
+        "scope":(
+            "post-generation evaluation only; reference notes were not "
+            "generation inputs"
+        ),
+        "provenance":{
+            "generated_midi":str(generated_midi),
+            "generated_sha256":hash_file(generated_midi),
+            "reference_midi":str(reference_midi),
+            "reference_sha256":hash_file(reference_midi),
+            "instrument":"guitar",
+            "difficulty":difficulty,
+            "tolerance_seconds":float(tolerance),
+            "generated_audio_lead_seconds":lead,
+            "alignment":alignment,
+            "alignment_offset_seconds":offset,
+            "git":git_state(Path(__file__).resolve().parents[1]),
+        },
+        "metrics":metrics,
+        "stage_metrics":(
+            _reference_stage_metrics(
+                generated_folder,
+                reference_attacks,
+                offset,
+                tolerance,
+            )
+            if generated_folder is not None else []
+        ),
+    }
+    output=Path(output) if output else (
+        (generated_folder or generated_midi.parent)/
+        "analysis"/"reference-comparison.json"
+    )
+    output.parent.mkdir(parents=True,exist_ok=True)
+    output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+    output.with_suffix(".md").write_text(
+        _reference_comparison_markdown(report),encoding="utf-8"
+    )
+    return report
 
 
 def compare_authorized_chart(manifest, song_id, generated_folder, output=None):

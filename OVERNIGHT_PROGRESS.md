@@ -596,3 +596,22 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage
   passes 18 tests.
+
+### 2026-10-03 06:17 - General reference cross-check restored
+
+- Audited the earlier standalone chart comparison tool against the current
+  provenance-gated authorized evaluator. The current engine already had richer
+  difficulty, motif, phrase-boundary, density, and four-second metrics, but had
+  lost arbitrary local MIDI comparison, automatic alignment, unmatched-event
+  detail, and authoring-stage attribution.
+- Added evaluation-only `compare-midi` for completed output folders or MIDI
+  files. It reads reference notes only after generation, hashes both MIDIs,
+  records Git/alignment provenance, estimates or accepts a global offset, and
+  writes JSON plus Markdown.
+- Reports now preserve exact unmatched attacks, weakest four-second windows,
+  and comparison metrics after each saved guitar authoring stage. A real
+  Certain Death cross-check recovered a -10 ms offset and measured final Expert
+  attack F1 0.7987. Mapping matched 853 attacks; playability matched 849 while
+  improving overall F1 from 0.75 to 0.80 by removing unsupported extras.
+- Focused regression coverage passes 21 tests. The command does not alter
+  generation and does not make reference charts training inputs.

@@ -56,6 +56,20 @@ def main():
     human_compare.add_argument("song_id")
     human_compare.add_argument("generated",type=Path)
     human_compare.add_argument("--output",type=Path)
+    midi_compare=sub.add_parser(
+        "compare-midi",
+        help="Evaluate a completed guitar chart against reference MIDI",
+    )
+    midi_compare.add_argument("generated",type=Path)
+    midi_compare.add_argument("reference",type=Path)
+    midi_compare.add_argument("--output",type=Path)
+    midi_compare.add_argument(
+        "--difficulty",
+        choices=["expert","hard","medium","easy"],
+        default="expert",
+    )
+    midi_compare.add_argument("--tolerance-ms",type=int,default=80)
+    midi_compare.add_argument("--offset",type=float)
     reference=sub.add_parser("analyze-reference",help="Learn style statistics from finished Rock Band MIDI charts")
     reference.add_argument("folder",type=Path)
     reference.add_argument("--output",type=Path,default=Path("reference")/"style-profile.json")
@@ -243,6 +257,32 @@ def main():
             print(f"Human-chart comparison failed: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report["difficulties"]["expert"],indent=2))
+        return 0
+    if args.command=="compare-midi":
+        from .datasets import DatasetManifestError
+        from .regression import compare_reference_midi
+        try:
+            report=compare_reference_midi(
+                args.generated,
+                args.reference,
+                args.output,
+                difficulty=args.difficulty,
+                tolerance=args.tolerance_ms/1000,
+                offset=args.offset,
+            )
+        except (
+            DatasetManifestError,FileNotFoundError,KeyError,TypeError,ValueError
+        ) as exc:
+            print(f"MIDI comparison failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps({
+            "alignment_offset_seconds":
+                report["provenance"]["alignment_offset_seconds"],
+            **report["metrics"]["attack"],
+            "worst_reference_recall":
+                report["metrics"]["attack_windows"]
+                ["worst_reference_recall"],
+        },indent=2))
         return 0
     if args.command=="convert-guitarset":
         from .training import TrainingDataError, convert_guitarset_jams

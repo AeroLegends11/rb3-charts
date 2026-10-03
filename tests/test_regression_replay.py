@@ -13,6 +13,8 @@ from rb3charts.regression import (
     benchmark_all_replays,
     benchmark_replays,
     compare_chart_attacks,
+    estimate_attack_offset,
+    _snapshot_attacks,
     compute_regression_metrics,
     stage_entry,
 )
@@ -418,6 +420,39 @@ def test_human_chart_comparison_exposes_local_attack_recall_collapse():
 
     assert [row["recall"] for row in windows["windows"]] == [1, .5]
     assert windows["worst_reference_recall"]["start"] == 4
+
+
+def test_attack_alignment_and_unmatched_events_are_reported():
+    reference=[
+        {"time":time,"lanes":(0,),"duration":.1}
+        for time in (1,2,3,4)
+    ]
+    candidate=[
+        {"time":time-.37,"lanes":(0,),"duration":.1}
+        for time in (1,2,3)
+    ]
+    offset=estimate_attack_offset(reference,candidate)
+    aligned=[
+        {**row,"time":row["time"]+offset}
+        for row in candidate
+    ]
+    report=compare_chart_attacks(reference,aligned)
+    assert offset==pytest.approx(.37)
+    assert report["attack"]["matched"]==3
+    assert [row["time"] for row in report["unmatched"]["reference"]]==[4]
+    assert report["unmatched"]["candidate"]==[]
+
+
+def test_snapshot_attacks_group_chord_lanes_and_apply_offset():
+    attacks=_snapshot_attacks([
+        {"start":1,"end":1.2,"lanes":[0]},
+        {"start":1,"end":1.3,"lanes":[2]},
+    ],offset=.25)
+    assert attacks==[{
+        "time":1.25,
+        "lanes":(0,2),
+        "duration":pytest.approx(.3),
+    }]
 
 
 def test_repeated_four_note_runs_metric_coverage():
