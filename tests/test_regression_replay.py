@@ -733,6 +733,17 @@ def test_authorized_index_separates_dataset_and_package_song_ids(tmp_path):
     assert index["entries"][0]["identity"]["song_id"]=="dataset-song"
 
 
+def test_comparison_index_rejects_nested_output(tmp_path):
+    _write_index_run(
+        tmp_path,"run","song","rb3charts-reference-comparison"
+    )
+
+    with pytest.raises(ValueError,match="directly inside"):
+        build_comparison_index(
+            tmp_path,tmp_path/"nested"/"comparison-index.json"
+        )
+
+
 def test_comparison_trend_pairs_shared_runs_and_reports_asymmetry(tmp_path):
     baseline=tmp_path/"baseline"
     candidate=tmp_path/"candidate"
@@ -795,14 +806,16 @@ def test_comparison_trend_preserves_null_metric_as_unavailable(tmp_path):
     baseline=tmp_path/"baseline"
     candidate=tmp_path/"candidate"
     for root in (baseline,candidate):
-        _write_index_run(
+        run=_write_index_run(
             root,"run","song","rb3charts-reference-comparison"
         )
+        if root==candidate:
+            report_path=run/"analysis"/"reference-comparison.json"
+            report=json.loads(report_path.read_text(encoding="utf-8"))
+            report["metrics"]["motifs"]["coverage"]=None
+            report_path.write_text(json.dumps(report),encoding="utf-8")
         build_comparison_index(root)
     candidate_index=candidate/"comparison-index.json"
-    payload=json.loads(candidate_index.read_text(encoding="utf-8"))
-    payload["entries"][0]["summary"]["motif"]["coverage"]=None
-    candidate_index.write_text(json.dumps(payload),encoding="utf-8")
 
     trend=compare_comparison_indexes(
         baseline/"comparison-index.json",candidate_index
@@ -862,6 +875,24 @@ def test_comparison_trend_rejects_stale_report_lineage(tmp_path):
         compare_comparison_indexes(
             tmp_path/"baseline"/"comparison-index.json",
             tmp_path/"candidate"/"comparison-index.json",
+        )
+
+
+def test_comparison_trend_rejects_tampered_index_summary(tmp_path):
+    for name in ("baseline","candidate"):
+        root=tmp_path/name
+        _write_index_run(
+            root,"run","song","rb3charts-reference-comparison"
+        )
+        build_comparison_index(root)
+    candidate=tmp_path/"candidate"/"comparison-index.json"
+    payload=json.loads(candidate.read_text(encoding="utf-8"))
+    payload["entries"][0]["summary"]["attack"]["f1"]=.1234
+    candidate.write_text(json.dumps(payload),encoding="utf-8")
+
+    with pytest.raises(ValueError,match="summary differs"):
+        compare_comparison_indexes(
+            tmp_path/"baseline"/"comparison-index.json",candidate
         )
 
 

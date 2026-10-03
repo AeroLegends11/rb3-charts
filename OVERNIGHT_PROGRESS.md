@@ -939,3 +939,20 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   morning review. Less Talk remains informational: its Expert scaling-riff
   attack/pitch sequence is still upstream-blocked, and no rejected recovery
   hook was restored.
+
+### 2026-10-03 16:10 - Comparison lineage hardening retained
+
+- Exercising sanitized trends on the real three-song authorized development
+  corpus exposed that manifest `song_id` and generated package `song_id` are
+  distinct identities. Authorized reports now bind both: the manifest identity
+  remains the corpus key while generated package ID, artist/title and MIDI hash
+  establish current-run lineage. The real rejected spacing experiment reports
+  three paired songs and exactly zero attack-F1 delta.
+- Index output is restricted to the corpus root so relative report links cannot
+  escape the revalidation boundary. Trend loading rejects escaping links,
+  input-index overwrite, altered linked reports, generated MIDI changes, and
+  index summaries that no longer equal the hashed report's sanitized summary.
+- Fixed index Markdown rendering for explicitly unavailable/null metrics rather
+  than formatting them as numbers.
+- Focused index/trend validation passes 11 tests; the full suite passes 209
+  tests with six existing dependency/deprecation warnings.

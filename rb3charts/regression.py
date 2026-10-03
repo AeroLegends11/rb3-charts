@@ -1738,13 +1738,15 @@ def _comparison_index_markdown(index):
             paired="unavailable"
         else:
             weakest=summary["weakest_window"]
+            def display(value):
+                return f"{value:.4f}" if value is not None else "—"
             values=[
-                f"{summary['attack']['f1']:.4f}",
-                f"{summary['chord']['f1']:.4f}",
-                f"{summary['sustain']['f1']:.4f}",
-                f"{summary['lane']['exact_agreement']:.4f}",
-                f"{summary['motif']['coverage']:.4f}",
-                f"{weakest['recall']:.4f}" if weakest else "—",
+                display(summary["attack"]["f1"]),
+                display(summary["chord"]["f1"]),
+                display(summary["sustain"]["f1"]),
+                display(summary["lane"]["exact_agreement"]),
+                display(summary["motif"]["coverage"]),
+                display(weakest["recall"]) if weakest else "—",
             ]
             paired=summary["paired_source_status"]
         link=entry.get("links",{}).get("markdown")
@@ -1768,10 +1770,10 @@ def build_comparison_index(root, output=None):
     if not root.is_dir():
         raise FileNotFoundError(f"Comparison root does not exist: {root}")
     output=Path(output).resolve() if output else root/"comparison-index.json"
-    try:
-        output.relative_to(root)
-    except ValueError as exc:
-        raise ValueError("Comparison index output must stay inside the corpus root") from exc
+    if output.parent!=root:
+        raise ValueError(
+            "Comparison index output must be directly inside the corpus root"
+        )
     metadata_paths=sorted(root.glob("**/metadata/song.json"))
     if not metadata_paths:
         raise ValueError("No generated runs with metadata/song.json were found")
@@ -2012,6 +2014,22 @@ def _load_comparison_index(path):
             ):
                 raise ValueError(
                     f"Stale comparison-report lineage for {song_id}"
+                )
+            try:
+                linked_report=json.loads(
+                    report_path.read_text(encoding="utf-8")
+                )
+            except (OSError,json.JSONDecodeError) as exc:
+                raise ValueError(
+                    f"Malformed linked comparison report for {song_id}: {exc}"
+                ) from exc
+            if linked_report.get("schema")!=payload.get("comparison_schema"):
+                raise ValueError(
+                    f"Linked comparison schema differs for {song_id}"
+                )
+            if _comparison_index_summary(linked_report)!=entry.get("summary"):
+                raise ValueError(
+                    f"Comparison index summary differs from report for {song_id}"
                 )
             run=report_path.parent.parent
             generated_midi=next((

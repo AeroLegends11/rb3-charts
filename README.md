@@ -143,7 +143,9 @@ mixed schemas and malformed metadata/reports are rejected before either index
 is written. Available reports must match the current generated MIDI hash and,
 for authorized comparisons, the metadata song ID; stale comparisons are
 rejected. Source paths, unmatched/reference note rows and detailed authorized
-records are excluded.
+records are excluded. A custom index output must remain directly inside the
+corpus root so every relative report link can be revalidated without escaping
+the index boundary.
 
 `compare-comparison-indexes` writes deterministic JSON plus concise Markdown for
 two compatible sanitized indexes. Song IDs are paired only when display
