@@ -1611,6 +1611,7 @@ def compare_authorized_chart(
         "song_id": str(song_id),
         "manifest_sha256": validation["manifest_sha256"],
         "generated_folder": str(generated_folder),
+        "generated_midi_sha256": hash_file(generated_midi),
         "generated_audio_lead_seconds": lead,
         "difficulties": difficulties,
         "paired_source_agreement": validation["paired_source_agreement"],
@@ -1841,6 +1842,36 @@ def build_comparison_index(root, output=None):
                     f"Malformed comparison schema in generated run {run.name}"
                 )
             schemas.add(schema)
+            generated_candidates=[
+                run/"midi"/"notes.mid",
+                run/"import"/"notes.mid",
+            ]
+            generated_midi=next(
+                (path for path in generated_candidates if path.is_file()),
+                None,
+            )
+            if generated_midi is None:
+                raise ValueError(
+                    f"Comparison report in {run.name} has no current generated MIDI"
+                )
+            if schema=="rb3charts-authorized-chart-comparison":
+                if str(report.get("song_id"))!=song_id:
+                    raise ValueError(
+                        f"Comparison song identity differs in generated run {run.name}"
+                    )
+                expected_generated_hash=report.get("generated_midi_sha256")
+            else:
+                expected_generated_hash=(
+                    report.get("provenance") or {}
+                ).get("generated_sha256")
+            if (
+                not isinstance(expected_generated_hash,str)
+                or len(expected_generated_hash)!=64
+                or hash_file(generated_midi)!=expected_generated_hash
+            ):
+                raise ValueError(
+                    f"Comparison generated-MIDI lineage differs in {run.name}"
+                )
             relative_json=Path(os.path.relpath(
                 report_path,output.parent
             )).as_posix()

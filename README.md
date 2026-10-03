@@ -139,7 +139,9 @@ run basename, comparison/validation status, compact attack/chord/sustain/lane/
 motif/weak-window summaries, paired-source status and relative local links.
 Runs with no comparison remain explicitly `missing`; duplicate song IDs,
 mixed schemas and malformed metadata/reports are rejected before either index
-is written. Source paths, unmatched/reference note rows and detailed authorized
+is written. Available reports must match the current generated MIDI hash and,
+for authorized comparisons, the metadata song ID; stale comparisons are
+rejected. Source paths, unmatched/reference note rows and detailed authorized
 records are excluded.
 
 `audit-playability-evidence` is also post-generation only. It joins attributed

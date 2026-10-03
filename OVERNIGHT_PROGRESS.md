@@ -856,3 +856,16 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   mixed schemas and malformed schemas. Runtime generation remains unchanged.
 - Validation: seven focused comparison/reporting tests passed; full suite
   passed 200 tests; CLI help was exercised.
+
+### 2026-10-03 07:24 - Stale comparison lineage rejected
+
+- Began the next independent quality task by binding corpus index entries to
+  the current generated MIDI. Authorized comparison artifacts now record that
+  MIDI SHA-256; reference comparisons already did.
+- Indexing verifies the current `midi/notes.mid` or `import/notes.mid` against
+  the comparison hash and verifies authorized comparison `song_id` against
+  generated metadata. Changed MIDI or mismatched identity aborts before index
+  output, preventing stale metrics from being presented as current.
+- Added a focused stale-lineage regression test. Runtime generation and metric
+  calculation remain unchanged.
+- Validation: four focused index tests passed; full suite passed 201 tests.

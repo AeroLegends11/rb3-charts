@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -571,6 +572,10 @@ def _write_index_run(root, name, song_id, schema=None, title="Song", artist="Art
     run=root/name
     (run/"metadata").mkdir(parents=True)
     (run/"analysis").mkdir()
+    (run/"midi").mkdir()
+    generated_midi=run/"midi"/"notes.mid"
+    generated_midi.write_bytes(f"generated {song_id}".encode())
+    generated_hash=hashlib.sha256(generated_midi.read_bytes()).hexdigest()
     (run/"metadata"/"song.json").write_text(json.dumps({
         "song_id":song_id,
         "title":title,
@@ -590,6 +595,7 @@ def _write_index_run(root, name, song_id, schema=None, title="Song", artist="Art
                 "schema_version":1,
                 "song_id":song_id,
                 "generated_folder":str(run),
+                "generated_midi_sha256":generated_hash,
                 "difficulties":{"expert":metrics},
                 "paired_source_agreement":{
                     "status":"available",
@@ -603,6 +609,7 @@ def _write_index_run(root, name, song_id, schema=None, title="Song", artist="Art
                 "schema_version":1,
                 "provenance":{
                     "generated_midi":str(run/"midi"/"notes.mid"),
+                    "generated_sha256":generated_hash,
                     "reference_midi":r"C:\excluded\reference.mid",
                 },
                 "metrics":metrics,
@@ -674,6 +681,18 @@ def test_comparison_index_rejects_mixed_and_malformed_schemas(tmp_path):
     )
     with pytest.raises(ValueError,match="Malformed comparison schema"):
         build_comparison_index(root)
+
+
+def test_comparison_index_rejects_stale_generated_midi_lineage(tmp_path):
+    run=_write_index_run(
+        tmp_path,"run","song","rb3charts-authorized-chart-comparison"
+    )
+    (run/"midi"/"notes.mid").write_bytes(b"changed after comparison")
+
+    with pytest.raises(ValueError,match="generated-MIDI lineage differs"):
+        build_comparison_index(tmp_path)
+
+    assert not (tmp_path/"comparison-index.json").exists()
 
 
 def test_attack_alignment_and_unmatched_events_are_reported():
