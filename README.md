@@ -77,6 +77,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-runs 'C:\Path\To\Output_Root'
 .\.venv\Scripts\python.exe -m rb3charts.cli replay 'C:\Path\To\Existing_Output'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays'
+.\.venv\Scripts\python.exe -m rb3charts.cli compare-reviews 'C:\Path\To\Baseline_Draft' 'C:\Path\To\Candidate_Draft'
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument drums
 .\.venv\Scripts\python.exe -m rb3charts.cli benchmark-replays 'C:\Path\To\Baseline_Replays' 'C:\Path\To\Candidate_Replays' --instrument all
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output' --source-agreement-report 'C:\Path\To\agreement.json'
@@ -123,6 +124,14 @@ guitar writes `output/replay-benchmark.json` and other instruments write
 `output/<instrument>-replay-benchmark.json`. The all-instrument mode writes
 `output/all-instruments-replay-benchmark.json` and lists instruments that were
 unavailable in either replay root.
+
+`compare-reviews` creates one local synchronized A/B review page for two
+completed drafts of the same source recording. It verifies song identity,
+source-audio hash, tempo map and lead-in timing before comparing them. One audio
+transport is shared across both versions; use the A/B buttons or keyboard keys
+to switch at the same timestamp. Candidate-only and baseline-only attacks are
+outlined, and the densest eight-second candidate-addition windows become jump
+markers. This is a review surface only and never changes either draft.
 
 `compare-midi` is an evaluation-only cross-check for a completed generated
 guitar chart and a local reference MIDI. It automatically estimates a global

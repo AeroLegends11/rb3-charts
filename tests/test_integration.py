@@ -10,7 +10,7 @@ from rb3charts.midi import write_midi
 from rb3charts.validate import validate
 from rb3charts.audio import write_padded_audio
 from rb3charts.timing import analyze_tempo
-from rb3charts.preview import create_preview
+from rb3charts.preview import create_comparison_preview,create_preview
 from rb3charts.audio import detect_chart_profile
 
 def test_missing_beats_repaired_without_moving_detected_anchors():
@@ -299,6 +299,64 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     assert "voice conflict" in page
     assert 'height="700"' in page and "NOTES APPROACH THIS LINE" in page
     assert (tmp_path/"audio"/"timing-audit-guitar.wav").is_file()
+
+
+def test_comparison_preview_keeps_versions_synchronized(tmp_path):
+    notes=[
+        {
+            "start":1.0,
+            "end":1.1,
+            "lanes":[0],
+            "confidence":.8,
+            "source_id":"shared",
+        }
+    ]
+    extra={
+        "start":1.25,
+        "end":1.35,
+        "lanes":[1],
+        "confidence":.7,
+        "source_id":"candidate-only",
+    }
+    for name,hard in (("baseline",notes),("candidate",notes+[extra])):
+        folder=tmp_path/name
+        (folder/"analysis").mkdir(parents=True)
+        (folder/"metadata").mkdir()
+        (folder/"source").mkdir()
+        (folder/"audio").mkdir()
+        (folder/"analysis"/"charts.json").write_text(
+            json.dumps({"guitar":{"hard":hard}}),encoding="utf-8"
+        )
+        (folder/"analysis"/"tempo.json").write_text(
+            json.dumps({"beats":[0,.5,1,1.5,2],"numerator":4}),
+            encoding="utf-8",
+        )
+        (folder/"metadata"/"song.json").write_text(
+            json.dumps({
+                "song_id":"song-id",
+                "title":"A/B Song",
+                "artist":"Tester",
+                "lead_seconds":2.0,
+            }),
+            encoding="utf-8",
+        )
+        (folder/"source"/"source.json").write_text(
+            json.dumps({"sha256":"abc"}),encoding="utf-8"
+        )
+        (folder/"audio"/"song.wav").write_bytes(b"audio")
+
+    output=tmp_path/"review"/"ab.html"
+    report=create_comparison_preview(
+        tmp_path/"baseline",tmp_path/"candidate",output
+    )
+    page=output.read_text(encoding="utf-8")
+    assert report["counts"]["baseline"]["guitar"]["hard"]==1
+    assert report["counts"]["candidate"]["guitar"]["hard"]==2
+    assert "A · Baseline" in page and "B · Candidate" in page
+    assert '"different": true' in page
+    assert "A/B keys switch versions" in page
+    assert "../candidate/audio/song.wav" in page
+
 
 def test_midi_preserves_hold_note_duration(tmp_path):
     import pretty_midi

@@ -993,3 +993,21 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   lane-independent attack/pitch/voice evidence. Existing grid, motif, stem,
   TabCNN and structure-fusion candidates were rejected and remain absent from
   runtime generation.
+
+### 2026-10-03 16:11 - Hail Hard synchronized A/B review
+
+- Added `compare-reviews` for two completed drafts of the same source. It
+  verifies song identity, source SHA-256, tempo map and lead-in, then writes one
+  local page with a shared transport and instant same-timestamp A/B switching.
+- Version-only attacks receive cyan outlines. The densest eight-second
+  candidate-addition windows become jump buttons so the reviewer need not search
+  the whole song manually.
+- Generated
+  `comparisons/morning-review/Hail_To_The_King_Hard_AB.html` from the exact
+  retained 0.46 and 0.38 spacing drafts. It defaults to Guitar/Hard/Candidate:
+  A has 850 attacks and B has 969; Expert is identical at 1,600 attacks.
+- The review question is now concrete: does B preserve the intended Hard rhythm
+  more naturally than A without becoming tiring or over-dense? A/B keys switch
+  versions while playback continues.
+- Full validation passes: 210 tests, with the six existing dependency and
+  deprecation warnings.

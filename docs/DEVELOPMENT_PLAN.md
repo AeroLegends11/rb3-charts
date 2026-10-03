@@ -152,6 +152,12 @@ Status update (2026-10-02):
   source-mix versus guitar-stem onset prominence/width, and voice-continuity
   windows. Optional reference labels measure separability only after generation
   and remain excluded from authoring.
+- Added synchronized local A/B review pages for completed drafts. They reject
+  mismatched song identity, source hash, tempo map or lead-in before presenting
+  one shared audio transport, instant same-timestamp version switching,
+  version-only attack highlighting and densest-change jump markers. This closes
+  the gap between measured replay selection and an actionable listening review
+  without making either draft an input to the other.
 
 ## 3. Consolidate motif understanding — architecture proposal
 

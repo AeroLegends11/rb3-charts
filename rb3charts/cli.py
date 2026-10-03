@@ -51,6 +51,13 @@ def main():
         choices=["guitar","bass","drums","keys","all"],
         default="guitar",
     )
+    review_compare=sub.add_parser(
+        "compare-reviews",
+        help="Create a synchronized A/B page for two completed drafts",
+    )
+    review_compare.add_argument("baseline",type=Path)
+    review_compare.add_argument("candidate",type=Path)
+    review_compare.add_argument("--output",type=Path)
     human_compare=sub.add_parser("compare-human-chart",help="Compare generated guitar with an authorized held-out chart")
     human_compare.add_argument("manifest",type=Path)
     human_compare.add_argument("song_id")
@@ -308,6 +315,20 @@ def main():
             print(
                 f"Compared {report['songs_matched']} songs -> {output}"
             )
+        return 0
+    if args.command=="compare-reviews":
+        from .preview import create_comparison_preview
+        output=args.output or Path("output")/"comparison-review.html"
+        try:
+            report=create_comparison_preview(
+                args.baseline,args.candidate,output
+            )
+        except (
+            FileNotFoundError,KeyError,TypeError,ValueError,json.JSONDecodeError
+        ) as exc:
+            print(f"Review comparison failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report,indent=2))
         return 0
     if args.command=="compare-human-chart":
         from .datasets import DatasetManifestError
