@@ -16,6 +16,7 @@ from rb3charts.regression import (
     benchmark_replays,
     build_comparison_index,
     compare_chart_attacks,
+    compare_comparison_indexes,
     estimate_attack_offset,
     _authorized_comparison_markdown,
     _paired_source_evidence_markdown,
@@ -595,6 +596,11 @@ def _write_index_run(root, name, song_id, schema=None, title="Song", artist="Art
                 "schema_version":1,
                 "song_id":song_id,
                 "generated_folder":str(run),
+                "generated_identity":{
+                    "song_id":song_id,
+                    "title":title,
+                    "artist":artist,
+                },
                 "generated_midi_sha256":generated_hash,
                 "difficulties":{"expert":metrics},
                 "paired_source_agreement":{
@@ -620,6 +626,19 @@ def _write_index_run(root, name, song_id, schema=None, title="Song", artist="Art
         path.write_text(json.dumps(report),encoding="utf-8")
         path.with_suffix(".md").write_text("# Local review\n",encoding="utf-8")
     return run
+
+
+def _shift_comparison_metrics(run, delta):
+    path=next((run/"analysis").glob("*-comparison.json"))
+    report=json.loads(path.read_text(encoding="utf-8"))
+    metrics=(
+        report["difficulties"]["expert"]
+        if "difficulties" in report else report["metrics"]
+    )
+    metrics["attack"]["f1"]=round(metrics["attack"]["f1"]+delta,4)
+    weakest=metrics["attack_windows"]["worst_reference_recall"]
+    weakest["recall"]=round(weakest["recall"]+delta,4)
+    path.write_text(json.dumps(report),encoding="utf-8")
 
 
 def test_comparison_index_sanitizes_reports_and_keeps_missing_runs(tmp_path):
@@ -693,6 +712,177 @@ def test_comparison_index_rejects_stale_generated_midi_lineage(tmp_path):
         build_comparison_index(tmp_path)
 
     assert not (tmp_path/"comparison-index.json").exists()
+
+
+def test_authorized_index_separates_dataset_and_package_song_ids(tmp_path):
+    run=_write_index_run(
+        tmp_path,"run","dataset-song",
+        "rb3charts-authorized-chart-comparison",
+    )
+    metadata_path=run/"metadata"/"song.json"
+    metadata=json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["song_id"]="rb3c_package_id"
+    metadata_path.write_text(json.dumps(metadata),encoding="utf-8")
+    report_path=run/"analysis"/"human-chart-comparison.json"
+    report=json.loads(report_path.read_text(encoding="utf-8"))
+    report["generated_identity"]["song_id"]="rb3c_package_id"
+    report_path.write_text(json.dumps(report),encoding="utf-8")
+
+    index=build_comparison_index(tmp_path)
+
+    assert index["entries"][0]["identity"]["song_id"]=="dataset-song"
+
+
+def test_comparison_trend_pairs_shared_runs_and_reports_asymmetry(tmp_path):
+    baseline=tmp_path/"baseline"
+    candidate=tmp_path/"candidate"
+    _write_index_run(
+        baseline,"a-run","a","rb3charts-authorized-chart-comparison",
+        title="A Song",artist="Artist",
+    )
+    _write_index_run(
+        baseline,"b-run","b","rb3charts-authorized-chart-comparison",
+        title="B Song",artist="Artist",
+    )
+    _write_index_run(
+        baseline,"baseline-only","base","rb3charts-authorized-chart-comparison",
+        title="Baseline Only",artist="Artist",
+    )
+    candidate_a=_write_index_run(
+        candidate,"a-run","a","rb3charts-authorized-chart-comparison",
+        title="A Song",artist="Artist",
+    )
+    _shift_comparison_metrics(candidate_a,-.1)
+    _write_index_run(
+        candidate,"b-run","b",title="B Song",artist="Artist"
+    )
+    _write_index_run(
+        candidate,"candidate-only","cand","rb3charts-authorized-chart-comparison",
+        title="Candidate Only",artist="Artist",
+    )
+    baseline_index=baseline/"comparison-index.json"
+    candidate_index=candidate/"comparison-index.json"
+    build_comparison_index(baseline,baseline_index)
+    build_comparison_index(candidate,candidate_index)
+
+    trend=compare_comparison_indexes(baseline_index,candidate_index)
+    json_text=(candidate/"comparison-trend.json").read_text(encoding="utf-8")
+    markdown=(candidate/"comparison-trend.md").read_text(encoding="utf-8")
+
+    assert trend["coverage"]=={
+        "baseline_identities":3,
+        "candidate_identities":3,
+        "shared_identities":2,
+        "paired_available":1,
+        "shared_missing":1,
+        "baseline_only":1,
+        "candidate_only":1,
+        "baseline_only_identities":["base"],
+        "candidate_only_identities":["cand"],
+    }
+    assert trend["macro"]["attack_f1"]["paired_values"]==1
+    assert trend["macro"]["attack_f1"]["delta"]==-.1
+    assert trend["rankings"]["attack_f1"]["regressions"][0]["identity"]["song_id"]=="a"
+    song_b=next(row for row in trend["songs"] if row["identity"]["song_id"]=="b")
+    assert song_b["metrics"]["attack_f1"]["status"]=="unavailable"
+    assert str(tmp_path) not in json_text
+    assert "generated_midi" not in json_text
+    assert "reference" not in json_text.lower()
+    assert "Baseline-only identities: **1**" in markdown
+
+
+def test_comparison_trend_preserves_null_metric_as_unavailable(tmp_path):
+    baseline=tmp_path/"baseline"
+    candidate=tmp_path/"candidate"
+    for root in (baseline,candidate):
+        _write_index_run(
+            root,"run","song","rb3charts-reference-comparison"
+        )
+        build_comparison_index(root)
+    candidate_index=candidate/"comparison-index.json"
+    payload=json.loads(candidate_index.read_text(encoding="utf-8"))
+    payload["entries"][0]["summary"]["motif"]["coverage"]=None
+    candidate_index.write_text(json.dumps(payload),encoding="utf-8")
+
+    trend=compare_comparison_indexes(
+        baseline/"comparison-index.json",candidate_index
+    )
+
+    assert trend["macro"]["motif_coverage"]=={
+        "paired_values":0,
+        "unavailable_values":1,
+        "baseline_mean":None,
+        "candidate_mean":None,
+        "delta":None,
+    }
+    assert trend["songs"][0]["metrics"]["motif_coverage"]["status"]=="unavailable"
+
+
+def test_comparison_trend_rejects_incompatible_or_duplicate_indexes(tmp_path):
+    baseline=tmp_path/"baseline"
+    candidate=tmp_path/"candidate"
+    _write_index_run(
+        baseline,"run","song","rb3charts-reference-comparison"
+    )
+    _write_index_run(
+        candidate,"run","song","rb3charts-authorized-chart-comparison"
+    )
+    build_comparison_index(baseline)
+    build_comparison_index(candidate)
+    with pytest.raises(ValueError,match="incompatible comparison schemas"):
+        compare_comparison_indexes(
+            baseline/"comparison-index.json",
+            candidate/"comparison-index.json",
+        )
+
+    duplicate=json.loads(
+        (baseline/"comparison-index.json").read_text(encoding="utf-8")
+    )
+    duplicate["entries"].append(duplicate["entries"][0])
+    duplicate_path=baseline/"duplicate.json"
+    duplicate_path.write_text(json.dumps(duplicate),encoding="utf-8")
+    with pytest.raises(ValueError,match="Duplicate song identity"):
+        compare_comparison_indexes(
+            duplicate_path,baseline/"comparison-index.json"
+        )
+
+
+def test_comparison_trend_rejects_stale_report_lineage(tmp_path):
+    for name in ("baseline","candidate"):
+        root=tmp_path/name
+        run=_write_index_run(
+            root,"run","song","rb3charts-reference-comparison"
+        )
+        build_comparison_index(root)
+        if name=="candidate":
+            report=run/"analysis"/"reference-comparison.json"
+            report.write_text("{}\n",encoding="utf-8")
+
+    with pytest.raises(ValueError,match="Stale comparison-report lineage"):
+        compare_comparison_indexes(
+            tmp_path/"baseline"/"comparison-index.json",
+            tmp_path/"candidate"/"comparison-index.json",
+        )
+
+
+def test_comparison_trend_rejects_link_escape_and_input_overwrite(tmp_path):
+    for name in ("baseline","candidate"):
+        root=tmp_path/name
+        _write_index_run(
+            root,"run","song","rb3charts-reference-comparison"
+        )
+        build_comparison_index(root)
+    baseline=tmp_path/"baseline"/"comparison-index.json"
+    candidate=tmp_path/"candidate"/"comparison-index.json"
+    payload=json.loads(candidate.read_text(encoding="utf-8"))
+    payload["entries"][0]["links"]["json"]="../outside.json"
+    candidate.write_text(json.dumps(payload),encoding="utf-8")
+    with pytest.raises(ValueError,match="escapes index root"):
+        compare_comparison_indexes(baseline,candidate)
+
+    build_comparison_index(tmp_path/"candidate")
+    with pytest.raises(ValueError,match="must not overwrite"):
+        compare_comparison_indexes(baseline,candidate,candidate)
 
 
 def test_attack_alignment_and_unmatched_events_are_reported():

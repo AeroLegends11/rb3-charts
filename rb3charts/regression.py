@@ -1611,6 +1611,11 @@ def compare_authorized_chart(
         "song_id": str(song_id),
         "manifest_sha256": validation["manifest_sha256"],
         "generated_folder": str(generated_folder),
+        "generated_identity": {
+            "song_id": str(metadata.get("song_id","")),
+            "title": str(metadata.get("title","")),
+            "artist": str(metadata.get("artist","")),
+        },
         "generated_midi_sha256": hash_file(generated_midi),
         "generated_audio_lead_seconds": lead,
         "difficulties": difficulties,
@@ -1691,20 +1696,22 @@ def _comparison_index_summary(report):
     }
 
 
+def _markdown_cell(value):
+    text=" ".join(str(value).split())
+    for source,replacement in (
+        ("\\",r"\\"),
+        ("|",r"\|"),
+        ("[",r"\["),
+        ("]",r"\]"),
+        ("`",r"\`"),
+        ("<","&lt;"),
+        (">","&gt;"),
+    ):
+        text=text.replace(source,replacement)
+    return text
+
+
 def _comparison_index_markdown(index):
-    def cell(value):
-        text=" ".join(str(value).split())
-        for source,replacement in (
-            ("\\",r"\\"),
-            ("|",r"\|"),
-            ("[",r"\["),
-            ("]",r"\]"),
-            ("`",r"\`"),
-            ("<","&lt;"),
-            (">","&gt;"),
-        ):
-            text=text.replace(source,replacement)
-        return text
 
     lines=[
         "# Comparison corpus index",
@@ -1745,8 +1752,8 @@ def _comparison_index_markdown(index):
             link=entry.get("links",{}).get("json")
         report_link=f"[local]({quote(link,safe='/..')})" if link else "—"
         identity=entry["identity"]
-        song=cell(f"{identity['artist']} — {identity['title']}")
-        run=cell(entry["run_basename"]).replace("`","'")
+        song=_markdown_cell(f"{identity['artist']} — {identity['title']}")
+        run=_markdown_cell(entry["run_basename"]).replace("`","'")
         lines.append(
             f"| {song} | `{run}` | "
             f"{entry['comparison_status']} | {entry['validation_status']} | "
@@ -1781,12 +1788,6 @@ def build_comparison_index(root, output=None):
             if metadata.get(key) in (None,""):
                 raise ValueError(f"Generated metadata in {run.name} requires {key}")
         song_id=str(metadata["song_id"])
-        if song_id in identities:
-            raise ValueError(
-                f"Duplicate song identity {song_id}: "
-                f"{identities[song_id]} and {run.name}"
-            )
-        identities[song_id]=run.name
         reports=[
             path for path in (
                 run/"analysis"/"human-chart-comparison.json",
@@ -1855,9 +1856,19 @@ def build_comparison_index(root, output=None):
                     f"Comparison report in {run.name} has no current generated MIDI"
                 )
             if schema=="rb3charts-authorized-chart-comparison":
-                if str(report.get("song_id"))!=song_id:
+                generated_identity=report.get("generated_identity") or {}
+                if (
+                    str(generated_identity.get("song_id"))!=song_id
+                    or str(generated_identity.get("title"))!=str(metadata["title"])
+                    or str(generated_identity.get("artist"))!=str(metadata["artist"])
+                ):
                     raise ValueError(
-                        f"Comparison song identity differs in generated run {run.name}"
+                        f"Comparison generated identity differs in {run.name}"
+                    )
+                entry["identity"]["song_id"]=str(report.get("song_id",""))
+                if not entry["identity"]["song_id"]:
+                    raise ValueError(
+                        f"Comparison song identity is missing in {run.name}"
                     )
                 expected_generated_hash=report.get("generated_midi_sha256")
             else:
@@ -1884,8 +1895,19 @@ def build_comparison_index(root, output=None):
             entry.update({
                 "comparison_status":"available",
                 "links":links,
+                "lineage":{
+                    "comparison_report_sha256":hash_file(report_path),
+                    "generated_midi_sha256":expected_generated_hash,
+                },
                 "summary":_comparison_index_summary(report),
             })
+        identity_song_id=entry["identity"]["song_id"]
+        if identity_song_id in identities:
+            raise ValueError(
+                f"Duplicate song identity {identity_song_id}: "
+                f"{identities[identity_song_id]} and {run.name}"
+            )
+        identities[identity_song_id]=run.name
         entries.append(entry)
     if not schemas:
         raise ValueError("No comparison reports were found")
@@ -1905,6 +1927,7 @@ def build_comparison_index(root, output=None):
             "source paths or detailed authorized records"
         ),
         "comparison_schema":next(iter(schemas)),
+        "metric_semantics":"rb3charts-chart-comparison-v1",
         "entries":entries,
     }
     output.parent.mkdir(parents=True,exist_ok=True)
@@ -1913,6 +1936,315 @@ def build_comparison_index(root, output=None):
         _comparison_index_markdown(index),encoding="utf-8"
     )
     return index
+
+
+_TREND_METRICS={
+    "attack_f1":("attack","f1"),
+    "chord_f1":("chord","f1"),
+    "sustain_f1":("sustain","f1"),
+    "lane_exact_agreement":("lane","exact_agreement"),
+    "motif_coverage":("motif","coverage"),
+    "motif_shape_agreement":("motif","relative_lane_shape_agreement"),
+    "weakest_window_recall":("weakest_window","recall"),
+}
+
+
+def _load_comparison_index(path):
+    path=Path(path).resolve()
+    try:
+        payload=json.loads(path.read_text(encoding="utf-8"))
+    except (OSError,json.JSONDecodeError) as exc:
+        raise ValueError(f"Cannot read comparison index: {exc}") from exc
+    if (
+        payload.get("schema")!="rb3charts-comparison-corpus-index"
+        or payload.get("schema_version")!=1
+    ):
+        raise ValueError("Incompatible comparison index schema")
+    if payload.get("metric_semantics")!="rb3charts-chart-comparison-v1":
+        raise ValueError("Incompatible comparison metric semantics")
+    entries=payload.get("entries")
+    if not isinstance(entries,list):
+        raise ValueError("Comparison index entries must be an array")
+    by_id={}
+    display_identities={}
+    for entry in entries:
+        identity=entry.get("identity") or {}
+        song_id=str(identity.get("song_id",""))
+        title=str(identity.get("title",""))
+        artist=str(identity.get("artist",""))
+        if not song_id or not title or not artist:
+            raise ValueError("Comparison index contains malformed song identity")
+        if song_id in by_id:
+            raise ValueError(f"Duplicate song identity {song_id}")
+        display_key=(artist.casefold(),title.casefold())
+        previous=display_identities.setdefault(display_key,song_id)
+        if previous!=song_id:
+            raise ValueError(
+                f"Duplicate display identity {artist} — {title}"
+            )
+        status=entry.get("comparison_status")
+        if status not in {"available","missing"}:
+            raise ValueError(f"Invalid comparison status for {song_id}")
+        if entry.get("validation_status") not in {
+            "passed","failed","unavailable",
+        }:
+            raise ValueError(f"Invalid validation status for {song_id}")
+        if status=="available":
+            links=entry.get("links") or {}
+            relative_text=links.get("json")
+            if not isinstance(relative_text,str) or not relative_text:
+                raise ValueError(f"Invalid comparison link for {song_id}")
+            relative=Path(relative_text)
+            if relative.is_absolute():
+                raise ValueError(f"Invalid comparison link for {song_id}")
+            report_path=(path.parent/relative).resolve()
+            if not report_path.is_relative_to(path.parent):
+                raise ValueError(
+                    f"Comparison link escapes index root for {song_id}"
+                )
+            lineage=entry.get("lineage") or {}
+            report_hash=lineage.get("comparison_report_sha256")
+            generated_hash=lineage.get("generated_midi_sha256")
+            if (
+                not isinstance(report_hash,str)
+                or len(report_hash)!=64
+                or hash_file(report_path)!=report_hash
+            ):
+                raise ValueError(
+                    f"Stale comparison-report lineage for {song_id}"
+                )
+            run=report_path.parent.parent
+            generated_midi=next((
+                candidate for candidate in (
+                    run/"midi"/"notes.mid",
+                    run/"import"/"notes.mid",
+                )
+                if candidate.is_file()
+            ),None)
+            if (
+                generated_midi is None
+                or not isinstance(generated_hash,str)
+                or len(generated_hash)!=64
+                or hash_file(generated_midi)!=generated_hash
+            ):
+                raise ValueError(
+                    f"Stale generated-MIDI lineage for {song_id}"
+                )
+            if not isinstance(entry.get("summary"),dict):
+                raise ValueError(f"Available comparison has no summary for {song_id}")
+        elif entry.get("summary") is not None:
+            raise ValueError(f"Missing comparison has a summary for {song_id}")
+        by_id[song_id]=entry
+    return path,payload,by_id
+
+
+def _trend_value(entry,metric):
+    if entry.get("comparison_status")!="available":
+        return None
+    value=entry["summary"]
+    for key in _TREND_METRICS[metric]:
+        if value is None:
+            return None
+        if not isinstance(value,dict):
+            raise ValueError(
+                f"Comparison metric {metric} is malformed for "
+                f"{entry['identity']['song_id']}"
+            )
+        value=value.get(key)
+    if value is None:
+        return None
+    if not isinstance(value,(int,float)) or isinstance(value,bool):
+        raise ValueError(
+            f"Comparison metric {metric} is malformed for "
+            f"{entry['identity']['song_id']}"
+        )
+    if not np.isfinite(value):
+        raise ValueError(
+            f"Comparison metric {metric} is not finite for "
+            f"{entry['identity']['song_id']}"
+        )
+    if not 0<=value<=1:
+        raise ValueError(
+            f"Comparison metric {metric} is outside 0..1 for "
+            f"{entry['identity']['song_id']}"
+        )
+    return float(value)
+
+
+def _comparison_trend_markdown(report):
+    coverage=report["coverage"]
+    lines=[
+        "# Comparison corpus trend",
+        "",
+        (
+            "Sanitized paired aggregate only. Paths, events, reference notes "
+            "and detailed authorized records are not embedded."
+        ),
+        "",
+        f"- Shared song identities: **{coverage['shared_identities']}**",
+        f"- Paired available comparisons: **{coverage['paired_available']}**",
+        f"- Baseline-only identities: **{coverage['baseline_only']}**",
+        f"- Candidate-only identities: **{coverage['candidate_only']}**",
+        f"- Shared identities with missing comparison: **{coverage['shared_missing']}**",
+        "",
+        "| Metric | Paired values | Baseline | Candidate | Delta |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for metric,row in report["macro"].items():
+        if row["paired_values"]:
+            lines.append(
+                f"| {metric} | {row['paired_values']} | "
+                f"{row['baseline_mean']:.4f} | {row['candidate_mean']:.4f} | "
+                f"{row['delta']:+.4f} |"
+            )
+        else:
+            lines.append(f"| {metric} | 0 | — | — | — |")
+    lines.extend([
+        "",
+        "## Largest paired attack-F1 changes",
+        "",
+        "| Direction | Song | Delta |",
+        "|---|---|---:|",
+    ])
+    for direction in ("regressions","improvements"):
+        for row in report["rankings"]["attack_f1"][direction][:5]:
+            identity=row["identity"]
+            song=_markdown_cell(
+                f"{identity['artist']} — {identity['title']}"
+            )
+            lines.append(
+                f"| {direction[:-1]} | {song} | {row['delta']:+.4f} |"
+            )
+    return "\n".join(lines)+"\n"
+
+
+def compare_comparison_indexes(baseline, candidate, output=None):
+    """Compare compatible sanitized indexes without treating asymmetry as paired."""
+    baseline_path,baseline_index,baseline_entries=_load_comparison_index(baseline)
+    candidate_path,candidate_index,candidate_entries=_load_comparison_index(candidate)
+    if baseline_index["comparison_schema"]!=candidate_index["comparison_schema"]:
+        raise ValueError("Comparison indexes use incompatible comparison schemas")
+    if baseline_index["metric_semantics"]!=candidate_index["metric_semantics"]:
+        raise ValueError("Comparison indexes use incompatible metric semantics")
+    baseline_ids=set(baseline_entries)
+    candidate_ids=set(candidate_entries)
+    shared=sorted(baseline_ids&candidate_ids)
+    for song_id in shared:
+        if baseline_entries[song_id]["identity"]!=candidate_entries[song_id]["identity"]:
+            raise ValueError(f"Song identity changed for {song_id}")
+    paired=[
+        song_id for song_id in shared
+        if (
+            baseline_entries[song_id]["comparison_status"]=="available"
+            and candidate_entries[song_id]["comparison_status"]=="available"
+        )
+    ]
+    songs=[]
+    macro={}
+    rankings={}
+    for metric in _TREND_METRICS:
+        rows=[]
+        for song_id in paired:
+            left=_trend_value(baseline_entries[song_id],metric)
+            right=_trend_value(candidate_entries[song_id],metric)
+            status="paired" if left is not None and right is not None else "unavailable"
+            row={
+                "identity":baseline_entries[song_id]["identity"],
+                "status":status,
+                "baseline":left,
+                "candidate":right,
+                "delta":round(right-left,4) if status=="paired" else None,
+            }
+            rows.append(row)
+        valid=[row for row in rows if row["status"]=="paired"]
+        if valid:
+            baseline_mean=float(np.mean([row["baseline"] for row in valid]))
+            candidate_mean=float(np.mean([row["candidate"] for row in valid]))
+            macro[metric]={
+                "paired_values":len(valid),
+                "unavailable_values":len(rows)-len(valid),
+                "baseline_mean":round(baseline_mean,4),
+                "candidate_mean":round(candidate_mean,4),
+                "delta":round(candidate_mean-baseline_mean,4),
+            }
+        else:
+            macro[metric]={
+                "paired_values":0,
+                "unavailable_values":len(rows),
+                "baseline_mean":None,
+                "candidate_mean":None,
+                "delta":None,
+            }
+        rankings[metric]={
+            "regressions":sorted(
+                (row for row in valid if row["delta"]<0),
+                key=lambda row:(row["delta"],row["identity"]["song_id"]),
+            ),
+            "improvements":sorted(
+                (row for row in valid if row["delta"]>0),
+                key=lambda row:(-row["delta"],row["identity"]["song_id"]),
+            ),
+        }
+    for song_id in shared:
+        left=baseline_entries[song_id]
+        right=candidate_entries[song_id]
+        metrics={}
+        for metric in _TREND_METRICS:
+            baseline_value=_trend_value(left,metric)
+            candidate_value=_trend_value(right,metric)
+            available=baseline_value is not None and candidate_value is not None
+            metrics[metric]={
+                "status":"paired" if available else "unavailable",
+                "baseline":baseline_value,
+                "candidate":candidate_value,
+                "delta":(
+                    round(candidate_value-baseline_value,4)
+                    if available else None
+                ),
+            }
+        songs.append({
+            "identity":left["identity"],
+            "baseline_status":left["comparison_status"],
+            "candidate_status":right["comparison_status"],
+            "baseline_validation":left["validation_status"],
+            "candidate_validation":right["validation_status"],
+            "metrics":metrics,
+        })
+    report={
+        "schema":"rb3charts-comparison-corpus-trend",
+        "schema_version":1,
+        "comparison_schema":baseline_index["comparison_schema"],
+        "metric_semantics":baseline_index["metric_semantics"],
+        "lineage":{
+            "baseline_index_sha256":hash_file(baseline_path),
+            "candidate_index_sha256":hash_file(candidate_path),
+        },
+        "coverage":{
+            "baseline_identities":len(baseline_ids),
+            "candidate_identities":len(candidate_ids),
+            "shared_identities":len(shared),
+            "paired_available":len(paired),
+            "shared_missing":len(shared)-len(paired),
+            "baseline_only":len(baseline_ids-candidate_ids),
+            "candidate_only":len(candidate_ids-baseline_ids),
+            "baseline_only_identities":sorted(baseline_ids-candidate_ids),
+            "candidate_only_identities":sorted(candidate_ids-baseline_ids),
+        },
+        "macro":macro,
+        "songs":songs,
+        "rankings":rankings,
+    }
+    output=Path(output).resolve() if output else (
+        candidate_path.parent/"comparison-trend.json"
+    )
+    if output in {baseline_path,candidate_path}:
+        raise ValueError("Trend output must not overwrite an input index")
+    output.parent.mkdir(parents=True,exist_ok=True)
+    output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+    output.with_suffix(".md").write_text(
+        _comparison_trend_markdown(report),encoding="utf-8"
+    )
+    return report
 
 
 def hash_file(path: Path):

@@ -82,6 +82,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-human-chart 'C:\Path\To\ChartPairs\manifest.json' song-id 'C:\Path\To\Generated_Output' --source-agreement-report 'C:\Path\To\agreement.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli compare-midi 'C:\Path\To\Generated_Output' 'C:\Path\To\Evaluation\notes.mid'
 .\.venv\Scripts\python.exe -m rb3charts.cli index-comparisons 'C:\Path\To\Generated_Corpus'
+.\.venv\Scripts\python.exe -m rb3charts.cli compare-comparison-indexes 'C:\Path\To\Baseline\comparison-index.json' 'C:\Path\To\Candidate\comparison-index.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli audit-playability-evidence 'C:\Path\To\Generated_Output' --structure-predictions 'C:\Path\To\predictions.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli analyze-reference 'C:\Path\To\Reference_MIDI_Corpus'
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-dataset 'C:\Path\To\Dataset\manifest.json' --verify-hashes
@@ -143,6 +144,16 @@ is written. Available reports must match the current generated MIDI hash and,
 for authorized comparisons, the metadata song ID; stale comparisons are
 rejected. Source paths, unmatched/reference note rows and detailed authorized
 records are excluded.
+
+`compare-comparison-indexes` writes deterministic JSON plus concise Markdown for
+two compatible sanitized indexes. Song IDs are paired only when display
+identity also matches; baseline-only, candidate-only and shared-missing coverage
+remain explicit. Per-song and macro deltas cover the safe aggregate F1,
+lane/motif and weakest-window fields, with ranked regressions/improvements.
+Null metrics remain unavailable rather than becoming zero. The command rejects
+duplicate identities, mixed comparison schemas, changed metric semantics,
+modified linked reports and changed generated MIDI. Trend artifacts contain
+index hashes but no local paths, report links, events or reference notes.
 
 `audit-playability-evidence` is also post-generation only. It joins attributed
 playability removals to cached transcription evidence, optional offline

@@ -81,6 +81,13 @@ def main():
     )
     comparison_index.add_argument("root",type=Path)
     comparison_index.add_argument("--output",type=Path)
+    comparison_trend=sub.add_parser(
+        "compare-comparison-indexes",
+        help="Compare compatible sanitized comparison corpus indexes",
+    )
+    comparison_trend.add_argument("baseline",type=Path)
+    comparison_trend.add_argument("candidate",type=Path)
+    comparison_trend.add_argument("--output",type=Path)
     evidence_audit=sub.add_parser(
         "audit-playability-evidence",
         help="Join playability removals to post-generation source evidence",
@@ -358,6 +365,23 @@ def main():
                 row["comparison_status"]=="available"
                 for row in report["entries"]
             ),
+        },indent=2))
+        return 0
+    if args.command=="compare-comparison-indexes":
+        from .regression import compare_comparison_indexes
+        try:
+            report=compare_comparison_indexes(
+                args.baseline,args.candidate,args.output
+            )
+        except (FileNotFoundError,KeyError,TypeError,ValueError) as exc:
+            print(f"Comparison trend failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps({
+            "paired_available":report["coverage"]["paired_available"],
+            "shared_missing":report["coverage"]["shared_missing"],
+            "baseline_only":report["coverage"]["baseline_only"],
+            "candidate_only":report["coverage"]["candidate_only"],
+            "attack_f1":report["macro"]["attack_f1"],
         },indent=2))
         return 0
     if args.command=="convert-guitarset":

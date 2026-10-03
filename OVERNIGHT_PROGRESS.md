@@ -869,3 +869,28 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Added a focused stale-lineage regression test. Runtime generation and metric
   calculation remain unchanged.
 - Validation: four focused index tests passed; full suite passed 201 tests.
+
+### 2026-10-03 07:35 - Sanitized comparison trends added
+
+- Added `compare-comparison-indexes` for deterministic JSON and Markdown deltas
+  between compatible sanitized corpus indexes. Compatibility requires the same
+  authorized/reference schema and explicit chart-comparison metric semantics.
+- Pairing requires matching song IDs and exact display identities. Coverage
+  separately records paired available comparisons, shared missing comparisons,
+  baseline-only identities and candidate-only identities; asymmetric sets are
+  never represented as fully paired.
+- Safe per-song and macro deltas cover attack/chord/sustain F1, exact lane
+  agreement, motif coverage/shape agreement and weakest-window recall. JSON
+  ranks improvements and regressions per metric; Markdown concisely displays
+  macro changes and the largest attack-F1 movements.
+- Null metrics remain explicitly unavailable and are excluded from only that
+  metric's macro denominator. No null is coerced to zero.
+- Trend loading revalidates linked comparison-report SHA-256 and current
+  generated-MIDI SHA-256, rejects duplicate display/song identities, malformed
+  metric values, incompatible schemas/semantics and stale lineage, and emits no
+  paths, links, events or reference-note rows.
+- Focused tests cover paired/asymmetric coverage, missing comparisons, null
+  metrics, incompatible schemas, duplicate identities, stale lineage and output
+  sanitization. Runtime generation remains unchanged.
+- Validation: eight focused index/trend tests passed; full suite passed 205
+  tests; CLI help was exercised.
