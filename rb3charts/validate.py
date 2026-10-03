@@ -2,6 +2,7 @@
 import math
 import mido
 from .model import DIFFICULTIES, TRACKS
+from .midi import authored_tick
 
 def validate(charts, tempo, duration, midi_path=None):
     errors, warnings = [], list(tempo.warnings)
@@ -91,8 +92,8 @@ def validate(charts, tempo, duration, midi_path=None):
             offset_beats=round(offset_tick/midi.ticks_per_beat)
             expected_event_ticks={
                 "[music_start]":music_start_tick,
-                "[music_end]":offset_tick+round(
-                    tempo.beat_at(duration)*midi.ticks_per_beat
+                "[music_end]":authored_tick(
+                    tempo,duration,offset_beats,midi.ticks_per_beat
                 ),
                 "[end]":round(
                     (
@@ -251,8 +252,8 @@ def validate(charts, tempo, duration, midi_path=None):
                         text_counts[message.text]=(
                             text_counts.get(message.text,0)+1
                         )
-                idle_tick=offset_tick+round(
-                    tempo.beat_at(duration)*midi.ticks_per_beat
+                idle_tick=authored_tick(
+                    tempo,duration,offset_beats,midi.ticks_per_beat
                 )
                 for text,expected_tick in (
                     ("[play]",music_start_tick),
@@ -300,19 +301,19 @@ def validate(charts, tempo, duration, midi_path=None):
                 )
                 expected_intervals = sorted(
                     (
-                        offset_tick
-                        + round(tempo.beat_at(note.start)*midi.ticks_per_beat),
+                        authored_tick(
+                            tempo,note.start,offset_beats,
+                            midi.ticks_per_beat,
+                        ),
                         max(
-                            offset_tick
-                            + round(
-                                tempo.beat_at(note.start)
-                                * midi.ticks_per_beat
+                            authored_tick(
+                                tempo,note.start,offset_beats,
+                                midi.ticks_per_beat,
                             )
                             + 1,
-                            offset_tick
-                            + round(
-                                tempo.beat_at(note.end)
-                                * midi.ticks_per_beat
+                            authored_tick(
+                                tempo,note.end,offset_beats,
+                                midi.ticks_per_beat,
                             ),
                         ),
                         base+lane,

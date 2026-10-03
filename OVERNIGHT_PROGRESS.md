@@ -615,3 +615,9 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   improving overall F1 from 0.75 to 0.80 by removing unsupported extras.
 - Focused regression coverage passes 21 tests. The command does not alter
   generation and does not make reference charts training inputs.
+- Replayed the seven-song official-reference evaluation corpus through current
+  code. Six passed immediately; Jonas exposed a one-tick serialized guitar
+  mismatch on a floating-point half-tick boundary in its variable tempo map.
+  MIDI writing rounded after adding lead beats while validation rounded before
+  adding them. Both now use the shared `authored_tick` conversion. The real
+  Jonas replay passes, and 56 focused charting tests pass.

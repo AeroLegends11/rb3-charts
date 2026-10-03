@@ -3,7 +3,7 @@ import pytest
 import mido
 from rb3charts.model import Note,TempoMap
 from rb3charts.chart import reductions,map_pitched,clean,enforce_playability,analyze_patterns,refine_band_guitar,conform_expert_to_reference,stabilize_repeated_phrases
-from rb3charts.midi import write_midi,note_times
+from rb3charts.midi import authored_tick, write_midi,note_times
 from rb3charts.validate import validate
 from rb3charts.transcribe import analyze_band_guitar_voice,electronic_lead_events,electronic_bass_events,_refine_pitched_articulations,_focus_band_guitar_candidates,_filter_sequential_lead_outliers
 
@@ -134,6 +134,16 @@ def test_validator_checks_serialized_gem_timing(tmp_path):
         "PART GUITAR/expert: MIDI timing differs" in error
         for error in result["errors"]
     )
+
+
+def test_authored_tick_rounds_after_lead_offset():
+    class EdgeTempo:
+        def beat_at(self, seconds):
+            return 10.419270833333334
+
+    tick=authored_tick(EdgeTempo(),0,8)
+    assert tick==17683
+    assert tick!=8*960+round(10.419270833333334*960)
 
 def test_validator_checks_serialized_tempo_map(tmp_path):
     tempo=TempoMap([0,.5,1.01,1.53,2.06,2.6,3.15])

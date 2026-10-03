@@ -5,6 +5,11 @@ from .model import DIFFICULTIES, TRACKS
 
 PPQ = 960
 
+def authored_tick(tempo, seconds, offset_beats, ppq=PPQ):
+    return max(
+        0,round((tempo.beat_at(seconds)+offset_beats)*ppq)
+    )
+
 def write_midi(path, tempo, instruments, duration, phrases):
     # Two full measures before the first mapped beat. Negative pickup beats
     # receive extra lead, so every audible attack remains after 2.5 seconds.
@@ -12,7 +17,7 @@ def write_midi(path, tempo, instruments, duration, phrases):
     offset_beats = max(tempo.numerator*2, math.ceil((2.5+tempo.beats[0])/first_interval))
     lead = offset_beats*first_interval-tempo.beats[0]
     end_beat = tempo.beat_at(duration+2.0)+offset_beats
-    tick = lambda seconds: max(0, round((tempo.beat_at(seconds)+offset_beats)*PPQ))
+    tick = lambda seconds: authored_tick(tempo,seconds,offset_beats)
     midi = mido.MidiFile(type=1, ticks_per_beat=PPQ)
     def track(name, events):
         tr = mido.MidiTrack([mido.MetaMessage("track_name",name=name,time=0)])
