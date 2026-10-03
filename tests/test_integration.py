@@ -11,6 +11,7 @@ from rb3charts.validate import validate
 from rb3charts.audio import write_padded_audio
 from rb3charts.timing import analyze_tempo
 from rb3charts.preview import (
+    _lane_run_diagnostics,
     create_comparison_preview,
     create_expert_hard_reference_preview,
     create_midi_comparison_preview,
@@ -302,6 +303,9 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     assert '"kind": "activity boundary"' in page
     assert "Difficulty attacks" in page
     assert "Review markers jump to low-confidence notes" in page
+    assert "suspicious same-lane runs" in page
+    assert "laneRuns=payload.lane_runs||{}" in page
+    assert "diff.addEventListener('change',showDiagnostics)" in page
     assert "Amber regions mark conflicting guitar-register evidence" in page
     assert "voice conflict" in page
     assert 'height="700"' in page and "NOTES HIT THIS LINE" in page
@@ -309,6 +313,31 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     assert "(!activeHold&&rawStart>strike+2)||rawEnd>strike+2" in page
     assert "if(activeHold)continue" in page
     assert (tmp_path/"audio"/"timing-audit-guitar.wav").is_file()
+
+
+def test_lane_run_diagnostics_distinguish_repetition_from_collapse():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    repeated=[
+        Note(1+index*.2,1+index*.2+.065,(2,),pitch=70)
+        for index in range(5)
+    ]
+    collapsed=[
+        Note(3+index*.2,3+index*.2+.065,(2,),pitch=pitch)
+        for index,pitch in enumerate((63,73,73,75,77))
+    ]
+
+    diagnostics=_lane_run_diagnostics(
+        {"guitar":{"expert":repeated,"hard":collapsed}},tempo,2.0
+    )
+
+    expert=diagnostics["guitar"]["expert"][0]
+    hard=diagnostics["guitar"]["hard"][0]
+    assert expert["kind"]=="single-lane run"
+    assert "5 yellow attacks" in expert["detail"]
+    assert "detected pitch 70" in expert["detail"]
+    assert hard["kind"]=="collapsed pitch contour"
+    assert "pitches 63-77" in hard["detail"]
+    assert hard["time"]==pytest.approx(5.0)
 
 
 def test_comparison_preview_keeps_versions_synchronized(tmp_path):

@@ -1199,3 +1199,19 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Regenerated
   `comparisons/morning-review/Hail_Expert_Repeated_Riff_Recovery_AB.html`
   with Guitar/Expert as its default review surface.
+
+### 2026-10-03 18:50 - Same-lane review markers added
+
+- Added difficulty-specific, non-destructive review markers for five or more
+  consecutive single-lane attacks no more than 0.75 beats apart. A marker
+  distinguishes a repeated detected pitch from a collapsed pitch contour when
+  at least three pitches span four or more semitones on one lane.
+- Markers change only review navigation. They do not reject notes, alter lanes
+  or classify a generated chart as correct/incorrect.
+- A current cached Hail replay produced 13 Expert and eight Hard guitar markers.
+  Hard now exposes the reported player 17-second defect directly:
+  `9 yellow attacks; pitches 51-70; through 19.28s`. The current Expert does
+  not contain that marker after repeated-register recovery, isolating the
+  remaining failure to difficulty reduction rather than lead selection.
+- Generated the current normal review at
+  `comparisons/review-markers/hail/Avenged_sevenfold_Hail_To_The_King_20261003_183319_643726/review.html`.
