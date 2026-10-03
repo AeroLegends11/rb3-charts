@@ -477,3 +477,103 @@ def create_midi_comparison_preview(
         "data_folder":str(data_folder),
     })
     return report
+
+
+def create_expert_hard_reference_preview(
+    generated,
+    reference,
+    output,
+    offset=0.0,
+):
+    """Create a synchronized A/B/C review of generated Expert, Hard and reference Expert."""
+    from .datasets import _read_expert_gems
+
+    generated=Path(generated).resolve()
+    reference=Path(reference).resolve()
+    output=Path(output).resolve()
+    required={
+        "charts":generated/"analysis"/"charts.json",
+        "tempo":generated/"analysis"/"tempo.json",
+        "metadata":generated/"metadata"/"song.json",
+        "audio":generated/"audio"/"song.wav",
+    }
+    missing=[str(path) for path in required.values() if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(
+            "Generated review run is incomplete: "+", ".join(missing)
+        )
+    if not reference.is_file():
+        raise FileNotFoundError(f"Reference MIDI not found: {reference}")
+    charts=json.loads(required["charts"].read_text(encoding="utf-8"))
+    guitar=charts.get("guitar",{})
+    if not all(difficulty in guitar for difficulty in ("expert","hard")):
+        raise ValueError("Generated review requires guitar Expert and Hard")
+    tempo=json.loads(required["tempo"].read_text(encoding="utf-8"))
+    metadata=json.loads(required["metadata"].read_text(encoding="utf-8"))
+    lead=float(metadata.get("lead_seconds",0))
+
+    def generated_notes(difficulty):
+        return [{
+            "t":float(note["start"])+lead,
+            "end":float(note["end"])+lead,
+            "lanes":[int(lane) for lane in note["lanes"]],
+            "confidence":float(note.get("confidence",1)),
+        } for note in guitar[difficulty]]
+
+    grouped=defaultdict(list)
+    for gem in _read_expert_gems(reference,"rock_band_midi","expert"):
+        grouped[round(float(gem["start"]),6)].append(gem)
+    official=[]
+    for start,gems in sorted(grouped.items()):
+        official.append({
+            "t":start-float(offset)+lead,
+            "end":max(float(gem["end"]) for gem in gems)-float(offset)+lead,
+            "lanes":sorted({int(gem["lane"]) for gem in gems}),
+            "confidence":1.0,
+        })
+    versions={
+        "generated_expert":generated_notes("expert"),
+        "generated_hard":generated_notes("hard"),
+        "official_expert":official,
+    }
+    labels={
+        "generated_expert":"Project Expert",
+        "generated_hard":"Project Hard",
+        "official_expert":"Official Expert",
+    }
+    output.parent.mkdir(parents=True,exist_ok=True)
+    audio=os.path.relpath(required["audio"],output.parent).replace("\\","/")
+    payload=json.dumps({
+        "versions":versions,
+        "labels":labels,
+        "beats":[float(beat)+lead for beat in tempo["beats"]],
+        "meter":int(tempo.get("numerator",4)),
+        "lead":lead,
+        "audio":audio,
+    }).replace("<","\\u003c")
+    title=html.escape(str(metadata["title"]))
+    artist=html.escape(str(metadata["artist"]))
+    page='''<!doctype html><html lang="en"><meta charset="utf-8"><title>A/B/C chart review</title>
+<style>body{background:#0b111c;color:#e4ebf5;font:16px system-ui;margin:28px auto;max-width:1050px}h1{margin-bottom:4px}p{color:#a8b8cd}.badge{color:#75dac5}.controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap}button,select{font:inherit;padding:8px 13px;background:#24344b;color:white;border:1px solid #526780;border-radius:8px}button{cursor:pointer}.active{background:#176c65;border-color:#75dac5}canvas{width:100%;height:auto;aspect-ratio:11/7;background:#10192a;border:1px solid #2b3d57;border-radius:12px;margin:16px 0}audio{width:100%}</style>
+<h1>__TITLE__</h1><p>__ARTIST__ · synchronized A/B/C chart review</p>
+<p class="badge">A and B are generated from the same cached evidence. C is aligned post-generation evaluation only and never a generation input.</p>
+<p><strong>Review question:</strong> does B expose a cleaner backbone for what A should have interpreted from the song when compared with C?</p>
+<div class="controls"><button id="generated_expert">A · Project Expert</button><button id="generated_hard">B · Project Hard</button><button id="official_expert">C · Official Expert</button><label>Speed <select id="speed"><option value="1">1×</option><option value=".75">0.75×</option><option value=".5">0.5×</option></select></label><button id="back">−5 seconds</button><button id="toggle">Play / Pause</button></div>
+<canvas id="chart" width="1100" height="700"></canvas><audio id="audio" controls></audio>
+<p id="summary" class="badge"></p><p id="stats"></p>
+<script>const payload=__DATA__,versions=payload.versions,beats=payload.beats,meter=payload.meter;let version='generated_hard';const audio=document.getElementById('audio'),canvas=document.getElementById('chart'),ctx=canvas.getContext('2d');audio.src=payload.audio;function selectVersion(name){version=name;for(const key of Object.keys(versions))document.getElementById(key).classList.toggle('active',key===name);document.getElementById('summary').textContent=(name==='generated_expert'?'A':name==='generated_hard'?'B':'C')+' · '+payload.labels[name]+' · '+versions[name].length+' attacks'}for(const key of Object.keys(versions))document.getElementById(key).onclick=()=>selectVersion(key);document.getElementById('speed').onchange=e=>audio.playbackRate=+e.target.value;document.getElementById('back').onclick=()=>audio.currentTime=Math.max(0,audio.currentTime-5);document.getElementById('toggle').onclick=()=>audio.paused?audio.play():audio.pause();document.addEventListener('keydown',e=>{if(e.target.tagName==='SELECT')return;if(e.code==='Space'){e.preventDefault();audio.paused?audio.play():audio.pause()}if(e.key.toLowerCase()==='a')selectVersion('generated_expert');if(e.key.toLowerCase()==='b')selectVersion('generated_hard');if(e.key.toLowerCase()==='c')selectVersion('official_expert');if(e.code==='ArrowLeft')audio.currentTime=Math.max(0,audio.currentTime-5);if(e.code==='ArrowRight')audio.currentTime=Math.min(audio.duration||Infinity,audio.currentTime+5)});const colors=['#65df7b','#ff5864','#f8d45d','#4c9dff','#ff973d'],W=1100,H=700,horizon=48,strike=590,topWidth=300,bottomWidth=820,lookAhead=3.5;function geom(y){const p=Math.max(0,Math.min(1,(y-horizon)/(strike-horizon))),width=topWidth+(bottomWidth-topWidth)*p;return {left:(W-width)/2,width}}function yFor(t,time){return strike-(t-time)/lookAhead*(strike-horizon)}function laneX(lane,y){const g=geom(y);return g.left+(lane+.5)*g.width/5}function lineAt(y,color,width=1){const g=geom(y);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(g.left,y);ctx.lineTo(g.left+g.width,y);ctx.stroke()}function draw(){const time=audio.currentTime,notes=versions[version];ctx.clearRect(0,0,W,H);const floor=ctx.createLinearGradient(0,horizon,0,strike);floor.addColorStop(0,'#111d31');floor.addColorStop(1,'#17283d');const bottom=geom(strike),top=geom(horizon);ctx.fillStyle=floor;ctx.beginPath();ctx.moveTo(top.left,horizon);ctx.lineTo(top.left+top.width,horizon);ctx.lineTo(bottom.left+bottom.width,strike);ctx.lineTo(bottom.left,strike);ctx.closePath();ctx.fill();for(let lane=0;lane<=5;lane++){ctx.strokeStyle='#52647d';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(top.left+lane*top.width/5,horizon);ctx.lineTo(bottom.left+lane*bottom.width/5,strike);ctx.stroke()}beats.forEach((beat,index)=>{const y=yFor(beat,time);if(y>=horizon&&y<=strike+20)lineAt(y,index%meter===0?'#95aac5':'#344760',index%meter===0?3:1)});lineAt(strike,'#fff',6);ctx.font='16px system-ui';ctx.textAlign='center';for(let lane=0;lane<5;lane++){const x=laneX(lane,strike);ctx.fillStyle=colors[lane];ctx.beginPath();ctx.arc(x,strike,22,0,Math.PI*2);ctx.fill();ctx.fillStyle='#dfe9f5';ctx.fillText(['Green','Red','Yellow','Blue','Orange'][lane],x,642)}ctx.textAlign='left';ctx.fillStyle='#b9c8db';ctx.fillText('NOTES HIT THIS LINE',bottom.left+8,strike+38);for(const n of notes){const rawY=yFor(n.t,time);if(rawY<horizon-30||rawY>strike+2)continue;const y=Math.min(strike,rawY);for(const lane of n.lanes){const x=laneX(lane,y),size=7+13*Math.max(0,Math.min(1,(y-horizon)/(strike-horizon)));ctx.globalAlpha=.38+.62*n.confidence;ctx.fillStyle=colors[lane];ctx.strokeStyle='#f7fbff';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(x-size*1.35,y-size*.62,size*2.7,size*1.24,size*.55);ctx.fill();ctx.stroke()}}ctx.globalAlpha=1;ctx.fillStyle='#b9c8db';ctx.font='16px system-ui';ctx.fillText((version==='generated_expert'?'A':version==='generated_hard'?'B':'C')+' · '+payload.labels[version]+' · player '+time.toFixed(2)+'s · song '+Math.max(0,time-payload.lead).toFixed(2)+'s · A/B/C keys switch charts · Space plays',50,665);requestAnimationFrame(draw)}selectVersion('generated_hard');draw();</script></html>'''
+    output.write_text(
+        page.replace("__TITLE__",title)
+        .replace("__ARTIST__",artist)
+        .replace("__DATA__",payload),
+        encoding="utf-8",
+    )
+    return {
+        "output":str(output),
+        "title":metadata["title"],
+        "artist":metadata["artist"],
+        "alignment_offset_seconds":float(offset),
+        "counts":{
+            labels[key]:len(notes) for key,notes in versions.items()
+        },
+    }

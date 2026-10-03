@@ -76,6 +76,14 @@ def main():
         default="expert",
     )
     midi_review.add_argument("--offset",type=float,required=True)
+    abc_review=sub.add_parser(
+        "review-expert-hard-reference",
+        help="Create a synchronized project Expert/Hard/reference Expert review",
+    )
+    abc_review.add_argument("generated",type=Path)
+    abc_review.add_argument("reference",type=Path)
+    abc_review.add_argument("--output",type=Path)
+    abc_review.add_argument("--offset",type=float,required=True)
     human_compare=sub.add_parser("compare-human-chart",help="Compare generated guitar with an authorized held-out chart")
     human_compare.add_argument("manifest",type=Path)
     human_compare.add_argument("song_id")
@@ -370,6 +378,21 @@ def main():
             json.JSONDecodeError,
         ) as exc:
             print(f"MIDI review creation failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report,indent=2))
+        return 0
+    if args.command=="review-expert-hard-reference":
+        from .preview import create_expert_hard_reference_preview
+        output=args.output or Path("output")/"expert-hard-reference-review.html"
+        try:
+            report=create_expert_hard_reference_preview(
+                args.generated,args.reference,output,args.offset
+            )
+        except (
+            FileNotFoundError,KeyError,OSError,TypeError,ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            print(f"Three-way review creation failed: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report,indent=2))
         return 0

@@ -153,6 +153,18 @@ Status update (2026-10-02):
   attack F1 0.4750→0.5182 and matched 74 of 119 added attacks while exact lanes
   declined 0.1474→0.1330. This supports attack density/timing but not the current
   lane pattern; the result remains post-generation evaluation only.
+- Human A/B/C review reframed that result: generated Hard may expose a cleaner
+  attack-selection backbone for canonical Expert rather than merely an easier
+  chart. On Hail, project Expert charts 1.3913 times the official Expert attack
+  count with 0.5288 precision; project Hard charts 0.8426 times the count with
+  0.5666 precision. Both remain near 0.133 exact-lane agreement. Before any
+  runtime change, test whether reduction-retained versus Expert-only attacks
+  separate on source-derived evidence across rights-cleared songs. Official
+  notes may evaluate the frozen result but cannot select that evidence or rule.
+  Human review does not support treating intro density alone as the defect:
+  generated Expert can approach reference attack density while choosing the
+  wrong attacks and lane progression. Optimize source-supported selection and
+  phrase continuity, not a blanket reduction in intro note count.
 - Added post-generation playability-evidence audits that join each attributed
   removal to raw onset/level evidence, optional offline structure ranks,
   source-mix versus guitar-stem onset prominence/width, and voice-continuity

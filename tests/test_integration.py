@@ -12,6 +12,7 @@ from rb3charts.audio import write_padded_audio
 from rb3charts.timing import analyze_tempo
 from rb3charts.preview import (
     create_comparison_preview,
+    create_expert_hard_reference_preview,
     create_midi_comparison_preview,
     create_preview,
 )
@@ -371,14 +372,21 @@ def test_midi_comparison_preview_aligns_reference_to_generated_audio(
     generated=tmp_path/"generated"
     for part in ("analysis","metadata","source","audio"):
         (generated/part).mkdir(parents=True,exist_ok=True)
+    generated_note={
+        "start":1.0,
+        "end":1.1,
+        "lanes":[0],
+        "confidence":.8,
+        "source_id":"generated",
+    }
     (generated/"analysis"/"charts.json").write_text(json.dumps({
-        "guitar":{"hard":[{
-            "start":1.0,
-            "end":1.1,
-            "lanes":[0],
-            "confidence":.8,
-            "source_id":"generated",
-        }]}
+        "guitar":{
+            "expert":[
+                generated_note,
+                {**generated_note,"start":1.25,"end":1.35},
+            ],
+            "hard":[generated_note],
+        }
     }),encoding="utf-8")
     (generated/"analysis"/"tempo.json").write_text(json.dumps({
         "beats":[0,.5,1,1.5,2],
@@ -423,6 +431,22 @@ def test_midi_comparison_preview_aligns_reference_to_generated_audio(
     assert (
         tmp_path/"review"/"hard-vs-expert"/"audio"/"song.wav"
     ).is_file()
+
+    abc_output=tmp_path/"review"/"abc.html"
+    abc_report=create_expert_hard_reference_preview(
+        generated,reference,abc_output,offset=-1.1
+    )
+    abc_page=abc_output.read_text(encoding="utf-8")
+    assert abc_report["counts"]=={
+        "Project Expert":2,
+        "Project Hard":1,
+        "Official Expert":1,
+    }
+    assert "A · Project Expert" in abc_page
+    assert "B · Project Hard" in abc_page
+    assert "C · Official Expert" in abc_page
+    assert "selectVersion('generated_hard')" in abc_page
+    assert '"t": 3.6' in abc_page
 
 
 def test_midi_preserves_hold_note_duration(tmp_path):

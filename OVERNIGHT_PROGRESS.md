@@ -1066,3 +1066,28 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   aligned official Expert) at the same timestamp. The official markers are
   materialized only in the ignored local companion folder and never enter
   generation.
+
+### 2026-10-03 16:47 - Three-way Expert/Hard/official review
+
+- Clarified the human observation: project Hard is not being proposed as a
+  difficulty match for official Expert. It appears to be a cleaner version of
+  what project Expert should have interpreted, while project Expert's event
+  choices and play pattern remain substantially wrong.
+- Generated
+  `comparisons/morning-review/Hail_Project_Expert_vs_Hard_vs_Official_Expert.html`.
+  Its shared transport switches A (1,600-note project Expert), B (969-note
+  project Hard) and C (1,150-note aligned official Expert); it starts on B.
+- A has higher official-Expert recall/F1 (0.7357/0.6153) by charting 39.1% more
+  attacks than C. B has lower recall/F1 (0.4774/0.5182), but its total count is
+  much closer to C and timing precision is higher (0.5666 versus 0.5288).
+- Exact-lane agreement is essentially unchanged and poor (A 0.1336, B 0.1330).
+  B therefore exposes a useful de-noised attack backbone, not a solved lane
+  pattern. A safe future experiment is to measure whether reduction-retained
+  attacks carry stronger source evidence than Expert-only attacks across the
+  rights-cleared corpus, then use that evidence to improve canonical Expert
+  selection without deriving Expert from Hard or using reference notes.
+- Follow-up visual inspection softened the earlier intro-density claim: raw
+  density alone may be reasonably close to the official intro. The actionable
+  defect is the selection, clustering, continuity and lane/play pattern of
+  those attacks. Future experiments must not treat a blanket density reduction
+  as the target.
