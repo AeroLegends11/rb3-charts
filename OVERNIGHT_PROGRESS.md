@@ -969,3 +969,8 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Existing GuitarSet and Guitar-TECHS measurements already use explicit pinned
   alternates and remain unchanged. Focused provenance tests and the 209-test
   full suite pass.
+- Chart-pair evidence attachment now independently re-hashes the paired
+  manifest's primary audio, labels and alternate recordings rather than trusting
+  the evaluation report's verification count. Duplicate, missing or extra
+  evaluation item identities and changed alternate bytes produce `invalid`
+  lineage without exposing their metrics.

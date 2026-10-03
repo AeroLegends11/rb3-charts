@@ -112,7 +112,7 @@ def _source_agreement_summary(report_path, target_payload):
             raise DatasetManifestError("source-agreement manifest hash does not match")
         manifest_validation = validate_dataset_manifest(
             manifest_path,
-            verify_hashes=False,
+            verify_hashes=True,
         )
         manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
         if manifest_payload.get("dataset") != source.get("dataset"):
@@ -126,15 +126,37 @@ def _source_agreement_summary(report_path, target_payload):
             raise DatasetManifestError("source-agreement validated provenance does not match")
         if int(validation.get("hashes_verified", 0)) < 2 * len(manifest_payload["items"]):
             raise DatasetManifestError("source-agreement source hashes were not verified")
-        source_items = {
-            str(item.get("song_id")): item for item in source.get("items") or []
-        }
-        for item in manifest_payload["items"]:
-            evaluated = source_items.get(str(item["song_id"]))
-            if evaluated is None:
+        report_items=source.get("items")
+        if not isinstance(report_items,list):
+            raise DatasetManifestError(
+                "source agreement items must be an array"
+            )
+        source_items={}
+        for evaluated in report_items:
+            if not isinstance(evaluated,dict):
                 raise DatasetManifestError(
-                    f"source agreement omits {item['song_id']}"
+                    "source agreement item must be an object"
                 )
+            evaluated_id=str(evaluated.get("song_id",""))
+            if not evaluated_id:
+                raise DatasetManifestError(
+                    "source agreement item has no song_id"
+                )
+            if evaluated_id in source_items:
+                raise DatasetManifestError(
+                    f"source agreement duplicates {evaluated_id}"
+                )
+            source_items[evaluated_id]=evaluated
+        manifest_ids={
+            str(item["song_id"]) for item in manifest_payload["items"]
+        }
+        if set(source_items)!=manifest_ids:
+            raise DatasetManifestError(
+                "source agreement item identities differ from manifest"
+            )
+        manifest_root=manifest_path.parent.resolve()
+        for index,item in enumerate(manifest_payload["items"]):
+            evaluated = source_items.get(str(item["song_id"]))
             if evaluated.get("primary", {}).get("sha256") != item["audio_sha256"]:
                 raise DatasetManifestError(
                     f"source agreement primary hash differs for {item['song_id']}"
@@ -143,10 +165,25 @@ def _source_agreement_summary(report_path, target_payload):
                 raise DatasetManifestError(
                     f"source agreement label hash differs for {item['song_id']}"
                 )
-            expected_alternate = item.get("alternate_audio_sha256")
+            alternate_relative=item.get("alternate_audio")
+            expected_alternate=item.get("alternate_audio_sha256")
+            if not alternate_relative or not expected_alternate:
+                raise DatasetManifestError(
+                    f"source agreement manifest has no pinned alternate for "
+                    f"{item['song_id']}"
+                )
+            _,alternate_path=_resolve_item_path(
+                manifest_root,
+                alternate_relative,
+                f"items[{index}].alternate_audio",
+            )
+            if _hash_file(alternate_path)!=expected_alternate:
+                raise DatasetManifestError(
+                    f"source agreement alternate hash does not match for "
+                    f"{item['song_id']}"
+                )
             if (
-                expected_alternate is not None
-                and evaluated.get("alternate", {}).get("sha256")
+                evaluated.get("alternate", {}).get("sha256")
                 != expected_alternate
             ):
                 raise DatasetManifestError(

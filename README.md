@@ -202,10 +202,12 @@ See `docs/AUTHORIZED_CHART_PILOT.md`.
 
 `--source-agreement-report` additively attaches an existing
 `evaluate-source-agreement` result to the chart-pair validation report. The
-summary verifies the evaluation report, paired manifest and release lineage,
-then records tolerance, splits, shared precision/recall/F1, the best individual
-source and deltas. Missing reports are explicitly `unavailable`; broken lineage
-is `invalid`. A valid GuitarSet or Guitar-TECHS result is external
+summary re-hashes the evaluation report, paired manifest, primary recordings,
+labels and pinned alternates, verifies exact evaluation-item identity and
+release lineage, then records tolerance, splits, shared precision/recall/F1,
+the best individual source and deltas. Missing reports are explicitly
+`unavailable`; broken lineage is `invalid`. A valid GuitarSet or Guitar-TECHS
+result is external
 rights-cleared calibration, not evidence that authorized chart-pair songs have
 paired captures.
 

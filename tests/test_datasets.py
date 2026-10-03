@@ -227,6 +227,13 @@ def test_chart_pair_report_attaches_external_source_agreement_with_lineage(tmp_p
             "published_md5": "a" * 32,
         },
     }
+    for item in source_payload["items"]:
+        alternate = tmp_path / f"alternate-{item['song_id']}.wav"
+        alternate.write_bytes(
+            f"alternate {item['song_id']}".encode()
+        )
+        item["alternate_audio"] = alternate.name
+        item["alternate_audio_sha256"] = _hash(alternate)
     source_manifest.write_text(json.dumps(source_payload), encoding="utf-8")
     manifest_hash = _hash(source_manifest)
     agreement_path = tmp_path / "source-agreement.json"
@@ -261,7 +268,9 @@ def test_chart_pair_report_attaches_external_source_agreement_with_lineage(tmp_p
                 "song_id": item["song_id"],
                 "labels_sha256": item["annotations_sha256"],
                 "primary": {"sha256": item["audio_sha256"]},
-                "alternate": {"sha256": "b" * 64},
+                "alternate": {
+                    "sha256": item["alternate_audio_sha256"]
+                },
             }
             for item in source_payload["items"]
         ],
@@ -287,6 +296,37 @@ def test_chart_pair_report_attaches_external_source_agreement_with_lineage(tmp_p
         "precision": .08, "recall": -.04, "f1": .0111,
     }
     assert agreement["target_coverage"]["status"] == "unavailable"
+
+    agreement_payload = json.loads(
+        agreement_path.read_text(encoding="utf-8")
+    )
+    agreement_payload["items"].append(
+        agreement_payload["items"][0]
+    )
+    agreement_path.write_text(
+        json.dumps(agreement_payload),encoding="utf-8"
+    )
+    duplicate = validate_chart_pair_manifest(
+        path,
+        source_agreement_report=agreement_path,
+    )["paired_source_agreement"]
+    assert duplicate["status"] == "invalid"
+    assert "duplicates train-song" in duplicate["reason"]
+
+    agreement_payload["items"].pop()
+    agreement_path.write_text(
+        json.dumps(agreement_payload),encoding="utf-8"
+    )
+    alternate=tmp_path/"alternate-train-song.wav"
+    original_alternate=alternate.read_bytes()
+    alternate.write_bytes(b"changed alternate")
+    changed = validate_chart_pair_manifest(
+        path,
+        source_agreement_report=agreement_path,
+    )["paired_source_agreement"]
+    assert changed["status"] == "invalid"
+    assert "alternate hash does not match" in changed["reason"]
+    alternate.write_bytes(original_alternate)
 
     source_manifest.write_text("{}\n", encoding="utf-8")
     invalid = validate_chart_pair_manifest(
