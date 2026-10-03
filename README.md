@@ -100,7 +100,9 @@ are reported separately rather than classified as chords. When both replay
 roots contain structure diagnostics, the report also compares mean activity
 blocks, boundary strengths, repeated drum-groove families, and groove-supported
 attack coverage. Complete reduction snapshots add mean/max four-second density
-for Expert, Hard, Medium, and Easy.
+for Expert, Hard, Medium, and Easy. Pattern artifacts add song-mean recurring
+family/occurrence counts, supported-attack coverage, and pitched lane-motion
+metrics.
 
 New review drafts record hashes for `import/notes.mid`, `song.wav`, and
 `song.ini`. The `package` command rejects any of those inputs if they changed

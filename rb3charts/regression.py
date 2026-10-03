@@ -352,6 +352,36 @@ def _benchmark_structure_metrics(folder: Path):
     }
 
 
+def _benchmark_pattern_metrics(folder: Path, instrument: str):
+    path=folder/"analysis"/"patterns.json"
+    if not path.is_file():
+        return None
+    payload=json.loads(path.read_text(encoding="utf-8")).get(instrument)
+    if not payload:
+        return None
+    attacks=max(1,int(payload.get("attacks",0)))
+    metrics={
+        "recurring_pattern_families":int(
+            payload.get("recurring_pattern_families",0)
+        ),
+        "recurring_pattern_occurrences":int(
+            payload.get("recurring_pattern_occurrences",0)
+        ),
+        "pattern_supported_attack_ratio":round(
+            int(payload.get("pattern_supported_attacks",0))/attacks,4
+        ),
+    }
+    for key in (
+        "contour_agreement_ratio",
+        "flattened_change_ratio",
+        "adjacent_motion_rate",
+        "wide_jump_rate",
+    ):
+        if key in payload:
+            metrics[key]=float(payload[key])
+    return metrics
+
+
 def _peak_four_second_nps(notes):
     starts=np.asarray(sorted(note.start for note in notes),dtype=float)
     peak=0
@@ -397,6 +427,7 @@ def benchmark_replays(
     statuses={"baseline":defaultdict(int),"candidate":defaultdict(int)}
     reduction_pairs=0
     structure_pairs=[]
+    pattern_pairs=[]
     reduction_densities={
         label:{difficulty:[] for difficulty in (
             "expert","hard","medium","easy"
@@ -410,6 +441,12 @@ def benchmark_replays(
         after=_benchmark_stage_metrics(candidate_folder,instrument)
         before_structure=_benchmark_structure_metrics(baseline_folder)
         after_structure=_benchmark_structure_metrics(candidate_folder)
+        before_pattern=_benchmark_pattern_metrics(
+            baseline_folder,instrument
+        )
+        after_pattern=_benchmark_pattern_metrics(
+            candidate_folder,instrument
+        )
         for metric in core_total_keys:
             totals["baseline"][metric]+=before[metric]
             totals["candidate"][metric]+=after[metric]
@@ -450,9 +487,13 @@ def benchmark_replays(
             },
             "baseline_structure":before_structure,
             "candidate_structure":after_structure,
+            "baseline_pattern":before_pattern,
+            "candidate_pattern":after_pattern,
         })
         if before_structure is not None and after_structure is not None:
             structure_pairs.append((before_structure,after_structure))
+        if before_pattern is not None and after_pattern is not None:
+            pattern_pairs.append((before_pattern,after_pattern))
     for label in ("baseline","candidate"):
         total_attacks=max(1,totals[label]["attacks"])
         totals[label].update({
@@ -529,6 +570,30 @@ def benchmark_replays(
         for key in structure_keys
     } if structure_pairs else None
     report["structure_macro_song_mean"]=structure_macro
+    pattern_macro={"songs_matched":len(pattern_pairs)}
+    pattern_keys=(
+        sorted(set.intersection(*[
+            set(before)&set(after)
+            for before,after in pattern_pairs
+        ]))
+        if pattern_pairs else []
+    )
+    for label,index in (("baseline",0),("candidate",1)):
+        pattern_macro[label]={
+            key:round(float(np.mean([
+                pair[index][key] for pair in pattern_pairs
+            ])),4)
+            for key in pattern_keys
+        } if pattern_pairs else None
+    pattern_macro["delta"]={
+        key:round(
+            pattern_macro["candidate"][key]
+            - pattern_macro["baseline"][key],
+            4,
+        )
+        for key in pattern_keys
+    } if pattern_pairs else None
+    report["pattern_macro_song_mean"]=pattern_macro
     output=Path(output)
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")

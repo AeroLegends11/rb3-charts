@@ -268,6 +268,15 @@ Status update (2026-10-02):
   measure-level drum-groove families. The review page links the eight strongest
   activity boundaries for focused listening. These diagnostics never name
   verse/chorus sections and do not alter charts.
+- Review pages now expose up to 16 capped jump markers per instrument for
+  repeated motif candidates, including family occurrence count and instance
+  number. These are A/B listening links, not correctness claims or generation
+  inputs.
+- Corpus replay benchmarks now compare final pattern vocabulary: recurring
+  families/occurrences, pattern-supported attack ratio, and pitched contour,
+  flattening, adjacent-motion, and wide-jump rates. Independent Hail roots
+  matched exactly at 158 families, 442 occurrences, and 0.5619 supported-attack
+  ratio.
 - On the cached Hail replay, 19 repeated drum-groove families covered 62.99% of
   Expert drum attacks. This is descriptive evidence for future groove work, not
   permission to normalize drum patterns.

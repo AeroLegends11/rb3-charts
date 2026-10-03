@@ -500,3 +500,18 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   benchmarks. The retained Hail Hard change now reproduces directly in the
   standard report: retention 0.5312 -> 0.6056 and max density 3.75 -> 4.25/s.
   Focused replay benchmark coverage passes 16 tests.
+
+### 2026-10-03 01:38 - Repeated motif review links retained
+
+- Added up to 16 capped repeated-motif candidate markers per instrument, with
+  occurrence count and instance number, so reviewers can jump among candidate
+  phrase returns for direct A/B listening.
+- Markers are descriptive only and do not normalize or rewrite lanes.
+- Fresh Hail and Less Talk reviews expose the capped markers; focused integration
+  coverage passes 14 tests.
+- Added corpus-level pattern vocabulary comparisons for recurring family and
+  occurrence counts, supported-attack coverage, contour agreement, flattening,
+  adjacent motion, and wide jumps.
+- Independent Hail roots matched exactly at 158 families, 442 occurrences,
+  0.5619 supported-attack ratio, 0.993 contour agreement, and zero deltas across
+  every pattern metric. Focused replay benchmark coverage passes 16 tests.

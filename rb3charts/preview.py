@@ -66,6 +66,7 @@ def _review_diagnostics(
             for region in dense
         )
         motif_mismatches = []
+        motif_occurrences = []
         for pattern in (patterns or {}).get(instrument, {}).get("top_patterns", []):
             motif_mismatches.extend(
                 {
@@ -75,7 +76,23 @@ def _review_diagnostics(
                 }
                 for start in pattern.get("lane_mismatch_times", [])
             )
+            motif_occurrences.extend(
+                {
+                    "time":float(start)+lead,
+                    "kind":"repeated motif candidate",
+                    "detail":(
+                        f"{int(pattern.get('occurrences',0))} occurrences; "
+                        f"instance {index+1}"
+                    ),
+                }
+                for index,start in enumerate(
+                    pattern.get("source_times",[])[:4]
+                )
+            )
         markers.extend(sorted(motif_mismatches, key=lambda marker: marker["time"])[:20])
+        markers.extend(sorted(
+            motif_occurrences,key=lambda marker:marker["time"]
+        )[:16])
         markers.extend({
             "time":float(boundary["seconds"])+lead,
             "kind":"activity boundary",

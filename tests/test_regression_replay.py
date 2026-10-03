@@ -199,6 +199,16 @@ def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
             }),
             encoding="utf-8",
         )
+        (root/"analysis"/"patterns.json").write_text(
+            json.dumps({instrument:{
+                "attacks":3,
+                "recurring_pattern_families":2,
+                "recurring_pattern_occurrences":5,
+                "pattern_supported_attacks":2,
+                "contour_agreement_ratio":.75,
+            }}),
+            encoding="utf-8",
+        )
 
     write_run(tmp_path/"baseline"/"run",(0,1,2))
     write_run(tmp_path/"candidate"/"run",(0,0,2))
@@ -218,6 +228,11 @@ def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
     assert (
         report["structure_macro_song_mean"]["baseline"]
         ["repeated_drum_groove_families"]==2
+    )
+    assert report["pattern_macro_song_mean"]["songs_matched"]==1
+    assert (
+        report["pattern_macro_song_mean"]["baseline"]
+        ["pattern_supported_attack_ratio"]==.6667
     )
     assert report["macro"]["candidate"]["assessment_status_counts"]=={"missing":1}
     assert (tmp_path/"benchmark.json").is_file()
