@@ -364,7 +364,12 @@ def create_comparison_preview(
     def note_key(note):
         source_id=str(note.get("source_id",""))
         return (
-            ("source",source_id)
+            (
+                "source",
+                source_id,
+                round(float(note["start"]),6),
+                tuple(note["lanes"]),
+            )
             if source_id
             else (
                 "position",
@@ -486,7 +491,8 @@ def create_comparison_preview(
         .replace(
             "__DIFFERENCE_NOTE__",
             (
-                "Cyan outlines identify attacks unique to the selected version."
+                "Cyan outlines identify added, removed, onset-changed, or "
+                "lane-changed attacks in the selected version."
                 if highlight_differences else
                 "Reference markers are evaluation-only and never generation inputs."
             ),

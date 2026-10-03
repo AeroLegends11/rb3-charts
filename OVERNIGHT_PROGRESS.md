@@ -1241,3 +1241,18 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Generated
   `comparisons/morning-review/Hail_Hard_Contour_Anchors_AB.html`; it opens on
   Guitar/Hard and highlights the three same-count replacements.
+
+### 2026-10-03 19:10 - A/B lane changes made visible
+
+- Synchronized A/B matching no longer treats a shared source ID as unchanged
+  when its authored onset or lane shape differs. Cyan outlines now cover
+  added/removed attacks and same-source onset/lane changes.
+- Sustain-end-only changes remain visible in note tails but do not create a
+  cyan attack outline; including them made the Expert riff review too noisy.
+- Default difficulty selection uses the total changed-attack count, so
+  same-count replacements are reviewable without manual difficulty switching.
+- Regenerated both
+  `comparisons/morning-review/Hail_Expert_Repeated_Riff_Recovery_AB.html` and
+  `comparisons/morning-review/Hail_Hard_Contour_Anchors_AB.html`. They open on
+  Expert and Hard respectively; the Hard review highlights exactly the three
+  removed and three replacement attacks.

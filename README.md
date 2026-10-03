@@ -40,9 +40,10 @@ branch, then starts the GUI).
   release. A/B reviews open on the shared difficulty with the most changed
   attacks. Difficulty-specific review markers identify long same-lane runs and
   distinguish repeated detected pitch from multiple pitches collapsed onto one
-  color. These are review prompts, not automatic correctness failures. Highway
-  speeds are consistent look-ahead levels, not a claim of pixel-for-pixel
-  calibration to a specific Rock Band display.
+  color. Cyan A/B outlines include added/removed attacks plus same-source
+  onset and lane changes. These are review prompts, not automatic
+  correctness failures. Highway speeds are consistent look-ahead levels, not a
+  claim of pixel-for-pixel calibration to a specific Rock Band display.
 - After review, **Package reviewed chart for Xbox** runs Onyx/Magma without
   repeating separation or transcription. Immediate compilation remains an
   advanced opt-in.

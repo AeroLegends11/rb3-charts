@@ -366,10 +366,15 @@ def test_comparison_preview_keeps_versions_synchronized(tmp_path):
         medium=[
             dict(notes[0],source_id=f"{name}-medium")
         ]
+        expert=(
+            notes
+            if name=="baseline"
+            else [dict(notes[0],lanes=[1])]
+        )
         (folder/"analysis"/"charts.json").write_text(
             json.dumps({
                 "guitar":{
-                    "expert":notes,
+                    "expert":expert,
                     "hard":hard,
                     "medium":medium,
                 }
@@ -409,7 +414,9 @@ def test_comparison_preview_keeps_versions_synchronized(tmp_path):
     assert "Playback speed" in page
     assert "NOTES HIT THIS LINE" in page
     assert "rawY>strike+2" in page
-    assert '"default_difficulties": {"guitar": "medium"}' in page
+    assert '"default_difficulties": {"guitar": "expert"}' in page
+    assert '"lanes": [1], "confidence": 0.8, "different": true' in page
+    assert "lane-changed attacks" in page
     assert "diff.value||payload.default_difficulties[inst.value]||'expert'" in page
     assert '"lead": 2.0' in page and "song '+Math.max(0,time-payload.lead)" in page
     assert "../candidate/audio/song.wav" in page
