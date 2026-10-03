@@ -547,6 +547,10 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - A real Hail motif-review draft passed with a verified manifest and zero errors.
   A synthetic post-validation `song.ini` change fails as expected.
 - Focused integration coverage passes 15 tests; CLI help passes.
+- Complete run folders now perform the current recheck automatically at the
+  packaging boundary. A valid synthetic reviewed run compiles through the fake
+  Onyx harness; changing `song.ini` afterward stops packaging before compile.
+  Legacy folders without charts/tempo retain their compatibility fallback.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage

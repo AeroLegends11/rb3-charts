@@ -461,7 +461,19 @@ def package_existing(folder, progress=print, onyx=None):
         with logfile.open("a",encoding="utf-8") as stream:stream.write(text+"\n")
         try:progress(text)
         except UnicodeEncodeError:progress(text.encode("ascii",errors="replace").decode("ascii"))
-    if not _verify_package_input_manifest(folder):
+    recheck_inputs=(
+        folder/"analysis"/"charts.json",
+        folder/"analysis"/"tempo.json",
+    )
+    current_recheck=all(path.is_file() for path in recheck_inputs)
+    if current_recheck:
+        recheck=validate_existing_run(folder)
+        if not recheck["passed"]:
+            raise RuntimeError(
+                "Current chart revalidation failed; packaging was stopped"
+            )
+        log("Current structural and package-input revalidation passed")
+    elif not _verify_package_input_manifest(folder):
         warning=(
             "Legacy run has no package-input manifest; package inputs could "
             "not be checked for changes after validation."

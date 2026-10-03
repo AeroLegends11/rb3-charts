@@ -447,6 +447,9 @@ that report local.
 charts and tempo map, verifies the package-input manifest when present, and
 writes separate `validation_recheck_report.json`/`.txt` files without rerunning
 authoring or overwriting the original validation report.
+`package` automatically performs this current recheck when the saved charts and
+tempo map are available; legacy folders without those artifacts retain the
+documented compatibility fallback.
 
 `input/`, `cache/`, `output/`, `tools/`, `.research/` and `Ready for Xbox/` remain
 local. Git exclusions do not prevent normal reading, generation or packaging.

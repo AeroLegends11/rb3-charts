@@ -138,6 +138,9 @@ Status update (2026-10-02):
 - `validate-run` now applies the current structural/readback validator and
   package-input manifest check to an existing draft without replaying authoring.
   It writes separate recheck reports, preserving the original validation record.
+- Packaging now invokes that current recheck automatically for complete run
+  folders and stops before compilation on any failure. Older folders missing
+  charts/tempo retain the explicit legacy manifest/report fallback.
 
 ## 3. Consolidate motif understanding — architecture proposal
 

@@ -140,11 +140,13 @@ def test_reviewed_run_rejects_changed_package_input(tmp_path,monkeypatch):
     with pytest.raises(RuntimeError,match="manifest is incomplete"):
         pipeline.package_existing(run,lambda message:None)
 
-def test_existing_run_validation_rechecks_midi_and_manifest(tmp_path):
+def test_existing_run_validation_rechecks_midi_and_manifest(
+    tmp_path,monkeypatch
+):
     from rb3charts import pipeline
     run=tmp_path/"draft"
     for folder in (
-        run/"analysis",run/"metadata",run/"import"
+        run/"analysis",run/"metadata",run/"import",run/"logs"
     ):
         folder.mkdir(parents=True)
     tempo=TempoMap([0,.5,1,1.5,2,2.5,3])
@@ -163,7 +165,7 @@ def test_existing_run_validation_rechecks_midi_and_manifest(tmp_path):
         encoding="utf-8",
     )
     (run/"metadata"/"song.json").write_text(
-        json.dumps({"source_seconds":2}),
+        json.dumps({"source_seconds":2,"song_id":"rb3c_demo"}),
         encoding="utf-8",
     )
     write_midi(run/"import"/"notes.mid",tempo,{"guitar":charts},2,{})
@@ -174,6 +176,21 @@ def test_existing_run_validation_rechecks_midi_and_manifest(tmp_path):
     assert report["passed"]
     assert report["package_input_manifest"]=="verified"
     assert (run/"validation_recheck_report.json").is_file()
+    (run/"result.json").write_text(
+        json.dumps({"status":"draft_ready"}),encoding="utf-8"
+    )
+    (run/"validation_report.json").write_text(
+        json.dumps({"passed":True}),encoding="utf-8"
+    )
+    package=run/"rb3"/"rb3c_demo.con"
+    def fake_compile(import_folder,run_folder,song_id,onyx,log):
+        package.parent.mkdir()
+        package.write_bytes(b"CON "+b"x"*1024)
+        return package
+    monkeypatch.setattr(pipeline,"compile_rb3",fake_compile)
+    monkeypatch.setattr(pipeline,"find_onyx",lambda:Path("onyx.exe"))
+    packaged=pipeline.package_existing(run,lambda message:None)
+    assert packaged["status"]=="compiled_needs_playtest"
     (run/"import"/"song.ini").write_text("[song]\nname=Changed\n")
     changed=pipeline.validate_existing_run(run)
     assert not changed["passed"]
@@ -181,6 +198,10 @@ def test_existing_run_validation_rechecks_midi_and_manifest(tmp_path):
         "changed after validation" in error
         for error in changed["errors"]
     )
+    with pytest.raises(
+        RuntimeError,match="Current chart revalidation failed"
+    ):
+        pipeline.package_existing(run,lambda message:None)
 
 def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     (tmp_path/"audio").mkdir()
