@@ -28,6 +28,12 @@ def main():
         help="Recheck an existing draft without rerunning authoring",
     )
     validate_run.add_argument("folder",type=Path)
+    validate_runs=sub.add_parser(
+        "validate-runs",
+        help="Recheck every existing draft below a folder",
+    )
+    validate_runs.add_argument("folder",type=Path)
+    validate_runs.add_argument("--output",type=Path)
     replay=sub.add_parser("replay",help="Cached replay: rerun authoring from saved analysis (no new audio reanalysis)")
     replay.add_argument("folder",type=Path,help="Existing output run folder with analysis candidates and tempo")
     replay.add_argument("--output",type=Path,default=None,help="Destination root for the replay run folder")
@@ -381,6 +387,20 @@ def main():
             + ("PASS" if report["passed"] else "FAIL")
         )
         return 0 if report["passed"] else 1
+    if args.command=="validate-runs":
+        from .pipeline import validate_existing_runs
+        try:
+            report=validate_existing_runs(args.folder,args.output)
+        except (FileNotFoundError,ValueError) as exc:
+            print(f"Batch run validation failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps({
+            "runs_total":report["runs_total"],
+            "runs_passed":report["runs_passed"],
+            "runs_failed":report["runs_failed"],
+            "output":report["output"],
+        },indent=2))
+        return 1 if report["runs_failed"] else 0
     if args.command=="package":
         try:
             result=package_existing(args.folder,onyx=args.onyx)

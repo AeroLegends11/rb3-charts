@@ -587,6 +587,11 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   artifact for every instrument available in both roots, and records unavailable
   instruments explicitly. A real comparison exercised guitar, bass, and drums
   in one invocation; the focused regression suite passes 19 tests.
+- Added `validate-runs` for non-destructive corpus rechecks. It discovers draft
+  runs by saved charts, continues after malformed runs, preserves each run's
+  errors/warnings, returns nonzero when any fail, and writes one aggregate JSON
+  report. One invocation revalidated both morning-review drafts successfully;
+  the focused integration suite passes 15 tests.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage

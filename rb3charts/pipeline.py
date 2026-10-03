@@ -570,6 +570,49 @@ def validate_existing_run(folder):
     return report
 
 
+def validate_existing_runs(root, output=None):
+    """Recheck every draft below a root and retain individual failures."""
+    root=Path(root).resolve()
+    if not root.is_dir():
+        raise FileNotFoundError(f"Validation root does not exist: {root}")
+    run_folders=sorted({
+        path.parent.parent
+        for path in root.rglob("analysis/charts.json")
+    })
+    if not run_folders:
+        raise ValueError(f"No existing draft runs found under: {root}")
+    runs=[]
+    for folder in run_folders:
+        try:
+            result=validate_existing_run(folder)
+            runs.append({
+                "folder":str(folder),
+                "passed":result["passed"],
+                "errors":result["errors"],
+                "warnings":result["warnings"],
+            })
+        except (EOFError,KeyError,OSError,TypeError,ValueError) as exc:
+            runs.append({
+                "folder":str(folder),
+                "passed":False,
+                "errors":[str(exc)],
+                "warnings":[],
+            })
+    passed=sum(item["passed"] for item in runs)
+    report={
+        "schema_version":1,
+        "root":str(root),
+        "runs_total":len(runs),
+        "runs_passed":passed,
+        "runs_failed":len(runs)-passed,
+        "runs":runs,
+    }
+    output=Path(output) if output else root/"validation-batch-report.json"
+    save_json(output,report)
+    report["output"]=str(output.resolve())
+    return report
+
+
 def replay_cached(folder, output=None, progress=print, compile=False, onyx=None):
     """Replay authoring from cached analysis artifacts without new audio inference."""
     source_folder=Path(folder).resolve()

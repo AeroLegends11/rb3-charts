@@ -221,6 +221,20 @@ def test_existing_run_validation_rechecks_midi_and_manifest(
     assert not invalid_item["passed"]
     assert "Package-input manifest is malformed" in invalid_item["errors"]
 
+    copy=tmp_path/"draft-copy"
+    import shutil
+    shutil.copytree(run,copy)
+    (copy/"analysis"/"tempo.json").write_text(
+        "{invalid",encoding="utf-8"
+    )
+    batch=pipeline.validate_existing_runs(
+        tmp_path,tmp_path/"batch-validation.json"
+    )
+    assert batch["runs_total"]==2
+    assert batch["runs_passed"]==0
+    assert batch["runs_failed"]==2
+    assert (tmp_path/"batch-validation.json").is_file()
+
 def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     (tmp_path/"audio").mkdir()
     sf.write(tmp_path/"audio"/"song.wav",np.zeros((44100*2,2),dtype=np.float32),44100)
