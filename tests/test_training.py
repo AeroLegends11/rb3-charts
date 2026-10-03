@@ -18,6 +18,7 @@ from rb3charts.training import (
     convert_guitarset_jams,
     convert_guitar_techs_midi,
     convert_slakh_track,
+    evaluate_source_agreement,
     evaluate_structure_ranking,
     extract_structure_features,
     mix_slakh_guitar_stems,
@@ -622,3 +623,70 @@ def test_structure_baseline_runs_on_cuda_when_available(tmp_path):
         seed=7,
     )
     assert report["device_used"] == "cuda"
+
+
+def test_source_agreement_preserves_provenance_and_scores_shared_attacks(tmp_path):
+    primary=tmp_path/"audio"/"micamp"/"micamp_take.wav"
+    alternate=tmp_path/"audio"/"directinput"/"directinput_take.wav"
+    primary.parent.mkdir(parents=True)
+    alternate.parent.mkdir(parents=True)
+    labels_path=tmp_path/"labels"/"take.json"
+    labels_path.parent.mkdir()
+    sample_rate=FEATURE_SAMPLE_RATE
+    primary_audio=np.zeros(sample_rate,dtype=np.float32)
+    alternate_audio=np.zeros(sample_rate,dtype=np.float32)
+    for seconds in (.2,.5,.8):
+        index=int(seconds*sample_rate)
+        primary_audio[index:index+100]=1
+    for seconds in (.2,.5,.7):
+        index=int(seconds*sample_rate)
+        alternate_audio[index:index+100]=1
+    sf.write(primary,primary_audio,sample_rate)
+    sf.write(alternate,alternate_audio,sample_rate)
+    dataset={
+        "id":"fixture",
+        "version":"1",
+        "source_url":"https://example.invalid/fixture",
+        "audio_license":"CC BY 4.0",
+        "annotation_license":"CC BY 4.0",
+        "commercial_use":"allowed",
+        "attribution":"Fixture Author",
+    }
+    labels={
+        "provenance":dataset,
+        "group_id":"fixture:take",
+        "split_keys":["fixture:take","performer:fixture:p1"],
+        "targets":["attack"],
+        "attacks":[{"start":seconds} for seconds in (.2,.5,.8)],
+    }
+    labels_path.write_text(json.dumps(labels),encoding="utf-8")
+    digest=lambda path:hashlib.sha256(path.read_bytes()).hexdigest()
+    manifest=tmp_path/"manifest.json"
+    manifest.write_text(json.dumps({
+        "schema_version":1,
+        "dataset":dataset,
+        "items":[{
+            "song_id":"take",
+            "artist_id":"p1",
+            "split":"train",
+            "audio":"audio/micamp/micamp_take.wav",
+            "audio_sha256":digest(primary),
+            "alternate_audio":"audio/directinput/directinput_take.wav",
+            "alternate_audio_sha256":digest(alternate),
+            "annotations":"labels/take.json",
+            "annotations_sha256":digest(labels_path),
+        }],
+    }),encoding="utf-8")
+    output=tmp_path/"agreement.json"
+
+    report=evaluate_source_agreement(manifest,output)
+
+    assert report["manifest_sha256"]==digest(manifest)
+    assert report["items"][0]["split_keys"]==labels["split_keys"]
+    assert report["items"][0]["primary"]["sha256"]==digest(primary)
+    assert report["items"][0]["alternate"]["sha256"]==digest(alternate)
+    assert report["items"][0]["alternate"]["hash_manifested"] is True
+    assert report["splits"]["train"]["shared"]["precision"]==1.0
+    assert report["splits"]["train"]["shared"]["label_matches"]==2
+    assert report["splits"]["train"]["shared_precision_lift_vs_best_source"]==0
+    assert output.is_file()

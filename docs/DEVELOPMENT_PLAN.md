@@ -497,6 +497,11 @@ Status update (2026-09-22):
   six-example candidate reached only 0.7276. EGFxSet therefore remains an
   available research converter, not accepted runtime training data, and
   `hybrid-guitar-techs-v1` remains the selected checkpoint.
+- Added a manifest- and hash-validated aligned-source agreement evaluator.
+  Guitar-TECHS direct-input and mic/amp recordings provide two genuinely
+  independent captures of each labeled performance while preserving performer
+  split keys. Shared onsets are measured separately from channel-only onsets;
+  the evaluator remains offline and does not alter generation.
 - Reframed EGFxSet as deterministic multi-attack phrase augmentation rather
   than one five-second optimizer item per isolated note. Twelve ten-second
   phrases contain 236 known attacks, use 280 ms source excerpts with 25 ms

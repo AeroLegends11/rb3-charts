@@ -95,6 +95,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli train-structure-baseline 'C:\Path\To\feature-index.json' 'C:\Path\To\baseline.pt' --device cuda
 .\.venv\Scripts\python.exe -m rb3charts.cli predict-structure 'C:\Path\To\baseline.pt' 'C:\Path\To\guitar.wav' 'C:\Path\To\predictions.json' --beats 'C:\Path\To\tempo.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli evaluate-structure-ranking 'C:\Path\To\predictions.json' 'C:\Path\To\labels.json'
+.\.venv\Scripts\python.exe -m rb3charts.cli evaluate-source-agreement 'C:\Path\To\paired-dataset-manifest.json' --output 'C:\Path\To\agreement.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli predict-tabcnn 'C:\Path\To\TabCNN.pt' 'C:\Path\To\guitar.wav' 'C:\Path\To\tabcnn.json' --attacks 'C:\Path\To\structure-predictions.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli demo --compile
 .\.venv\Scripts\python.exe -m pytest -q
@@ -231,6 +232,17 @@ fixed top-K candidate set by a named rank field and performs one-to-one attack
 matching against lane-independent labels at a fixed tolerance. By default K is
 the number of distinct labeled attacks and the accepted combined rank is used.
 The report records all matching parameters and can be saved with `--output`.
+
+`evaluate-source-agreement` validates a rights-cleared manifest and its hashes,
+then compares aligned recording channels such as Guitar-TECHS mic/amp and
+direct-input audio. Each channel contributes the same deterministic number of
+prominence-ranked onset candidates as the authoritative label count. Reports
+separate shared, primary-only, and alternate-only precision/recall, retain
+group/performer split keys and both audio hashes, and reject missing, duplicated,
+duration-mismatched, or provenance-mismatched pairs. It is offline evidence and
+does not change generation. Paired manifests may provide `alternate_audio` and
+`alternate_audio_sha256`; otherwise the alternate channel is derived from the
+primary channel layout and its computed hash is still recorded.
 
 `predict-tabcnn` evaluates the CC BY 4.0 augmented TabCNN checkpoint published
 with EGSet12. It writes string/fret, pitch and polyphony evidence and can sample

@@ -1742,3 +1742,304 @@ def evaluate_structure_ranking(
     if output is not None:
         save_json(Path(output).resolve(), report)
     return report
+
+
+def _match_time_points(left, right, tolerance):
+    left=sorted(float(value) for value in left)
+    right=sorted(float(value) for value in right)
+    left_index=right_index=0
+    matches=[]
+    while left_index<len(left) and right_index<len(right):
+        delta=right[right_index]-left[left_index]
+        if abs(delta)<=tolerance:
+            matches.append((left[left_index],right[right_index],delta))
+            left_index+=1
+            right_index+=1
+        elif delta<0:
+            right_index+=1
+        else:
+            left_index+=1
+    return matches
+
+
+def _ranked_audio_onsets(path, selection_count):
+    import librosa
+    from scipy import signal
+
+    y,sr=librosa.load(path,sr=FEATURE_SAMPLE_RATE,mono=True)
+    envelope=librosa.onset.onset_strength(
+        y=y,sr=sr,hop_length=FEATURE_HOP_LENGTH
+    )
+    peaks,properties=signal.find_peaks(
+        envelope,
+        distance=3,
+        prominence=max(1e-8,float(np.max(envelope))*.01),
+    )
+    order=sorted(
+        range(len(peaks)),
+        key=lambda index:(
+            -float(properties["prominences"][index]),
+            -float(envelope[peaks[index]]),
+            int(peaks[index]),
+        ),
+    )
+    selected=sorted(peaks[index] for index in order[:selection_count])
+    return {
+        "duration_seconds":len(y)/sr,
+        "candidate_peaks":len(peaks),
+        "selected":[
+            float(value)
+            for value in librosa.frames_to_time(
+                np.asarray(selected),
+                sr=sr,
+                hop_length=FEATURE_HOP_LENGTH,
+            )
+        ],
+    }
+
+
+def evaluate_source_agreement(
+    manifest,
+    output=None,
+    primary_channel="micamp",
+    alternate_channel="directinput",
+    tolerance_ms=50,
+):
+    """Measure whether aligned independent recordings agree on labeled attacks."""
+    from .datasets import DatasetManifestError, validate_dataset_manifest
+
+    manifest=Path(manifest).resolve()
+    try:
+        validation=validate_dataset_manifest(manifest,verify_hashes=True)
+    except DatasetManifestError as exc:
+        raise TrainingDataError(str(exc)) from exc
+    payload=json.loads(manifest.read_text(encoding="utf-8"))
+    root=manifest.parent
+    tolerance=float(tolerance_ms)/1000
+    items=[]
+    split_keys={}
+    alternate_hashes={}
+    for item in payload["items"]:
+        primary_relative=Path(item["audio"])
+        explicit_alternate=item.get("alternate_audio")
+        if explicit_alternate is not None:
+            alternate_relative=Path(str(explicit_alternate))
+        else:
+            parts=list(primary_relative.parts)
+            try:
+                channel_index=parts.index(primary_channel)
+            except ValueError as exc:
+                raise TrainingDataError(
+                    f"{item['song_id']} audio path has no {primary_channel} channel"
+                ) from exc
+            parts[channel_index]=alternate_channel
+            filename=parts[-1]
+            prefix=f"{primary_channel}_"
+            if not filename.startswith(prefix):
+                raise TrainingDataError(
+                    f"{item['song_id']} audio filename does not start with {prefix}"
+                )
+            parts[-1]=f"{alternate_channel}_{filename[len(prefix):]}"
+            alternate_relative=Path(*parts)
+        primary=(root/primary_relative).resolve()
+        alternate=(root/alternate_relative).resolve()
+        labels_path=(root/Path(item["annotations"])).resolve()
+        try:
+            alternate.relative_to(root.resolve())
+        except ValueError as exc:
+            raise TrainingDataError(
+                f"{item['song_id']} alternate recording escapes manifest root"
+            ) from exc
+        if not alternate.is_file():
+            raise TrainingDataError(
+                f"{item['song_id']} alternate recording is missing: "
+                f"{alternate_relative}"
+            )
+        labels=json.loads(labels_path.read_text(encoding="utf-8"))
+        provenance=labels.get("provenance") or {}
+        dataset=payload["dataset"]
+        for key in (
+            "source_url","audio_license","annotation_license",
+            "commercial_use","attribution",
+        ):
+            if provenance.get(key)!=dataset.get(key):
+                raise TrainingDataError(
+                    f"{item['song_id']} label provenance does not match manifest"
+                )
+        artifact_keys=labels.get("split_keys")
+        if not isinstance(artifact_keys,list) or not artifact_keys:
+            raise TrainingDataError(
+                f"{item['song_id']} labels have no split keys"
+            )
+        for key in artifact_keys:
+            previous=split_keys.setdefault(str(key),str(item["split"]))
+            if previous!=item["split"]:
+                raise TrainingDataError(
+                    f"Split key {key} crosses {previous}/{item['split']}"
+                )
+        label_times=sorted({
+            round(float(row["start"]),6)
+            for row in labels.get("attacks",[])
+        })
+        if not label_times:
+            raise TrainingDataError(
+                f"{item['song_id']} labels contain no attacks"
+            )
+        primary_onsets=_ranked_audio_onsets(primary,len(label_times))
+        alternate_onsets=_ranked_audio_onsets(alternate,len(label_times))
+        if abs(
+            primary_onsets["duration_seconds"]
+            - alternate_onsets["duration_seconds"]
+        )>.1:
+            raise TrainingDataError(
+                f"{item['song_id']} paired recordings differ in duration"
+            )
+        paired=_match_time_points(
+            primary_onsets["selected"],
+            alternate_onsets["selected"],
+            tolerance,
+        )
+        shared=[(left+right)/2 for left,right,_ in paired]
+        paired_primary={left for left,_,_ in paired}
+        paired_alternate={right for _,right,_ in paired}
+        primary_only=[
+            value for value in primary_onsets["selected"]
+            if value not in paired_primary
+        ]
+        alternate_only=[
+            value for value in alternate_onsets["selected"]
+            if value not in paired_alternate
+        ]
+        def score(values):
+            matches=_match_time_points(label_times,values,tolerance)
+            return {
+                "selected":len(values),
+                "label_matches":len(matches),
+                "precision":round(len(matches)/max(1,len(values)),4),
+                "label_recall":round(len(matches)/len(label_times),4),
+                "median_error_ms":(
+                    round(float(np.median([
+                        abs(delta)*1000 for _,_,delta in matches
+                    ])),3) if matches else None
+                ),
+            }
+        alternate_hash=_hash_file(alternate)
+        expected_alternate_hash=item.get("alternate_audio_sha256")
+        if (
+            expected_alternate_hash is not None
+            and alternate_hash!=expected_alternate_hash
+        ):
+            raise TrainingDataError(
+                f"{item['song_id']} alternate audio hash does not match manifest"
+            )
+        previous=alternate_hashes.setdefault(
+            alternate_hash,item["song_id"]
+        )
+        if previous!=item["song_id"]:
+            raise TrainingDataError(
+                f"Alternate audio content is reused by {previous} "
+                f"and {item['song_id']}"
+            )
+        primary_score=score(primary_onsets["selected"])
+        alternate_score=score(alternate_onsets["selected"])
+        shared_score=score(shared)
+        primary_only_score=score(primary_only)
+        alternate_only_score=score(alternate_only)
+        items.append({
+            "song_id":item["song_id"],
+            "artist_id":item["artist_id"],
+            "split":item["split"],
+            "group_id":labels.get("group_id"),
+            "split_keys":artifact_keys,
+            "labels_sha256":item["annotations_sha256"],
+            "primary":{
+                "channel":primary_channel,
+                "path":str(primary_relative),
+                "sha256":item["audio_sha256"],
+                "candidate_peaks":primary_onsets["candidate_peaks"],
+                **primary_score,
+            },
+            "alternate":{
+                "channel":alternate_channel,
+                "path":str(alternate_relative),
+                "sha256":alternate_hash,
+                "hash_manifested":expected_alternate_hash is not None,
+                "candidate_peaks":alternate_onsets["candidate_peaks"],
+                **alternate_score,
+            },
+            "shared":shared_score,
+            "primary_only":primary_only_score,
+            "alternate_only":alternate_only_score,
+            "shared_precision_lift_vs_best_source":round(
+                shared_score["precision"]
+                - max(primary_score["precision"],alternate_score["precision"]),
+                4,
+            ),
+            "source_pair_median_delta_ms":(
+                round(float(np.median([
+                    abs(delta)*1000 for _,_,delta in paired
+                ])),3) if paired else None
+            ),
+            "labeled_attacks":len(label_times),
+        })
+    def aggregate(rows,key):
+        selected=sum(row[key]["selected"] for row in rows)
+        matches=sum(row[key]["label_matches"] for row in rows)
+        labels=sum(row["labeled_attacks"] for row in rows)
+        return {
+            "selected":selected,
+            "label_matches":matches,
+            "precision":round(matches/max(1,selected),4),
+            "label_recall":round(matches/max(1,labels),4),
+        }
+    summaries={}
+    for split in sorted({row["split"] for row in items}):
+        rows=[row for row in items if row["split"]==split]
+        summary={
+            "items":len(rows),
+            "labeled_attacks":sum(row["labeled_attacks"] for row in rows),
+            **{
+                key:aggregate(rows,key)
+                for key in (
+                    "primary","alternate","shared",
+                    "primary_only","alternate_only",
+                )
+            },
+        }
+        summary["shared_precision_lift_vs_best_source"]=round(
+            summary["shared"]["precision"]
+            - max(
+                summary["primary"]["precision"],
+                summary["alternate"]["precision"],
+            ),
+            4,
+        )
+        summaries[split]=summary
+    report={
+        "schema":"rb3charts-source-agreement-evaluation",
+        "schema_version":1,
+        "scope":(
+            "offline rights-cleared evaluation; shared-source evidence "
+            "does not alter generation"
+        ),
+        "manifest":str(manifest),
+        "manifest_sha256":_hash_file(manifest),
+        "dataset":payload["dataset"],
+        "validation":validation,
+        "configuration":{
+            "primary_channel":primary_channel,
+            "alternate_channel":alternate_channel,
+            "selection_count":"one ranked onset per labeled attack",
+            "onset_ranking":"prominence_then_height",
+            "tolerance_ms":int(tolerance_ms),
+            "sample_rate":FEATURE_SAMPLE_RATE,
+            "hop_length":FEATURE_HOP_LENGTH,
+        },
+        "splits":summaries,
+        "items":items,
+    }
+    if output is not None:
+        output=Path(output)
+        output.parent.mkdir(parents=True,exist_ok=True)
+        output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+    return report

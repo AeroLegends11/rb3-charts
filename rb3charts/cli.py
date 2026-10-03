@@ -152,6 +152,15 @@ def main():
     ranking.add_argument("--rank-field",default="periodic_width_attack_rank_percentile")
     ranking.add_argument("--selection-count",type=int)
     ranking.add_argument("--tolerance-ms",type=int,default=50)
+    agreement=sub.add_parser(
+        "evaluate-source-agreement",
+        help="Evaluate aligned rights-cleared recording channels",
+    )
+    agreement.add_argument("manifest",type=Path)
+    agreement.add_argument("--output",type=Path)
+    agreement.add_argument("--primary-channel",default="micamp")
+    agreement.add_argument("--alternate-channel",default="directinput")
+    agreement.add_argument("--tolerance-ms",type=int,default=50)
     tabcnn=sub.add_parser("predict-tabcnn",help="Run offline CC BY 4.0 TabCNN pitch/polyphony evaluation")
     tabcnn.add_argument("checkpoint",type=Path)
     tabcnn.add_argument("audio",type=Path)
@@ -404,6 +413,21 @@ def main():
             print(f"Structure ranking evaluation failed: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report,indent=2))
+        return 0
+    if args.command=="evaluate-source-agreement":
+        from .training import TrainingDataError, evaluate_source_agreement
+        try:
+            report=evaluate_source_agreement(
+                args.manifest,
+                args.output,
+                args.primary_channel,
+                args.alternate_channel,
+                args.tolerance_ms,
+            )
+        except TrainingDataError as exc:
+            print(f"Source agreement evaluation failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["splits"],indent=2))
         return 0
     if args.command=="predict-tabcnn":
         from .tabcnn import TabCNNError, predict_tabcnn

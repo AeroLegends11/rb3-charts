@@ -717,3 +717,37 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   tooling makes this lack of cross-domain separability reproducible and prevents
   future official-only correlations from being mistaken for selectable runtime
   evidence.
+
+### 2026-10-03 07:10 - Rights-clean source agreement calibrated
+
+- Audited the implemented/local dataset paths. GuitarSet has 360 licensed mic
+  recordings and JAMS labels locally, but not its hex-pickup channel, so it
+  cannot currently measure independent capture agreement. Slakh provides
+  rendered source stems and authoritative MIDI, but its guitar mix is a
+  deterministic sum and separate Guitar-class stems are different arranged
+  parts, not independent captures of one attack. EGFxSet pickup/effect files
+  are separate isolated-note performances without aligned paired onsets.
+  Authorized chart pairs contain full mixes plus separator-derived stems, not
+  independent recordings.
+- Guitar-TECHS is suitable: the local CC BY 4.0 release contains synchronized
+  direct-input and mic/amp recordings plus MIDI for the same performance.
+  Added deterministic `evaluate-source-agreement`, which verifies the existing
+  manifest and primary hashes, supports explicit alternate paths/hashes, rejects
+  duplicate or duration-mismatched pairs, preserves label group/performer split
+  keys, and selects one prominence-ranked onset per labeled attack in each
+  channel. Local paired manifests now pin all 68 alternate recording hashes.
+- Across 56 P1/P2 chord recordings and 4,885 labeled attacks at 50 ms, mic/amp
+  precision was 0.5431, direct input 0.5294, and 4,445 shared onsets reached
+  0.5591. Mic-only onsets measured 0.3818 and DI-only 0.2614. P1 shared
+  precision was 0.6514 versus 0.6130/0.6001; P2 was 0.4887 versus
+  0.4871/0.4727.
+- Across 12 performer-P3 music excerpts and 1,550 labeled attacks, mic/amp was
+  0.8161, direct input 0.8077, and 1,511 shared onsets reached 0.8226.
+  Mic-only precision was 0.4872 and DI-only 0.2308.
+- The direction was stable at 30/50/80 ms. Chord shared precision was
+  0.4518/0.5591/0.6919 versus best-source 0.4311/0.5431/0.6680. Music shared
+  precision was 0.8020/0.8226/0.8405 versus 0.7923/0.8161/0.8297.
+- This establishes lawful evidence that agreement between independent captures
+  modestly raises attack precision and that channel-only peaks are much weaker.
+  It does not supply paired captures for the cleared chart songs, so no runtime
+  recovery rule or threshold changed.
