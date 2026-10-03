@@ -449,7 +449,9 @@ writes separate `validation_recheck_report.json`/`.txt` files without rerunning
 authoring or overwriting the original validation report.
 `package` automatically performs this current recheck when the saved charts and
 tempo map are available; legacy folders without those artifacts retain the
-documented compatibility fallback.
+documented compatibility fallback. The packaged `result.json` records whether
+the current recheck passed, only a legacy manifest was available, or validation
+artifacts were unavailable, and links the recheck report when present.
 
 `input/`, `cache/`, `output/`, `tools/`, `.research/` and `Ready for Xbox/` remain
 local. Git exclusions do not prevent normal reading, generation or packaging.

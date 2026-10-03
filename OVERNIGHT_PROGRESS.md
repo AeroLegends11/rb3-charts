@@ -551,6 +551,10 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   packaging boundary. A valid synthetic reviewed run compiles through the fake
   Onyx harness; changing `song.ini` afterward stops packaging before compile.
   Legacy folders without charts/tempo retain their compatibility fallback.
+- Package results now persist `validation_recheck` provenance and the recheck
+  report path. Legacy manifest-only and unavailable states are explicit rather
+  than inferable only from logs.
+- The current Less Talk motif-review draft also passes `validate-run`.
 - Replay corpus discovery now rejects duplicate artist/title keys and names
   both conflicting paths, preventing accidental arbitrary baseline selection.
   Missing artist/title identity is also rejected. Focused benchmark coverage

@@ -473,6 +473,10 @@ def package_existing(folder, progress=print, onyx=None):
                 "Current chart revalidation failed; packaging was stopped"
             )
         log("Current structural and package-input revalidation passed")
+        result["validation_recheck"]="passed"
+        result["validation_recheck_report"]=str(
+            folder/"validation_recheck_report.json"
+        )
     elif not _verify_package_input_manifest(folder):
         warning=(
             "Legacy run has no package-input manifest; package inputs could "
@@ -480,6 +484,11 @@ def package_existing(folder, progress=print, onyx=None):
         )
         result.setdefault("warnings",[]).append(warning)
         log(warning)
+        result["validation_recheck"]="legacy_unavailable"
+        result["validation_recheck_report"]=None
+    else:
+        result["validation_recheck"]="legacy_manifest_only"
+        result["validation_recheck_report"]=None
     log("Packaging reviewed chart with Onyx and Magma")
     try:
         package=compile_rb3(folder/"import",folder,metadata["song_id"],onyx or find_onyx(),log)

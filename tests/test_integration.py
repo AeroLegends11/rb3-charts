@@ -114,6 +114,7 @@ def test_reviewed_run_packages_without_regenerating(tmp_path,monkeypatch):
     assert result["status"]=="compiled_needs_playtest"
     assert result["package"]==str(package)
     assert any("Legacy run" in warning for warning in result["warnings"])
+    assert result["validation_recheck"]=="legacy_unavailable"
 
 def test_reviewed_run_rejects_changed_package_input(tmp_path,monkeypatch):
     from rb3charts import pipeline
@@ -191,6 +192,10 @@ def test_existing_run_validation_rechecks_midi_and_manifest(
     monkeypatch.setattr(pipeline,"find_onyx",lambda:Path("onyx.exe"))
     packaged=pipeline.package_existing(run,lambda message:None)
     assert packaged["status"]=="compiled_needs_playtest"
+    assert packaged["validation_recheck"]=="passed"
+    assert packaged["validation_recheck_report"].endswith(
+        "validation_recheck_report.json"
+    )
     (run/"import"/"song.ini").write_text("[song]\nname=Changed\n")
     changed=pipeline.validate_existing_run(run)
     assert not changed["passed"]
