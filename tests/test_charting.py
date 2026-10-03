@@ -634,7 +634,7 @@ def test_band_guitar_lead_focus_preserves_strong_chord():
     assert report["groups_resolved"]==0
 
 
-def test_band_guitar_lead_focus_anchors_weak_octave_to_recent_register():
+def test_band_guitar_lead_focus_anchors_isolated_octave_to_recent_register():
     times=np.arange(0,1.5,.01)
     midi=np.where(times<.70,48.0,41.0)
     voiced=np.ones_like(times,dtype=bool)
@@ -650,6 +650,35 @@ def test_band_guitar_lead_focus_anchors_weak_octave_to_recent_register():
     result,report=_focus_band_guitar_candidates(events,times,midi,voiced,.375)
     assert [event["pitch"] for event in result[-2:]]==[53,53]
     assert report["octave_anchors"]>=2
+    assert report["candidate_supported_registers"]==0
+
+
+def test_band_guitar_lead_focus_preserves_repeated_register_evidence():
+    times=np.arange(0,2,.01)
+    midi=np.full_like(times,70.0)
+    voiced=np.ones_like(times,dtype=bool)
+    events=[]
+    pitches=(70,58,70,51,70,58,70,51,70)
+    for index,pitch in enumerate(pitches):
+        start=.1+index*.18
+        midi[(times>=start)&(times<=start+.13)]=pitch
+        events.append({
+            "start":start,
+            "end":start+.13,
+            "pitch":pitch,
+            "confidence":.5,
+            "source_id":str(index),
+            "source":"guitar",
+        })
+
+    focused,report=_focus_band_guitar_candidates(
+        events,times,midi,voiced,.5
+    )
+    result,outlier_report=_filter_sequential_lead_outliers(focused,.5)
+
+    assert [event["pitch"] for event in result]==list(pitches)
+    assert report["candidate_supported_registers"]==2
+    assert outlier_report["candidate_supported_registers"]==2
 
 
 def test_band_guitar_lead_focus_keeps_two_supported_repeated_attacks():
@@ -672,6 +701,75 @@ def test_band_guitar_voice_filter_removes_rapid_harmonic_spike():
     result,report=_filter_sequential_lead_outliers(events,.375)
     assert [event["pitch"] for event in result]==[48,48,48,48]
     assert report["sequential_outliers_removed"]==1
+
+
+def test_band_guitar_voice_filter_preserves_repeated_pedal_riff():
+    events=[]
+    for index,pitch in enumerate((70,51,70,58,70,51,70,58,70)):
+        events.append({
+            "start":index*.12,
+            "end":index*.12+.10,
+            "pitch":pitch,
+            "confidence":.48,
+            "source_id":str(index),
+            "source":"guitar",
+        })
+
+    result,report=_filter_sequential_lead_outliers(events,.5)
+
+    assert [event["pitch"] for event in result]==[
+        70,51,70,58,70,51,70,58,70
+    ]
+    assert report["sequential_outliers_removed"]==0
+    assert report["repeated_riff_spikes_preserved"]==4
+
+
+def test_band_guitar_voice_filter_requires_repeated_register_proposals():
+    def proposed_events(count):
+        events=[]
+        proposal_pitches=(51,58,51,58)
+        proposal_index=0
+        for index in range(9):
+            event={
+                "start":index*.12,
+                "end":index*.12+.10,
+                "pitch":70,
+                "confidence":.7,
+                "source_id":str(index),
+                "source":"guitar",
+            }
+            if index%2 and proposal_index<count:
+                pitch=proposal_pitches[proposal_index]
+                event["_lead_focus_register_proposal"]={
+                    "event":dict(event),
+                    "pitch":pitch,
+                    "source_id":str(index),
+                    "side":-1,
+                    "anchor":70,
+                    "replaced_correction":False,
+                }
+                proposal_index+=1
+            events.append(event)
+        return events
+
+    repeated,accepted=_filter_sequential_lead_outliers(
+        proposed_events(4),.5
+    )
+    sparse,rejected=_filter_sequential_lead_outliers(
+        proposed_events(2),.5
+    )
+
+    assert [event["pitch"] for event in repeated]==[
+        70,51,70,58,70,51,70,58,70
+    ]
+    assert accepted["candidate_supported_registers"]==4
+    assert [event["pitch"] for event in sparse]==[70]*9
+    assert rejected["candidate_supported_registers"]==0
+    assert rejected["unsupported_register_recoveries_reverted"]==2
+    assert all(
+        "_lead_focus_register_proposal" not in event
+        for event in repeated+sparse
+    )
 
 
 def test_band_guitar_voice_filter_keeps_coherent_high_run():

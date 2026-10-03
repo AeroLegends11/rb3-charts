@@ -183,6 +183,17 @@ Status update (2026-10-02):
   0.1430 and movement 0.4071 to 0.4390. Retain this source-derived contour
   safeguard, but do not treat it as a fix for repeated same-pitch voice collapse
   or difficulty-reduction sampling.
+- Band lead selection now defers alternate-register recovery until a compact
+  recurring pedal pattern is established. A raw pYIN register must agree with
+  a Basic Pitch candidate, oppose both neighboring anchored pitches, recur at
+  least four times within three beats against the same local register, and
+  survive the sequential-outlier check. Unsupported proposals are restored
+  before downstream charting; held-out Persephone is event-for-event identical
+  to the prior lead transcription. On the three development songs attack F1
+  changed +0.0008/+0.0002/+0.0013, while Hail's reviewed player 17.65-18.62
+  second window recovered alternating 51/58 pedal notes instead of a repeated
+  pitch-70 line. This is source-derived voice evidence, not permission to use
+  reference-chart notes for register selection.
 - Added post-generation playability-evidence audits that join each attributed
   removal to raw onset/level evidence, optional offline structure ranks,
   source-mix versus guitar-stem onset prominence/width, and voice-continuity

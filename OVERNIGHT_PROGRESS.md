@@ -1140,3 +1140,48 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   held-out movement gain outweighs the small absolute-color shift. This does
   not solve repeated same-pitch transcription at player 17 seconds or the
   contour-blind Hard reduction; those remain separate tasks.
+
+### 2026-10-03 18:20 - Recovered compact repeated-register riffs
+
+- Traced the player 17-second Hail failure through both voice-selection passes.
+  pYIN and Basic Pitch independently supported recurring pitches 51 and 58,
+  but recent-register octave anchoring moved them near pitch 70 and the
+  sequential-outlier filter then treated the remaining pedal notes as isolated
+  harmonic spikes.
+- Rejected four broad recovery variants before retention. They restored the
+  local riff but changed too many attacks and slightly regressed held-out
+  Persephone or whole-song movement. The broadest retained 72 extra Hail
+  attacks and reduced frozen attack F1 0.6153 to 0.6130.
+- The retained rule stages rather than immediately applies alternate-register
+  proposals. Evidence must agree between raw pYIN and a Basic Pitch candidate,
+  oppose both adjacent anchored pitches by at least six semitones, recur at
+  least four times within three beats, stay within a seven-semitone pedal
+  register and alternate against one local anchor register. Sequential cleanup
+  applies the same compact-family requirement.
+- Speculative proposals no longer affect duplicate consolidation or ordinary
+  spike decisions. Unsupported proposals restore the exact anchored event
+  before mapping and authoring. Held-out Persephone considered eight proposals,
+  accepted none, and produced a byte-for-byte identical 660-event lead
+  transcription and identical Expert evaluation.
+- Rights-cleared Expert results versus the committed contour baseline:
+  - Certain Death: attacks 1200 to 1203, attack F1 0.7996 to 0.8004;
+    movement unchanged at 0.4167.
+  - There's Something Wrong: attacks 964 to 966, attack F1 0.8228 to
+    0.8230, movement 0.5839 to 0.6510 and motif shape 0.5294 to 0.5343;
+    exact lanes shifted 0.3453 to 0.3356.
+  - Dirtbag: attacks 831 to 834, attack F1 0.6220 to 0.6233, exact lanes
+    0.1038 to 0.1111 and motif shape 0.0256 to 0.0476; movement stayed
+    0.3558.
+  - Held-out Persephone remained exactly unchanged at 625 attacks, 0.5537
+    attack F1, 0.2624 exact lanes and 0.5178 movement.
+- Hail Expert now has 1,618 rather than 1,600 attacks. In the reviewed player
+  17.65-18.62 second span, recovered pitches 51/58 create red/yellow/blue
+  motion instead of the prior pitch-70 yellow line. Using the same frozen
+  -1.10-second post-generation comparison, attack F1 changed 0.6087 to 0.6091,
+  exact lanes 0.1768 to 0.1791, movement 0.4230 to 0.4317 and mean interval
+  error 1.7622 to 1.7295.
+- Added cached Band replay of accepted candidate evidence plus the saved guitar
+  stem, avoiding source decode, Demucs and Basic Pitch inference while still
+  recomputing deterministic pYIN lead selection. Generated
+  `comparisons/morning-review/Hail_Expert_Repeated_Riff_Recovery_AB.html`
+  for synchronized Expert listening review.

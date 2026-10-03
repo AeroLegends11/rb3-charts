@@ -112,8 +112,10 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
         else:
             groups.append([event])
     selected=[]
+    register_proposals=[]
     report={"candidates":len(rows),"onset_groups":len(groups),"ambiguous_groups":0,
             "groups_resolved":0,"pitch_corrections":0,"octave_anchors":0,
+            "candidate_supported_registers":0,
             "rapid_duplicates_removed":0}
     for group in groups:
         start=min(event["start"] for event in group)
@@ -121,14 +123,30 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
         mask=(times>=start+.012)&(times<=end)&voiced&np.isfinite(midi_f0)
         values=midi_f0[mask]
         guide=None
+        register_proposal=None
         if len(values)>=3:
             median=float(np.median(values))
             dispersion=float(np.median(np.abs(values-median)))
             if dispersion<=.75:guide=int(round(median))
         if guide is not None and selected:
+            raw_guide=guide
             recent=[event["pitch"] for event in selected[-16:]]
             center=float(np.median(recent))
-            octaves=[guide+12*offset for offset in range(-4,5) if 40<=guide+12*offset<=84]
+            supported=[
+                event for event in group
+                if abs(event["pitch"]-raw_guide)<=2
+            ]
+            if supported and abs(raw_guide-center)>=6:
+                register_proposal={
+                    "event":max(supported,key=lambda event:event["confidence"]),
+                    "pitch":raw_guide,
+                    "side":-1 if raw_guide<center else 1,
+                    "anchor":center,
+                }
+            octaves=[
+                guide+12*offset for offset in range(-4,5)
+                if 40<=guide+12*offset<=84
+            ]
             anchored=min(octaves,key=lambda pitch:abs(pitch-center))
             if anchored!=guide:
                 guide=anchored
@@ -152,6 +170,15 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
                 chosen["lead_focus_corrected"]=True
                 report["pitch_corrections"]+=1
             selected.append(chosen)
+            if register_proposal is not None:
+                register_proposal.update({
+                    "index":len(selected)-1,
+                    "source_id":chosen["source_id"],
+                    "replaced_correction":bool(
+                        chosen.get("lead_focus_corrected")
+                    ),
+                })
+                register_proposals.append(register_proposal)
             report["groups_resolved"]+=1
             continue
         chosen=dict(group[0])
@@ -163,13 +190,61 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
                 chosen["lead_focus_corrected"]=True
                 report["pitch_corrections"]+=1
         selected.append(chosen)
+        if register_proposal is not None:
+            register_proposal.update({
+                "index":len(selected)-1,
+                "source_id":chosen["source_id"],
+                "replaced_correction":bool(chosen.get("lead_focus_corrected")),
+            })
+            register_proposals.append(register_proposal)
+    support_window=max(.7,(beat_period or .45)*3)
+    eligible_proposals=[]
+    for proposal in register_proposals:
+        index=proposal["index"]
+        if not (0<index<len(selected)-1):
+            continue
+        event=selected[index]
+        previous=selected[index-1]
+        following=selected[index+1]
+        if (
+            event["pitch"]==proposal["pitch"]
+            or event["start"]-previous["start"]>.28
+            or following["start"]-event["start"]>.28
+            or abs(event["pitch"]-previous["pitch"])>5
+            or abs(event["pitch"]-following["pitch"])>5
+            or min(
+                abs(proposal["pitch"]-previous["pitch"]),
+                abs(proposal["pitch"]-following["pitch"]),
+            )<6
+        ):
+            continue
+        eligible_proposals.append(proposal)
+    supported_proposals=set()
+    for index,proposal in enumerate(eligible_proposals):
+        family=[
+            candidate for candidate in register_proposals
+            if candidate["side"]==proposal["side"]
+            and abs(
+                candidate["event"]["start"]-proposal["event"]["start"]
+            )<=support_window
+            and abs(candidate["pitch"]-proposal["pitch"])<=7
+            and abs(candidate["anchor"]-proposal["anchor"])<=3
+        ]
+        if len(family)>=4:
+            supported_proposals.add(index)
+    for proposal_index in supported_proposals:
+        proposal=eligible_proposals[proposal_index]
+        selected[proposal["index"]]=dict(selected[proposal["index"]])
+        selected[proposal["index"]]["_lead_focus_register_proposal"]=proposal
+    report["candidate_supported_registers"]=len(supported_proposals)
     # Consolidate two estimates of the same attack after harmonic correction.
     # The limit stays below a sixteenth note at common tempos, retaining fast
     # authored strumming while removing split model activations.
     min_gap=float(np.clip((beat_period or .45)/4.8,.075,.095))
     result=[]
     for event in sorted(selected,key=lambda row:(row["start"],row["pitch"])):
-        corrected_overlap=(result and (event.get("lead_focus_corrected") or result[-1].get("lead_focus_corrected")) and
+        corrected_overlap=(result and
+                           (event.get("lead_focus_corrected") or result[-1].get("lead_focus_corrected")) and
                            event["start"]<result[-1]["end"]-.02 and event["start"]-result[-1]["start"]<.12)
         duplicate=(result and event["pitch"]==result[-1]["pitch"] and
                    (event["start"]-result[-1]["start"]<min_gap or corrected_overlap))
@@ -185,22 +260,146 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
 
 def _filter_sequential_lead_outliers(events,beat_period=None):
     """Remove unsupported pitch spikes while retaining coherent lead runs."""
-    rows=sorted((dict(event) for event in events),key=lambda event:(event["start"],event["pitch"]))
-    removed=set()
+    records=[]
+    for record_id,event in enumerate(events):
+        original=dict(event)
+        proposal=original.pop("_lead_focus_register_proposal",None)
+        effective=dict(original)
+        if proposal:
+            effective=dict(proposal["event"])
+            effective["pitch"]=proposal["pitch"]
+            effective["source_id"]=proposal["source_id"]
+            effective["lead_focus_corrected"]=True
+        records.append({
+            "id":record_id,
+            "original":original,
+            "effective":effective,
+            "proposal":proposal,
+        })
     neighborhood=float(np.clip((beat_period or .45)*1.2,.32,.52))
-    for index,event in enumerate(rows):
-        previous=rows[index-1] if index else None
-        following=rows[index+1] if index+1<len(rows) else None
-        rapid_spike=False
-        if previous and following and event["confidence"]<.62:
-            rapid_spike=(event["start"]-previous["start"]<=.24 and
-                         following["start"]-event["start"]<=.24 and
-                         abs(previous["pitch"]-following["pitch"])<=4 and
-                         abs(event["pitch"]-previous["pitch"])>=6 and
-                         abs(event["pitch"]-following["pitch"])>=6)
-        if rapid_spike:removed.add(index)
-    return [event for index,event in enumerate(rows) if index not in removed],{
-        "sequential_outliers_removed":len(removed)}
+    support_window=max(neighborhood*2, (beat_period or .45)*3)
+
+    def classify(field):
+        ordered=sorted(
+            records,
+            key=lambda record:(
+                record[field]["start"],
+                record[field]["pitch"],
+            ),
+        )
+        spikes={}
+        by_id={record["id"]:record[field] for record in ordered}
+        for index,record in enumerate(ordered):
+            event=record[field]
+            previous=ordered[index-1][field] if index else None
+            following=ordered[index+1][field] if index+1<len(ordered) else None
+            if (
+                previous
+                and following
+                and event["confidence"]<.62
+                and event["start"]-previous["start"]<=.24
+                and following["start"]-event["start"]<=.24
+                and abs(previous["pitch"]-following["pitch"])<=4
+                and abs(event["pitch"]-previous["pitch"])>=6
+                and abs(event["pitch"]-following["pitch"])>=6
+            ):
+                center=(previous["pitch"]+following["pitch"])/2
+                spikes[record["id"]]={
+                    "side":-1 if event["pitch"]<center else 1,
+                    "anchor":center,
+                }
+        supported=set()
+        for record_id,info in spikes.items():
+            event=by_id[record_id]
+            family=[
+                other_id for other_id,other_info in spikes.items()
+                if other_info["side"]==info["side"]
+                and abs(by_id[other_id]["start"]-event["start"])<=support_window
+                and abs(by_id[other_id]["pitch"]-event["pitch"])<=7
+                and abs(other_info["anchor"]-info["anchor"])<=3
+            ]
+            if len(family)>=4:
+                supported.update(family)
+        return spikes,supported,by_id
+
+    original_info,original_supported,_=classify("original")
+    effective_info,effective_supported,effective_by_id=classify("effective")
+    original_spikes=set(original_info)
+    proposal_ids={
+        record["id"] for record in records if record["proposal"]
+    }
+    proposals=[
+        record["proposal"] for record in records if record["proposal"]
+    ]
+    accepted=set()
+    proposal_support=[]
+    for record in records:
+        proposal=record["proposal"]
+        if not proposal:
+            continue
+        family=[
+            record_id for record_id in effective_supported
+            if effective_info[record_id]["side"]==proposal["side"]
+            and abs(
+                effective_by_id[record_id]["start"]
+                -proposal["event"]["start"]
+            )<=support_window
+            and abs(effective_by_id[record_id]["pitch"]-proposal["pitch"])<=7
+            and abs(effective_info[record_id]["anchor"]-proposal["anchor"])<=3
+        ]
+        direct_family=[
+            candidate for candidate in proposals
+            if candidate["side"]==proposal["side"]
+            and abs(
+                candidate["event"]["start"]-proposal["event"]["start"]
+            )<=support_window
+            and abs(candidate["pitch"]-proposal["pitch"])<=7
+            and abs(candidate["anchor"]-proposal["anchor"])<=3
+        ]
+        proposal_support.append({
+            "start":round(float(proposal["event"]["start"]),3),
+            "pitch":int(proposal["pitch"]),
+            "support":len(family),
+            "direct_support":len(direct_family),
+            "direct_pitch_span":(
+                max(row["pitch"] for row in direct_family)
+                -min(row["pitch"] for row in direct_family)
+            ),
+        })
+        if len(family)>=4 or len(direct_family)>=4:
+            accepted.add(record["id"])
+    reverted=proposal_ids-accepted
+    preserved=original_supported|effective_supported
+    removed=original_spikes-preserved
+    result=[
+        record["effective"] if record["id"] in accepted else record["original"]
+        for record in records
+        if record["id"] not in removed
+    ]
+    result.sort(key=lambda event:(event["start"],event["pitch"]))
+    replaced_corrections=sum(
+        bool(record["proposal"]["replaced_correction"])
+        for record in records
+        if record["id"] in accepted
+    )
+    return result,{
+        "sequential_outliers_removed":len(removed),
+        "repeated_riff_spikes_preserved":len(preserved),
+        "unsupported_register_recoveries_reverted":len(reverted),
+        "candidate_supported_registers":len(accepted),
+        "register_replaced_corrections":replaced_corrections,
+        "register_proposal_support_max":max(
+            (row["support"] for row in proposal_support),default=0
+        ),
+        "register_proposal_direct_support_max":max(
+            (row["direct_support"] for row in proposal_support),default=0
+        ),
+        "register_proposal_samples":sorted(
+            proposal_support,
+            key=lambda row:(row["support"],row["direct_support"]),
+            reverse=True,
+        )[:8],
+    }
 
 
 def band_guitar_lead_events(path,events,beat_period=None):
@@ -214,6 +413,9 @@ def band_guitar_lead_events(path,events,beat_period=None):
     midi_f0=librosa.hz_to_midi(f0)
     focused,report=_focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period)
     focused,outlier_report=_filter_sequential_lead_outliers(focused,beat_period)
+    report["pitch_corrections"]-=outlier_report.pop(
+        "register_replaced_corrections",0
+    )
     report.update(outlier_report)
     report["retained"]=len(focused)
     return focused,report

@@ -674,6 +674,11 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
     previous_charts=(json.loads(previous_charts_path.read_text(encoding="utf-8")) if previous_charts_path.is_file() else {})
     if previous_charts_path.is_file():
         consumed_inputs.add(previous_charts_path)
+    stems_path=analysis_source/"stems.json"
+    cached_stems=(
+        json.loads(stems_path.read_text(encoding="utf-8"))
+        if stems_path.is_file() else {}
+    )
     resolved_profile=profile_payload.get("resolved") or song_metadata.get("chart_profile") or "band"
     duration=float(song_metadata.get("source_seconds",0))
     if duration<=0:
@@ -742,21 +747,30 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
             if resolved_profile=="band" and instrument=="guitar":
                 report_paths=sorted(analysis_source.glob("guitar-*-events.json"))
                 candidate_groups=_load_accepted_event_groups(analysis_source,instrument)
-                focus_path=analysis_source/"lead-focus.json"
-                focus_payload=json.loads(focus_path.read_text(encoding="utf-8")) if focus_path.is_file() else {}
-                focus_report=focus_payload.get("guitar",{})
-                if candidate_groups and focus_report:
+                guitar_stem=Path(cached_stems.get("guitar",""))
+                if candidate_groups and guitar_stem.is_file():
+                    raw,lead_focus[instrument]=band_guitar_lead_events(
+                        guitar_stem,
+                        [event for group in candidate_groups for event in group],
+                        60/tempo.bpm,
+                    )
+                    save_json(
+                        analysis_folder/f"{instrument}-transcription.json",raw
+                    )
+                    log(
+                        "Replayed Band guitar lead selection from cached "
+                        "candidate evidence and stem"
+                    )
                     chord_evidence={
                         "candidates":[event for group in candidate_groups for event in group],
-                        "focus":focus_report,
+                        "focus":lead_focus[instrument],
                     }
-                    lead_focus[instrument]=focus_report
                     consumed_inputs.update(report_paths)
-                    consumed_inputs.add(focus_path)
+                    consumed_inputs.add(stems_path)
                 else:
                     warnings.append(
-                        "Guitar chord-section evidence unavailable in cached replay; "
-                        "section texture authoring was skipped."
+                        "Cached guitar candidate evidence or stem unavailable; "
+                        "lead selection and section texture authoring were not replayed."
                     )
             save_json(analysis_folder/f"{instrument}-transcription.json",raw)
         if resolved_profile=="band" and instrument=="guitar":

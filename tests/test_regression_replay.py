@@ -102,6 +102,40 @@ def test_cached_replay_writes_provenance_snapshots_and_metrics(tmp_path, monkeyp
     assert result_json["analysis_mode"]=="cached_replay"
 
 
+def test_cached_replay_recomputes_band_lead_from_cached_stem(
+    tmp_path,monkeypatch
+):
+    source=tmp_path/"source-run"
+    _write_replay_fixture(source,profile="band",instruments=["guitar"])
+    stem=tmp_path/"guitar.wav"
+    sf.write(stem,np.zeros(44100,dtype=np.float32),44100)
+    (source/"analysis"/"stems.json").write_text(
+        json.dumps({"guitar":str(stem)}),encoding="utf-8"
+    )
+    calls=[]
+
+    def focus(path,events,beat_period):
+        calls.append((path,len(events),beat_period))
+        return [dict(event,pitch=60) for event in events],{
+            "candidates":len(events),
+            "retained":len(events),
+        }
+
+    monkeypatch.setattr("rb3charts.pipeline.band_guitar_lead_events",focus)
+    result=replay_cached(
+        source,output=tmp_path/"output",progress=lambda _:None,compile=False
+    )
+    replay_folder=Path(result["folder"])
+    transcription=json.loads(
+        (replay_folder/"analysis"/"guitar-transcription.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert calls and calls[0][0]==stem
+    assert {event["pitch"] for event in transcription}=={60}
+
+
 def test_cached_replay_writes_snapshots_and_metrics_for_each_instrument(tmp_path):
     source=tmp_path/"source-run"
     _write_replay_fixture(
