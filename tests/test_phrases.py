@@ -51,6 +51,16 @@ def test_phrase_removes_partial_short_guitar_sustain():
     assert report["short_tails_removed"][0]["source_id"]=="short-hold"
 
 
+def test_phrase_preserves_sustain_at_electronic_threshold():
+    result,report=author_guitar_phrases(
+        [Note(1,1.284,(1,),.8,"electronic-hold",60)],grid(),
+        sustain_threshold=.09,
+    )
+    assert np.isclose(result[0].end-result[0].start,.284)
+    assert report["short_tails_removed"]==[]
+    assert report["sustain_threshold_seconds"]==.09
+
+
 def test_sequence_fingering_can_handle_more_than_five_pitches_without_out_of_range():
     notes=[Note(1+i*.125,1+i*.125+.065,(1,),.9,str(i),p)
            for i,p in enumerate([60,62,64,65,67,69,71,72,71,69,67,65,64,62,60])]

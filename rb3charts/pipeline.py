@@ -9,7 +9,7 @@ from .model import Options, save_json
 from .audio import decode, fingerprint, separate, read_mono, write_padded_audio, detect_chart_profile
 from .timing import analyze_tempo
 from .transcribe import analyze_band_guitar_voice, pitched, neural_drums, import_gm_drums, electronic_bass_events, band_guitar_lead_events
-from .chart import BAND_GUITAR_SUSTAIN_SECONDS, map_pitched, clean, reductions, overdrive, align_drum_activations, enforce_playability, analyze_patterns, refine_band_guitar, conform_expert_to_reference, stabilize_repeated_phrases
+from .chart import ELECTRONIC_SUSTAIN_SECONDS, BAND_GUITAR_SUSTAIN_SECONDS, map_pitched, clean, reductions, overdrive, align_drum_activations, enforce_playability, analyze_patterns, conform_expert_to_reference
 from .midi import write_midi
 from .validate import validate, report_text
 from .export import write_import, compile_rb3, find_onyx
@@ -168,6 +168,7 @@ def generate(options: Options, progress=print):
         reference_conformance={}
         pattern_stabilization={}
         lead_focus={}
+        voice_continuity={}
         phrase_authoring={}
         stage_snapshots={}
         warnings=[]
@@ -195,6 +196,9 @@ def generate(options: Options, progress=print):
                 else:
                     notes=clean(neural_drums(stem,options.confidence,options.device,log,folder/"analysis"),instrument)
                     warnings.append("ADTOF distinguishes kick, snare, tom, hi-hat and cymbal. Tom height and ride versus crash remain simplified; Pro Drum markers need listening review.")
+                _record_stage_snapshot(
+                    stage_snapshots,instrument,"after_clean_drums",notes
+                )
             else:
                 if resolved_profile=="electronic" and instrument in ("guitar","bass"):
                     source_names=("other","piano","guitar") if instrument=="guitar" else ("bass","other")
@@ -233,16 +237,18 @@ def generate(options: Options, progress=print):
                         )
                 save_json(folder/"analysis"/f"{instrument}-transcription.json",raw)
                 if resolved_profile=="band" and instrument=="guitar":
+                    voice_continuity[instrument]=analyze_band_guitar_voice(raw,tempo)
                     save_json(folder/"analysis"/"guitar-voice-continuity.json",
-                              analyze_band_guitar_voice(raw,tempo))
+                              voice_continuity[instrument])
                 notes=map_pitched(raw,instrument,
                                   "electronic_lead" if resolved_profile=="electronic" and instrument=="guitar" else "range",
                                   0.09 if resolved_profile=="electronic" and instrument!="guitar"
                                   else BAND_GUITAR_SUSTAIN_SECONDS
                                   if resolved_profile=="band" and instrument=="guitar"
                                   else 0.22)
-                if instrument=="guitar":
-                    _record_stage_snapshot(stage_snapshots,instrument,"after_map_pitched",notes)
+                _record_stage_snapshot(
+                    stage_snapshots,instrument,"after_map_pitched",notes
+                )
             notes=[n for n in notes if n.start<duration and n.end>n.start]
             for n in notes:
                 n.end=min(duration,n.end)
@@ -253,22 +259,25 @@ def generate(options: Options, progress=print):
                 continue
             notes,playability[instrument]=enforce_playability(notes,instrument,tempo,resolved_profile,
                                                            phrase_aware=instrument=="guitar")
-            if instrument=="guitar":
-                _record_stage_snapshot(stage_snapshots,instrument,"after_enforce_playability",notes)
+            _record_stage_snapshot(
+                stage_snapshots,instrument,"after_enforce_playability",notes
+            )
             if resolved_profile=="band" and instrument in ("guitar","bass","keys"):
                 notes,reference_conformance[instrument]=conform_expert_to_reference(notes,tempo,instrument)
-                if instrument=="guitar":
-                    _record_stage_snapshot(stage_snapshots,instrument,"after_conform_expert_to_reference",notes)
-            if resolved_profile=="band" and instrument=="guitar":
-                # Smooth the final playable shapes after corpus conformance;
-                # chord simplification can itself create new single-note moves.
-                notes=refine_band_guitar(notes,tempo)
-                _record_stage_snapshot(stage_snapshots,instrument,"after_refine_band_guitar",notes)
-                notes,pattern_stabilization[instrument]=stabilize_repeated_phrases(notes,tempo,instrument)
-                _record_stage_snapshot(stage_snapshots,instrument,"after_stabilize_repeated_phrases",notes)
+                _record_stage_snapshot(
+                    stage_snapshots,
+                    instrument,
+                    "after_conform_expert_to_reference",
+                    notes,
+                )
             if instrument=="guitar":
                 notes,phrase_authoring[instrument]=author_guitar_phrases(
-                    notes,tempo,chord_evidence=chord_evidence
+                    notes,tempo,chord_evidence=chord_evidence,
+                    sustain_threshold=(
+                        ELECTRONIC_SUSTAIN_SECONDS
+                        if resolved_profile=="electronic"
+                        else BAND_GUITAR_SUSTAIN_SECONDS
+                    ),
                 )
                 changed=phrase_authoring[instrument]["chord_sections"]["notes_changed"]
                 if changed:
@@ -282,8 +291,9 @@ def generate(options: Options, progress=print):
                 warnings.append(f"{instrument}: playability gate removed {removed} crowded attacks; retained {playability[instrument]['after']} with a peak four-second density of {playability[instrument]['peak_four_second_nps']:.2f}/s.")
             log(f"Reducing {instrument}: Expert → Hard → Medium → Easy")
             charts[instrument]=reductions(notes,instrument,tempo)
-            if instrument=="guitar":
-                _record_reduction_snapshot(stage_snapshots,instrument,charts[instrument])
+            _record_reduction_snapshot(
+                stage_snapshots,instrument,charts[instrument]
+            )
             if instrument!="drums":
                 write_event_trace(folder/"analysis",instrument,raw,charts[instrument]["expert"])
         phrases={i:overdrive(parts,tempo,duration) for i,parts in charts.items()}
@@ -323,7 +333,9 @@ def generate(options: Options, progress=print):
         if not report["passed"]:
             raise RuntimeError("Chart validation failed. See validation_report.txt")
         log("Creating audible timing check and chart review")
-        create_preview(folder,charts,tempo,lead,metadata)
+        create_preview(
+            folder,charts,tempo,lead,metadata,voice_continuity,resolved_profile,patterns
+        )
         missing=[i for i in options.instruments if i not in charts]
         assessment=assess_chart(charts,patterns,playability,resolved_profile,missing)
         difficulty_tiers={name:item["difficulty_tier"] for name,item in assessment["instruments"].items() if "difficulty_tier" in item}
@@ -463,6 +475,7 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
     reference_conformance={}
     pattern_stabilization={}
     lead_focus={}
+    voice_continuity={}
     phrase_authoring={}
     stage_snapshots={}
     warnings=[]
@@ -473,6 +486,15 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
                 warnings.append("drums: prior chart unavailable in replay source; instrument omitted")
                 continue
             charts[instrument]={difficulty:_notes_from_payload(notes) for difficulty,notes in previous_charts[instrument].items()}
+            _record_stage_snapshot(
+                stage_snapshots,
+                instrument,
+                "replay_source_expert",
+                charts[instrument]["expert"],
+            )
+            _record_reduction_snapshot(
+                stage_snapshots,instrument,charts[instrument]
+            )
             continue
         if resolved_profile=="electronic" and instrument in ("guitar","bass"):
             report_paths=sorted(analysis_source.glob(f"{instrument}-*-events.json"))
@@ -516,16 +538,18 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
                     )
             save_json(analysis_folder/f"{instrument}-transcription.json",raw)
         if resolved_profile=="band" and instrument=="guitar":
+            voice_continuity[instrument]=analyze_band_guitar_voice(raw,tempo)
             save_json(analysis_folder/"guitar-voice-continuity.json",
-                      analyze_band_guitar_voice(raw,tempo))
+                      voice_continuity[instrument])
         notes=map_pitched(raw,instrument,
                           "electronic_lead" if resolved_profile=="electronic" and instrument=="guitar" else "range",
                           0.09 if resolved_profile=="electronic" and instrument!="guitar"
                           else BAND_GUITAR_SUSTAIN_SECONDS
                           if resolved_profile=="band" and instrument=="guitar"
                           else 0.22)
-        if instrument=="guitar":
-            _record_stage_snapshot(stage_snapshots,instrument,"after_map_pitched",notes)
+        _record_stage_snapshot(
+            stage_snapshots,instrument,"after_map_pitched",notes
+        )
         notes=[note for note in notes if note.start<duration and note.end>note.start]
         for note in notes:
             note.end=min(duration,note.end)
@@ -533,20 +557,25 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
             warnings.append(f"{instrument}: no replay notes after mapping; instrument omitted")
             continue
         notes,playability[instrument]=enforce_playability(notes,instrument,tempo,resolved_profile,phrase_aware=instrument=="guitar")
-        if instrument=="guitar":
-            _record_stage_snapshot(stage_snapshots,instrument,"after_enforce_playability",notes)
+        _record_stage_snapshot(
+            stage_snapshots,instrument,"after_enforce_playability",notes
+        )
         if resolved_profile=="band" and instrument in ("guitar","bass","keys"):
             notes,reference_conformance[instrument]=conform_expert_to_reference(notes,tempo,instrument)
-            if instrument=="guitar":
-                _record_stage_snapshot(stage_snapshots,instrument,"after_conform_expert_to_reference",notes)
-        if resolved_profile=="band" and instrument=="guitar":
-            notes=refine_band_guitar(notes,tempo)
-            _record_stage_snapshot(stage_snapshots,instrument,"after_refine_band_guitar",notes)
-            notes,pattern_stabilization[instrument]=stabilize_repeated_phrases(notes,tempo,instrument)
-            _record_stage_snapshot(stage_snapshots,instrument,"after_stabilize_repeated_phrases",notes)
+            _record_stage_snapshot(
+                stage_snapshots,
+                instrument,
+                "after_conform_expert_to_reference",
+                notes,
+            )
         if instrument=="guitar":
             notes,phrase_authoring[instrument]=author_guitar_phrases(
-                notes,tempo,chord_evidence=chord_evidence
+                notes,tempo,chord_evidence=chord_evidence,
+                sustain_threshold=(
+                    ELECTRONIC_SUSTAIN_SECONDS
+                    if resolved_profile=="electronic"
+                    else BAND_GUITAR_SUSTAIN_SECONDS
+                ),
             )
             changed=phrase_authoring[instrument]["chord_sections"]["notes_changed"]
             if changed:
@@ -556,8 +585,9 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
                 )
             _record_stage_snapshot(stage_snapshots,instrument,"after_author_guitar_phrases",notes)
         charts[instrument]=reductions(notes,instrument,tempo)
-        if instrument=="guitar":
-            _record_reduction_snapshot(stage_snapshots,instrument,charts[instrument])
+        _record_reduction_snapshot(
+            stage_snapshots,instrument,charts[instrument]
+        )
         write_event_trace(analysis_folder,instrument,raw,charts[instrument]["expert"])
     phrases={instrument:overdrive(parts,tempo,duration) for instrument,parts in charts.items()}
     patterns={instrument:analyze_patterns(parts["expert"],tempo,instrument) for instrument,parts in charts.items()}
@@ -579,9 +609,26 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
     save_json(analysis_folder/"overdrive.json",phrases)
     for instrument,payload in stage_snapshots.items():
         save_json(analysis_folder/f"{instrument}-stage-snapshots.json",payload)
-    metrics=compute_regression_metrics(stage_snapshots.get("guitar",{"instrument":"guitar","stages":[]}),tempo)
-    save_json(analysis_folder/"regression-metrics.json",metrics)
-    log(summarize_metrics(metrics))
+    metrics_by_instrument={
+        instrument:compute_regression_metrics(payload,tempo)
+        for instrument,payload in stage_snapshots.items()
+    }
+    save_json(
+        analysis_folder/"regression-metrics-by-instrument.json",
+        {
+            "schema_version":1,
+            "instruments":metrics_by_instrument,
+        },
+    )
+    for instrument,metrics in metrics_by_instrument.items():
+        save_json(
+            analysis_folder/f"{instrument}-regression-metrics.json",metrics
+        )
+        log(f"{instrument}: {summarize_metrics(metrics)}")
+    guitar_metrics=metrics_by_instrument.get(
+        "guitar",{"instrument":"guitar","stage_count":0,"stage_rates":{},"transitions":[],"reductions":{}}
+    )
+    save_json(analysis_folder/"regression-metrics.json",guitar_metrics)
     save_json(analysis_folder/"replay-provenance.json",_replay_provenance(source_folder,sorted(consumed_inputs|set(copied_candidates),key=lambda row:str(row)),options_payload,profile_payload))
     log("Writing tempo-aware Rock Band MIDI from cached replay")
     midi=folder/"midi"/"notes.mid"
@@ -607,7 +654,9 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
     save_json(folder/"validation_report.json",report)
     if not report["passed"]:
         raise RuntimeError("Cached replay validation failed. See validation_report.txt")
-    create_preview(folder,charts,tempo,lead,metadata)
+    create_preview(
+        folder,charts,tempo,lead,metadata,voice_continuity,resolved_profile,patterns
+    )
     missing=[instrument for instrument in instruments if instrument not in charts]
     assessment=assess_chart(charts,patterns,playability,resolved_profile,missing)
     difficulty_tiers={name:item["difficulty_tier"] for name,item in assessment["instruments"].items() if "difficulty_tier" in item}

@@ -66,3 +66,45 @@ This comparison ignores pad identity, simultaneous gem count, cymbal/tom status 
 The existing event-evidence addition supplies useful diagnostics, but this cross-check demonstrates that it has not yet solved lead interpretation or human-style authoring.
 
 Machine-readable measurements and sample notes are saved in the reviewed run's `analysis/reference-crosscheck.json`. Retrieved reference material is retained under `.research/less-talk-more-rokk/`.
+
+## Variable-tempo follow-up
+
+Revalidated 2026-10-02 with the current tempo analyzer and the same cached,
+source-aligned drum stem. This rerun did not provide the reference tempo map to
+generation; the reference remained post-generation evaluation evidence only.
+The sustained-change detector selected a 598-beat variable map instead of the
+historical 124.998 BPM grid.
+
+Using order-preserving one-to-one beat matching:
+
+| Scope and tolerance | Historical constant map | Current variable map |
+|---|---:|---:|
+| First 70 s, 50 ms | 25 matched, 83 missed, 120 extra | 107 matched, 1 missed, 4 extra |
+| First 70 s, 100 ms | 49 matched, 59 missed, 96 extra | 108 matched, 0 missed, 3 extra |
+| Full song, 50 ms | 493 matched, 83 missed, 137 extra | 567 matched, 9 missed, 31 extra |
+| Full song, 100 ms | 517 matched, 59 missed, 113 extra | 574 matched, 2 missed, 24 extra |
+
+The current map's full-song 50 ms matched errors have 16.36 ms median and
+42.64 ms p95 absolute error. A fresh non-compiling production-path draft was
+generated under `comparisons/less-talk-variable-tempo/`; its exported MIDI has
+565 tempo changes and begins near 70.18 BPM. This resolves the measured
+constant-tempo failure, but not the independent guitar density, voice-selection,
+fingering, chord or sustain findings above. Listening review is still required
+before treating the draft as playable.
+
+Listening review found that the first generated Guitar note was incorrectly a
+tap. Its source event at 2.653 s contained a 284 ms detected sustain, which
+survived mapping and playability but was shortened to 65 ms by the shared final
+phrase pass. The pass now uses the electronic 90 ms sustain threshold for
+electronic Guitar while retaining the 350 ms Band Guitar threshold. This is a
+profile-level correction backed by source evidence, not a title-specific hold.
+
+The same listening review rejected the scaling riffs: attacks sound off-time and
+the chart does not form the proper repeated pattern. Stage tracing confirms that
+this is not primarily a final-lane issue. In source seconds 25.420-28.299, lead
+selection retained 11 events for a 15-attack reference phrase and playability
+reduced them to eight. In 28.299-31.102, selection retained 13 events but
+playability again reduced them to eight. The retained pitches do not form a
+stable repeated contour, and several attacks sit roughly 60-110 ms from the
+nearest sixteenth-note grid point. This Guitar candidate is rejected even though
+its independently measured tempo map is substantially better.

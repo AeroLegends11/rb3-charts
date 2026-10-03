@@ -12,12 +12,17 @@ from rb3charts.training import (
     FEATURE_SAMPLE_RATE,
     TrainingDataError,
     _onset_metrics,
+    _peak_width_rank_percentiles,
+    _periodic_peak_support,
+    convert_egfxset_audio,
     convert_guitarset_jams,
     convert_guitar_techs_midi,
     convert_slakh_track,
+    evaluate_structure_ranking,
     extract_structure_features,
     mix_slakh_guitar_stems,
     predict_structure,
+    synthesize_egfxset_phrase,
     train_structure_baseline,
 )
 
@@ -99,6 +104,79 @@ def test_guitarset_conversion_treats_same_pitch_on_two_strings_as_one_voice(tmp_
     assert labels["attacks"][0]["note_count"] == 2
     assert labels["attacks"][0]["polyphony"] == 1
     assert labels["attacks"][0]["is_chord"] is False
+
+
+def test_egfxset_conversion_uses_string_fret_pitch_and_attack_only_targets(tmp_path):
+    audio = tmp_path / "Clean" / "Neck" / "6-3.wav"
+    audio.parent.mkdir(parents=True)
+    sf.write(audio, np.zeros(FEATURE_SAMPLE_RATE, dtype=np.float32), FEATURE_SAMPLE_RATE)
+    output = tmp_path / "labels.json"
+
+    labels = convert_egfxset_audio(audio, output)
+
+    assert labels["provenance"]["dataset_id"] == "egfxset"
+    assert labels["provenance"]["commercial_use"] == "allowed"
+    assert labels["targets"] == ["attack", "polyphony"]
+    assert labels["notes"][0]["pitch"] == 43
+    assert labels["effect"] == "Clean"
+    assert labels["pickup_configuration"] == "Neck"
+    assert labels["group_id"] == "egfxset:Neck:6-3"
+    assert labels["split_keys"][-1] == "performer:egfxset:unknown"
+    assert json.loads(output.read_text(encoding="utf-8"))["summary"]["attacks"] == 1
+    features = tmp_path / "features.npz"
+    metadata = extract_structure_features(audio, output, features)
+    assert metadata["targets"] == ["attack", "polyphony"]
+
+
+def test_egfxset_conversion_rejects_invalid_published_filename(tmp_path):
+    audio = tmp_path / "2-23.wav"
+    sf.write(audio, np.zeros(FEATURE_SAMPLE_RATE, dtype=np.float32), FEATURE_SAMPLE_RATE)
+    with pytest.raises(TrainingDataError, match="fret must be between"):
+        convert_egfxset_audio(audio)
+
+
+def test_egfxset_phrase_synthesis_is_deterministic_and_attack_only(tmp_path):
+    source = tmp_path / "Clean"
+    for string in range(1, 5):
+        audio = source / "Neck" / f"{string}-0.wav"
+        audio.parent.mkdir(parents=True, exist_ok=True)
+        tone = np.full(FEATURE_SAMPLE_RATE, string / 10, dtype=np.float32)
+        sf.write(audio, tone, FEATURE_SAMPLE_RATE, subtype="FLOAT")
+
+    first_audio = tmp_path / "first.wav"
+    first_labels = tmp_path / "first.json"
+    second_audio = tmp_path / "second.wav"
+    second_labels = tmp_path / "second.json"
+    first = synthesize_egfxset_phrase(
+        source, first_audio, first_labels, seed=17, duration=2.5
+    )
+    second = synthesize_egfxset_phrase(
+        source, second_audio, second_labels, seed=17, duration=2.5
+    )
+
+    assert first["targets"] == ["attack", "polyphony"]
+    assert first["attacks"][0]["start"] == pytest.approx(0.5)
+    assert len(first["attacks"]) > 1
+    assert first["group_id"] == "egfxset-synthetic:seed-17:sequence-00"
+    assert first["split_keys"][-1] == "performer:egfxset:unknown"
+    assert all(item["sha256"] for item in first["source_files"])
+    assert first == second
+    assert first_audio.read_bytes() == second_audio.read_bytes()
+
+
+def test_egfxset_phrase_synthesis_requires_source_diversity(tmp_path):
+    source = tmp_path / "Clean" / "Neck"
+    source.mkdir(parents=True)
+    for string in range(1, 4):
+        sf.write(
+            source / f"{string}-0.wav",
+            np.zeros(FEATURE_SAMPLE_RATE, dtype=np.float32),
+            FEATURE_SAMPLE_RATE,
+        )
+    with pytest.raises(TrainingDataError, match="at least four"):
+        synthesize_egfxset_phrase(
+            source.parent, tmp_path / "phrase.wav", tmp_path / "phrase.json"
+        )
 
 
 def test_guitar_techs_conversion_preserves_performer_split_and_polyphony(tmp_path):
@@ -304,7 +382,7 @@ def test_slakh_guitar_mix_uses_present_files_despite_stale_metadata_flags(tmp_pa
     assert report["peak"] == pytest.approx(0.3, abs=1e-6)
 
 
-def _write_feature_index_fixture(tmp_path, validation_player="01"):
+def _write_feature_index_fixture(tmp_path, validation_player="01", targets=None):
     items = []
     manifest_items = []
     for ordinal, (player, split, token) in enumerate((
@@ -320,6 +398,10 @@ def _write_feature_index_fixture(tmp_path, validation_player="01"):
         annotation.write_text(json.dumps(annotation_payload), encoding="utf-8")
         labels = folder / "labels.json"
         converted = convert_guitarset_jams(annotation, labels)
+        if targets is not None:
+            label_payload = json.loads(labels.read_text(encoding="utf-8"))
+            label_payload["targets"] = targets
+            labels.write_text(json.dumps(label_payload), encoding="utf-8")
         audio = folder / "audio.wav"
         tone = np.zeros(FEATURE_SAMPLE_RATE * 3, dtype=np.float32)
         tone[FEATURE_SAMPLE_RATE:FEATURE_SAMPLE_RATE + 100] = (
@@ -402,7 +484,77 @@ def test_structure_baseline_trains_and_writes_auditable_checkpoint(tmp_path):
     ranks=[event["attack_rank_percentile"] for event in prediction["candidates"]]
     assert min(ranks)==pytest.approx(0.0)
     assert max(ranks)==pytest.approx(1.0)
+    periodic_ranks = [
+        event["periodic_attack_rank_percentile"]
+        for event in prediction["candidates"]
+    ]
+    assert min(periodic_ranks) == pytest.approx(0.0)
+    assert max(periodic_ranks) == pytest.approx(1.0)
+    assert all(
+        0 <= event["periodic_support"] <= 1
+        for event in prediction["candidates"]
+    )
+    width_ranks = [
+        event["peak_width_rank_percentile"]
+        for event in prediction["candidates"]
+    ]
+    assert min(width_ranks) == pytest.approx(0.0)
+    assert max(width_ranks) == pytest.approx(1.0)
+    width_reranked = [
+        event["periodic_width_attack_rank_percentile"]
+        for event in prediction["candidates"]
+    ]
+    assert min(width_reranked) == pytest.approx(0.0)
+    assert max(width_reranked) == pytest.approx(1.0)
     assert set(prediction["summary"]["candidate_score_quantiles"])=={"0.5","0.75","0.9","0.95"}
+
+
+def test_structure_ranking_evaluation_uses_fixed_top_k_and_one_to_one_matches(tmp_path):
+    predictions = tmp_path / "predictions.json"
+    predictions.write_text(json.dumps({
+        "schema": "rb3charts-structure-predictions",
+        "candidates": [
+            {"start": 0.99, "periodic_width_attack_rank_percentile": 0.9},
+            {"start": 2.04, "periodic_width_attack_rank_percentile": 0.8},
+            {"start": 4.0, "periodic_width_attack_rank_percentile": 0.7},
+            {"start": 3.02, "periodic_width_attack_rank_percentile": 0.6},
+        ],
+    }), encoding="utf-8")
+    labels = tmp_path / "labels.json"
+    labels.write_text(json.dumps({
+        "schema": "rb3charts-structure-labels",
+        "notes": [
+            {"start": 1.0},
+            {"start": 1.0},
+            {"start": 2.0},
+            {"start": 3.0},
+        ],
+    }), encoding="utf-8")
+    output = tmp_path / "evaluation.json"
+    report = evaluate_structure_ranking(predictions, labels, output=output)
+    assert report["selection_count"] == 3
+    assert report["matched_attacks"] == 2
+    assert report["selected_candidates"] == 3
+    assert report["reference_attacks"] == 3
+    assert report["f1"] == pytest.approx(2 / 3)
+    assert json.loads(output.read_text(encoding="utf-8")) == report
+
+    invalid = json.loads(predictions.read_text(encoding="utf-8"))
+    invalid["candidates"][0]["periodic_width_attack_rank_percentile"] = float("nan")
+    predictions.write_text(json.dumps(invalid), encoding="utf-8")
+    with pytest.raises(TrainingDataError, match="must be finite"):
+        evaluate_structure_ranking(predictions, labels)
+
+
+def test_structure_baseline_trains_with_attack_polyphony_only_targets(tmp_path):
+    index = _write_feature_index_fixture(
+        tmp_path, targets=["attack", "polyphony"]
+    )
+    report = train_structure_baseline(
+        index, tmp_path / "attack-only.pt", epochs=1, device="cpu", seed=7
+    )
+    assert len(report["epoch_losses"]) == 1
+    assert 0 <= report["validation"]["attack_f1"] <= 1
 
 
 def test_structure_baseline_rejects_group_split_leakage(tmp_path):
@@ -436,6 +588,24 @@ def test_onset_metrics_use_same_peak_suppression_as_inference():
     )
     assert metrics["predicted_attacks"] == 1
     assert metrics["f1"] == 1
+
+
+def test_periodic_peak_support_requires_three_short_regular_attacks():
+    support = _periodic_peak_support(
+        [0.0, 0.125, 0.25, 0.6],
+        [0.7, 0.8, 0.9, 1.0],
+    )
+    assert support.tolist() == pytest.approx([0.0, 0.7, 0.0, 0.0])
+
+
+def test_peak_width_rank_prefers_broader_score_curve():
+    scores = np.zeros(32, dtype=float)
+    scores[5] = 1
+    scores[18:23] = [0.2, 0.6, 1.0, 0.6, 0.2]
+
+    ranks = _peak_width_rank_percentiles(scores, [5, 20])
+
+    assert ranks.tolist() == pytest.approx([0.0, 1.0])
 
 
 def test_structure_baseline_runs_on_cuda_when_available(tmp_path):

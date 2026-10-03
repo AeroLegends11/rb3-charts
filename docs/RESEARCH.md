@@ -64,15 +64,142 @@ personal, noncommercial authoring workspace. Do not redistribute bundled models
 or external tools without reviewing their licenses and supplying required notices.
 No user song audio is distributed by this project.
 
+The authorized five-lane pilot now contains 28 synchronized pairs, 12 artists,
+four chart authors, and 12,335 Expert attacks. Twenty-four training songs come
+from Fervi's GuitarMaster repository at commit
+`afc3f9520d5976bd526e2b48203faa974563337d`; each admitted folder bundles audio,
+Expert MIDI, attribution, and CC BY/CC BY-SA evidence. Five Zep Hurme songs were
+excluded to prevent split leakage into held-out Persephone, and one item without
+explicit fretter attribution was excluded. The manifest validator reverified
+all file and rights-evidence hashes before deterministic Stage B conversion.
+Independent Basic Pitch contours were extracted for all 24 new training songs.
+Naively adding 2,810 Fervi-aligned single-note events to the original 815-event
+symbolic baseline reduced held-out Persephone exact lanes from 0.2915 to 0.2794
+and movement from 0.4253 to 0.3801. Equal chart-author sampling fell further to
+0.1943/0.3665. More songs from one fretter increase volume but not authoring
+style diversity, so these charts are not yet used to fit a lane model.
+
 ## Learned structure model datasets
 
 The rights-traceable prototype uses GuitarSet for real guitar attacks/chords,
 Slakh2100-redux for aligned multitrack examples, and Guitar-TECHS for isolated
-electric-guitar examples. All three are published under CC BY 4.0. EGSet12 is a
-separate CC BY 4.0 held-out electric-guitar check and also publishes an augmented
-TabCNN checkpoint. RWC Music Database 2.0 is CC BY-NC 4.0 and must remain isolated
-in a noncommercial research experiment rather than being mixed into a permissive
-checkpoint.
+electric-guitar examples. EGFxSet adds isolated real-hardware electric-guitar
+effects as attack-only supervision. All four are published under CC BY 4.0.
+EGSet12 is a separate CC BY 4.0 held-out electric-guitar check and also publishes
+an augmented TabCNN checkpoint. RWC Music Database 2.0 is CC BY-NC 4.0 and must
+remain isolated in a noncommercial research experiment rather than being mixed
+into a permissive checkpoint.
+
+EGFxSet release 1.0 contains 8,970 five-second electric-guitar recordings under
+CC BY 4.0. The clean ZIP's published MD5 was verified before use. Its filename
+and remote-index inconsistencies require parsing only valid `string-fret.wav`
+members from the archive. The fixed recording intervals include effect tails,
+so conversion exposes attack and single-note polyphony targets but no sustain
+target. Controlled additions of 30 and six clean examples both reduced untouched
+attack F1; a seeded-shuffle control also showed that ordering was not the remedy.
+Adding a 250 ms silence prefix also failed, confirming that the isolated
+five-second optimizer items—not mislabeled capture lead-in—were the primary
+problem.
+
+Deterministic synthetic phrases are more useful: short faded excerpts provide
+multiple known attack transitions per artifact without treating effect tails as
+sustain. A 12-phrase, 236-attack seed improved the untouched hybrid test,
+external EGSet12, authorized Persephone, and macro commercial-stem ranking.
+The command records its random seed, sequence, source hashes and augmentation
+parameters, and exactly reproduces the evaluated sequence. The checkpoint still
+worsened Hail's reviewed 20-24 second ranking window, so it remains offline and
+is not wired into chart generation.
+
+A follow-up with synthetic dyads improved untouched polyphony but reduced
+attack transfer on the hybrid test, EGSet12 and Persephone ranking. It also
+failed to recover meaningful commercial-stem chord predictions. Synthetic
+single-note phrase augmentation remains the stronger offline candidate; real
+rights-cleared chord phrases are still required for polyphony generalization.
+
+Changing synthetic rhythm or repetition did not clear the protected Hail gate.
+Both equal- and low-dose rapid-phrase mixes reduced broad untouched performance
+and left Hail's 20-24 second ranking below the selected checkpoint. An equal-size
+set repeating short three- and four-note source motifs transferred strongly to
+EGSet12 but further reduced protected-window matches. These results reject more
+synthetic timing-pattern tuning: the window failure is a score-ranking problem
+around real dense attacks, not a shortage of fabricated attack intervals.
+
+Emphasizing real rapid passages was promising but not stable. Duplicating the
+twelve densest GuitarSet/Guitar-TECHS training recordings raised untouched
+attack F1 to 0.8511 and EGSet12 F1 to 0.8689, but reduced polyphony accuracy and
+still failed Hail's protected window. A six-recording dose collapsed instead,
+showing sensitivity to the baseline trainer's fixed item order. Directly
+weighting rapid labeled attack frames also regressed untouched attack and
+polyphony metrics. A deterministic per-epoch shuffle produced lower attack F1
+for the dense candidate than for its matched shuffled control, confirming that
+the fixed-order gain is not reproducible. None of these mechanisms is retained;
+future dense-phrase work needs a more robust sampling/training design.
+
+Temporal receptive field alone was not the missing generalization mechanism.
+Expanding the 104 ms baseline to a 337 ms three-layer dilated network improved
+the untouched cleared test and EGSet12, but reduced Persephone and both Hail
+rankings. A smaller 151 ms, same-parameter dilation regressed the untouched test
+directly. Both experimental architectures were removed.
+
+A calibration-independent periodicity prior was selected on the cleared
+validation split. It gives five percent of a candidate's ranking score to
+evidence that the peak lies between two similarly spaced peaks 80-300 ms away.
+The prior reranks existing candidates only and improved validation, EGSet12 and
+Hail full-song ranking while preserving Persephone and Hail's protected window.
+Its 14-song raw-event support change was small and balanced across songs. It is
+recorded in prediction artifacts for offline analysis, not used to add chart
+notes: a known false Hail reattack also has strong periodic support, proving
+that independent onset evidence remains necessary. Even with independent
+`model_start` evidence and conservative periodic thresholds, an offline
+recovery audit supported 9/11 Hail proposals but only 2/4 Persephone proposals.
+Tighter timing-symmetry and four-peak variants both underperformed the original
+three-peak prior on cleared validation, so they were rejected rather than tuned
+against either evaluation chart.
+
+Peak width in the model score curve supplied a stronger calibration-independent
+signal. A conservative validation-selected 10% width-rank blend improved
+cleared equal-count matching from 2027/2366 to 2040/2366. Frozen checks improved
+Hail and Persephone, improved all twelve EGSet12 recordings, and raised
+fourteen-song raw-event support from 0.64124 to 0.64682 (twelve wins, one tie,
+one loss). The combined rank is recorded for offline evaluation only; it does
+not authorize post-authoring attack recovery.
+
+Multi-recording gradient accumulation reduced order sensitivity on the untouched
+test and sharply improved Hail and EGSet12, but the four-recording control
+regressed fourteen-song macro support and the two-recording control regressed
+cleared validation and polyphony. Dense-real duplication merely tied its matched
+accumulated control. The trainer therefore retains one optimizer step per
+recording; batching cannot be selected from the narrow held-out gains.
+
+The 24 authorized GuitarMaster full mixes were also tested as lane-independent
+structure supervision, with their lane identities discarded. Direct expansion
+made the derived positive-class weight substantially larger and regressed both
+cleared splits. Fixing that weight to the selected baseline produced strong
+attack gains on validation, test, EGSet12, Persephone, and Hail, but regressed
+the broader fourteen-song commercial support proxy, including large losses on
+Less Talk and two other songs. This checkpoint and the weight override were
+rejected: sparse full-mix chart labels need a training strategy that transfers
+across songs, not a gain confined to narrow held-out sets.
+
+Low-rate fine-tuning of the strongest full-mix candidate back on the original
+corpus did not repair that transfer failure. It restored cleared validation and
+test attack metrics and retained EGSet12, Persephone, and Hail gains, but widened
+the fourteen-song regression to eleven losses and removed another sixty
+supported Less Talk attacks. The warm-start path and temporary trainer controls
+were removed.
+
+Softening attack targets into adjacent frames reduced untouched transfer and
+was removed. The apparent Persephone gain from fixed eight-beat phrase cuts
+disappeared in an isolated comparison against the current no-bound replay.
+Selecting 8, 12, 16, or 24 beats only on the three rights-cleared development
+songs favored 12 beats for movement and motif shape, but the frozen candidate
+regressed exact lanes and motif shape on Hail, including exact lanes in the
+protected opening window. Rest-based phrase boundaries remain selected.
+
+NSynth is also CC BY 4.0 and may be useful for isolated synth timbre/attack
+pretraining. Its individual notes do not provide phrase timing, repetition,
+polyphony, or playable lane-motion evidence, so it is not a substitute for a
+rights-cleared phrase-level synth-lead corpus and is not a current runtime input.
 
 No verified public dataset teaches Rock Band-specific lane choices, HOPO flags,
 difficulty reductions, overdrive, fills, or venue events. The learned component

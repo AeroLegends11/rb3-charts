@@ -52,6 +52,19 @@ def main():
     guitarset=sub.add_parser("convert-guitarset",help="Convert GuitarSet JAMS to lane-independent structure labels")
     guitarset.add_argument("annotation",type=Path)
     guitarset.add_argument("output",type=Path)
+    egfxset=sub.add_parser("convert-egfxset",help="Convert one EGFxSet WAV to attack-only structure labels")
+    egfxset.add_argument("audio",type=Path)
+    egfxset.add_argument("output",type=Path)
+    egfx_phrase=sub.add_parser(
+        "synthesize-egfxset-phrase",
+        help="Build a deterministic multi-attack phrase from EGFxSet WAVs",
+    )
+    egfx_phrase.add_argument("source",type=Path)
+    egfx_phrase.add_argument("audio",type=Path)
+    egfx_phrase.add_argument("labels",type=Path)
+    egfx_phrase.add_argument("--seed",type=int,default=1337)
+    egfx_phrase.add_argument("--sequence",type=int,default=0)
+    egfx_phrase.add_argument("--duration",type=float,default=10.0)
     slakh=sub.add_parser("convert-slakh",help="Convert one Slakh track to lane-independent structure labels")
     slakh.add_argument("track",type=Path)
     slakh.add_argument("output",type=Path)
@@ -79,6 +92,13 @@ def main():
     prediction.add_argument("output",type=Path)
     prediction.add_argument("--beats",type=Path)
     prediction.add_argument("--device",choices=["auto","cpu","cuda"],default="auto")
+    ranking=sub.add_parser("evaluate-structure-ranking",help="Score an offline candidate rank against structure labels")
+    ranking.add_argument("predictions",type=Path)
+    ranking.add_argument("labels",type=Path)
+    ranking.add_argument("--output",type=Path)
+    ranking.add_argument("--rank-field",default="periodic_width_attack_rank_percentile")
+    ranking.add_argument("--selection-count",type=int)
+    ranking.add_argument("--tolerance-ms",type=int,default=50)
     tabcnn=sub.add_parser("predict-tabcnn",help="Run offline CC BY 4.0 TabCNN pitch/polyphony evaluation")
     tabcnn.add_argument("checkpoint",type=Path)
     tabcnn.add_argument("audio",type=Path)
@@ -175,6 +195,31 @@ def main():
             return 1
         print(json.dumps(report["summary"],indent=2))
         return 0
+    if args.command=="convert-egfxset":
+        from .training import TrainingDataError, convert_egfxset_audio
+        try:
+            report=convert_egfxset_audio(args.audio,args.output)
+        except TrainingDataError as exc:
+            print(f"EGFxSet conversion failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["summary"],indent=2))
+        return 0
+    if args.command=="synthesize-egfxset-phrase":
+        from .training import TrainingDataError, synthesize_egfxset_phrase
+        try:
+            report=synthesize_egfxset_phrase(
+                args.source,
+                args.audio,
+                args.labels,
+                args.seed,
+                args.sequence,
+                args.duration,
+            )
+        except TrainingDataError as exc:
+            print(f"EGFxSet phrase synthesis failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["summary"],indent=2))
+        return 0
     if args.command=="convert-slakh":
         from .training import TrainingDataError, convert_slakh_track
         try:
@@ -230,6 +275,22 @@ def main():
             print(f"Structure inference failed: {exc}",file=sys.stderr)
             return 1
         print(json.dumps(report["summary"],indent=2))
+        return 0
+    if args.command=="evaluate-structure-ranking":
+        from .training import TrainingDataError, evaluate_structure_ranking
+        try:
+            report=evaluate_structure_ranking(
+                args.predictions,
+                args.labels,
+                args.output,
+                args.rank_field,
+                args.selection_count,
+                args.tolerance_ms,
+            )
+        except TrainingDataError as exc:
+            print(f"Structure ranking evaluation failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report,indent=2))
         return 0
     if args.command=="predict-tabcnn":
         from .tabcnn import TabCNNError, predict_tabcnn

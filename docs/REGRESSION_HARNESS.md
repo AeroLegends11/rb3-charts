@@ -35,12 +35,13 @@ reuses cached analysis and writes a new timestamped output folder.
     - map_pitched
     - enforce_playability
     - conform_expert_to_reference (band)
-    - refine_band_guitar (band)
-    - stabilize_repeated_phrases (band)
     - author_guitar_phrases
     - reductions (per difficulty)
 - `analysis/regression-metrics.json`
   - attack retention
+  - fixed four-second attack precision/recall windows and the worst active
+    reference-recall window, so local transcription collapses cannot hide
+    behind a strong whole-song score
   - matched timing error
   - contour collapse/reversal deltas
   - chord/hold rates
@@ -51,6 +52,8 @@ reuses cached analysis and writes a new timestamped output folder.
   - confidence-weighted register centers and evidence dominance
   - register-switch counts and weak-event ratios
   - diagnostic candidate flags only; no notes are removed or repitched
+  - candidate windows appear as non-destructive amber regions in `review.html`,
+    with register separation and switch counts shown during playback
 
 ## Coverage and false-lock caveat
 

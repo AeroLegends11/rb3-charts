@@ -37,6 +37,20 @@ def _write_replay_fixture(source: Path, profile="band", instruments=None):
     rows=[{"start":1+i*0.25,"end":1+i*0.25+0.1,"pitch":pitch,"confidence":0.85,"source_id":f"g-{i}"} for i,pitch in enumerate((48,50,52,53,48,50,52,53))]
     (source/"analysis"/"guitar-transcription.json").write_text(json.dumps(rows),encoding="utf-8")
     (source/"analysis"/"guitar-guitar-events.json").write_text(json.dumps({"events":[dict(row,accepted=True,classification="probable",reason="fixture") for row in rows]}),encoding="utf-8")
+    if "bass" in instruments:
+        bass_rows=[
+            {
+                "start":1+i*0.5,
+                "end":1+i*0.5+0.2,
+                "pitch":pitch,
+                "confidence":0.8,
+                "source_id":f"b-{i}",
+            }
+            for i,pitch in enumerate((36,38,40,41))
+        ]
+        (source/"analysis"/"bass-transcription.json").write_text(
+            json.dumps(bass_rows),encoding="utf-8"
+        )
 
 
 def test_cached_replay_writes_provenance_snapshots_and_metrics(tmp_path, monkeypatch):
@@ -57,6 +71,44 @@ def test_cached_replay_writes_provenance_snapshots_and_metrics(tmp_path, monkeyp
     result_json=json.loads((replay_folder/"result.json").read_text(encoding="utf-8"))
     assert metadata["analysis_mode"]=="cached_replay"
     assert result_json["analysis_mode"]=="cached_replay"
+
+
+def test_cached_replay_writes_snapshots_and_metrics_for_each_instrument(tmp_path):
+    source=tmp_path/"source-run"
+    _write_replay_fixture(
+        source,profile="band",instruments=["guitar","bass"]
+    )
+    result=replay_cached(
+        source,output=tmp_path/"output",progress=lambda _:None,compile=False
+    )
+    analysis=Path(result["folder"])/"analysis"
+    aggregate=json.loads(
+        (analysis/"regression-metrics-by-instrument.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert set(aggregate["instruments"])=={"guitar","bass"}
+    for instrument in ("guitar","bass"):
+        snapshots=json.loads(
+            (analysis/f"{instrument}-stage-snapshots.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert snapshots["instrument"]==instrument
+        assert len(snapshots["stages"])>=2
+        assert snapshots["reductions"]["stage"]=="after_reductions"
+        assert (analysis/f"{instrument}-regression-metrics.json").is_file()
+    assert aggregate["instruments"]["bass"]["stage_count"]==3
+    bass_reductions=aggregate["instruments"]["bass"]["reduction_metrics"]
+    assert set(bass_reductions)=={"expert","hard","medium","easy"}
+    assert bass_reductions["expert"]["attack_retention"]==1
+    assert not any(
+        row["orphan_source_ids"] for row in bass_reductions.values()
+    )
+    assert all(
+        row["max_timing_error_ms"] in (None,0)
+        for row in bass_reductions.values()
+    )
 
 
 def test_cached_replay_requires_event_reports_for_electronic_roles(tmp_path):
@@ -113,6 +165,8 @@ def test_human_chart_comparison_reports_timing_style_and_motifs():
     report = compare_chart_attacks(reference, candidate)
 
     assert report["attack"]["f1"] == 1
+    assert report["attack_windows"]["window_seconds"] == 4
+    assert report["attack_windows"]["worst_reference_recall"]["recall"] == 1
     assert report["attack"]["timing_error_ms"]["median"] == pytest.approx(20)
     assert report["chord"]["candidate"] == 1
     assert report["sustain"]["matched"] == 1
@@ -120,6 +174,22 @@ def test_human_chart_comparison_reports_timing_style_and_motifs():
     assert report["density"]["attack_count_ratio"] == 1
     assert report["motifs"]["families"] == 1
     assert report["motifs"]["coverage"] < 1
+
+
+def test_human_chart_comparison_exposes_local_attack_recall_collapse():
+    reference = [
+        {"time": time, "lanes": (0,), "duration": .1}
+        for time in (0, 1, 4, 5)
+    ]
+    candidate = [
+        {"time": time, "lanes": (0,), "duration": .1}
+        for time in (0, 1, 4)
+    ]
+
+    windows = compare_chart_attacks(reference, candidate)["attack_windows"]
+
+    assert [row["recall"] for row in windows["windows"]] == [1, .5]
+    assert windows["worst_reference_recall"]["start"] == 4
 
 
 def test_repeated_four_note_runs_metric_coverage():

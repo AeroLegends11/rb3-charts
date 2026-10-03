@@ -148,8 +148,42 @@ def analyze_patterns(notes, tempo, instrument):
             "pattern_supported_attacks":len(supported),"top_patterns":[]}
     for signature,rhythm,occurrences in groups[:12]:
         shape=signature if instrument=="drums" else signature[0]
-        report["top_patterns"].append({"shape":shape,"beat_gaps":rhythm,"occurrences":len(occurrences),
-                                       "source_times":[round(phrase[0].start,3) for _,phrase in occurrences[:8]]})
+        pattern = {
+            "shape":shape,
+            "beat_gaps":rhythm,
+            "occurrences":len(occurrences),
+            "source_times":[round(phrase[0].start,3) for _,phrase in occurrences[:8]],
+        }
+        if instrument != "drums":
+            exact_pitch_groups = {}
+            for occurrence in occurrences:
+                pitch_shape = tuple(
+                    round(float(note.pitch), 3) for note in occurrence[1]
+                )
+                exact_pitch_groups.setdefault(pitch_shape, []).append(occurrence)
+            lane_variants = 1
+            mismatch_times = []
+            exact_pitch_repetitions = 0
+            for repeated in exact_pitch_groups.values():
+                if len(repeated) < 2:
+                    continue
+                exact_pitch_repetitions += len(repeated)
+                lane_shapes = [
+                    tuple(tuple(note.lanes) for note in phrase)
+                    for _, phrase in repeated
+                ]
+                counts = Counter(lane_shapes)
+                majority = max(counts, key=lambda lanes: (counts[lanes], lanes))
+                lane_variants = max(lane_variants, len(counts))
+                mismatch_times.extend(
+                    round(phrase[0].start, 3)
+                    for (_, phrase), lanes in zip(repeated, lane_shapes)
+                    if lanes != majority
+                )
+            pattern["exact_pitch_repetitions"] = exact_pitch_repetitions
+            pattern["lane_variants"] = lane_variants
+            pattern["lane_mismatch_times"] = sorted(mismatch_times)[:8]
+        report["top_patterns"].append(pattern)
     if instrument!="drums":
         comparisons=agreements=flattened=0
         motions=[]

@@ -9,6 +9,14 @@ downloadable. Each pair needs explicit, auditable model-training rights for both
 the audio and the chart. Official charts and unlicensed commercial recordings
 remain evaluation-only.
 
+The current local manifest contains 28 validated pairs from 12 artists and four
+chart authors, totaling 12,335 Expert attacks. It combines the original Brad
+Sucks/Zep Hurme seed with 24 Fervi-authored GuitarMaster songs whose per-folder
+CC BY or CC BY-SA evidence applies to the bundled audio and chart. Songs that
+would leak the held-out Persephone artist/chart-author split, and a chart without
+explicit fretter attribution, are excluded. Audio, charts, permissions, hashes,
+and converted artifacts remain local under `.research/`.
+
 ## Stages
 
 1. Collect a small opt-in set from chart authors and audio rights holders.

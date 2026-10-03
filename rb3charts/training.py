@@ -4,6 +4,8 @@ from collections import Counter
 from hashlib import sha256
 import json
 from pathlib import Path
+import random
+import re
 
 import numpy as np
 
@@ -45,6 +47,15 @@ GUITAR_TECHS_PROVENANCE = {
         "Hegel Pedroza Villalobos, Termeh Taheri, Wallace Abreu, "
         "Ryan M. Corey, and Iran R. Roman"
     ),
+}
+EGFXSET_PROVENANCE = {
+    "dataset_id": "egfxset",
+    "dataset_version": "1.0",
+    "source_url": "https://doi.org/10.5281/zenodo.7044411",
+    "audio_license": "CC BY 4.0",
+    "annotation_license": "CC BY 4.0",
+    "commercial_use": "allowed",
+    "attribution": "Hegel Pedroza, Gerardo Meza, and Iran R. Roman",
 }
 
 
@@ -296,6 +307,209 @@ def convert_guitarset_jams(path, output=None, simultaneous_tolerance=0.03):
     }
     if output is not None:
         save_json(output, result)
+    return result
+
+
+def convert_egfxset_audio(path, output=None):
+    """Convert one EGFxSet string-fret recording into attack-only labels."""
+    import soundfile as sf
+
+    source = Path(path).resolve()
+    match = re.fullmatch(r"([1-6])-(\d{1,2})", source.stem)
+    if source.suffix.lower() != ".wav" or match is None:
+        raise TrainingDataError(
+            "EGFxSet audio must use the published string-fret WAV name, such as 6-0.wav"
+        )
+    string = int(match.group(1))
+    fret = int(match.group(2))
+    if not 0 <= fret <= 22:
+        raise TrainingDataError("EGFxSet fret must be between 0 and 22")
+    try:
+        duration = float(sf.info(source).duration)
+    except (OSError, RuntimeError) as exc:
+        raise TrainingDataError(f"Cannot read EGFxSet audio: {exc}") from exc
+    if duration <= 0:
+        raise TrainingDataError("EGFxSet audio duration must be positive")
+    tuning = {1: 64, 2: 59, 3: 55, 4: 50, 5: 45, 6: 40}
+    pitch = tuning[string] + fret
+    pickup = source.parent.name
+    effect = source.parent.parent.name
+    audio_hash = _hash_file(source)
+    note = {
+        "start": 0.0,
+        "end": duration,
+        "pitch": pitch,
+        "string": string,
+        "fret": fret,
+        "source_id": f"string-{string}-fret-{fret}",
+    }
+    attacks = _group_attacks([dict(note)], 0.03)
+    group_id = f"egfxset:{pickup}:{string}-{fret}"
+    result = {
+        "schema": "rb3charts-structure-labels",
+        "schema_version": STRUCTURE_LABEL_VERSION,
+        "source_format": "egfxset-string-fret-audio",
+        "source_annotation": source.name,
+        "source_annotation_sha256": audio_hash,
+        "source_files": [{"path": source.name, "sha256": audio_hash}],
+        "provenance": EGFXSET_PROVENANCE,
+        "group_id": group_id,
+        "split_keys": [group_id, "performer:egfxset:unknown"],
+        "duration": duration,
+        "targets": ["attack", "polyphony"],
+        "effect": effect,
+        "pickup_configuration": pickup,
+        "notes": [note],
+        "attacks": attacks,
+        "beats": [],
+        "summary": _label_summary([note], attacks),
+    }
+    if output is not None:
+        save_json(output, result)
+    return result
+
+
+def synthesize_egfxset_phrase(
+    source_folder,
+    output_audio,
+    output_labels,
+    seed=1337,
+    sequence=0,
+    duration=10.0,
+):
+    """Build one deterministic multi-attack phrase from EGFxSet recordings."""
+    import soundfile as sf
+
+    source_folder = Path(source_folder).resolve()
+    output_audio = Path(output_audio).resolve()
+    output_labels = Path(output_labels).resolve()
+    if not source_folder.is_dir():
+        raise TrainingDataError("EGFxSet phrase source must be a directory")
+    if output_audio.suffix.lower() != ".wav":
+        raise TrainingDataError("EGFxSet phrase audio output must use the .wav suffix")
+    if output_labels.suffix.lower() != ".json":
+        raise TrainingDataError("EGFxSet phrase labels output must use the .json suffix")
+    if sequence < 0:
+        raise TrainingDataError("EGFxSet phrase sequence must be non-negative")
+    if duration < 2.0:
+        raise TrainingDataError("EGFxSet phrase duration must be at least two seconds")
+
+    sources = []
+    for path in source_folder.rglob("*.wav"):
+        labels = convert_egfxset_audio(path)
+        note = labels["notes"][0]
+        token = (
+            f"egfxset-{labels['effect'].lower()}-"
+            f"{labels['pickup_configuration'].lower()}-"
+            f"s{note['string']}-f{note['fret']}"
+        )
+        sources.append((token, path, labels))
+    sources.sort(key=lambda item: item[0])
+    if len(sources) < 4:
+        raise TrainingDataError("EGFxSet phrase synthesis requires at least four recordings")
+
+    rng = random.Random(seed)
+    pool = None
+    for _ in range(sequence + 1):
+        pool = list(sources)
+        rng.shuffle(pool)
+
+    patterns = (
+        (0.5, 0.5, 0.25, 0.75, 0.5, 0.25, 0.25, 0.5),
+        (0.375, 0.375, 0.75, 0.375, 0.625, 0.5),
+        (0.25, 0.25, 0.5, 0.5, 0.75, 0.25, 0.5),
+    )
+    sample_rate = None
+    rendered = None
+    notes = []
+    attacks = []
+    source_files = []
+    position = 0.5
+    clip_seconds = 0.28
+    fade_seconds = 0.025
+    index = 0
+    while position < duration - 0.4 and index < 20:
+        _, path, labels = pool[index % len(pool)]
+        audio, current_rate = sf.read(path, always_2d=True, dtype="float32")
+        if sample_rate is None:
+            sample_rate = current_rate
+            rendered = np.zeros(round(duration * sample_rate), dtype=np.float32)
+        elif current_rate != sample_rate:
+            raise TrainingDataError("EGFxSet phrase sources must share one sample rate")
+        clip = audio.mean(axis=1)[:round(clip_seconds * sample_rate)].copy()
+        fade_frames = min(len(clip), round(fade_seconds * sample_rate))
+        if fade_frames:
+            clip[-fade_frames:] *= np.linspace(1.0, 0.0, fade_frames, dtype=np.float32)
+        start_frame = round(position * sample_rate)
+        rendered[start_frame:start_frame + len(clip)] += clip * 0.55
+        original = labels["notes"][0]
+        source_id = (
+            f"sequence-{sequence:02d}-{index:02d}-"
+            f"string-{original['string']}-fret-{original['fret']}"
+        )
+        end = position + len(clip) / sample_rate
+        note = {
+            "start": position,
+            "end": end,
+            "pitch": original["pitch"],
+            "string": original["string"],
+            "fret": original["fret"],
+            "source_id": source_id,
+        }
+        notes.append(note)
+        attacks.append({
+            "start": position,
+            "end": end,
+            "pitches": [original["pitch"]],
+            "note_count": 1,
+            "polyphony": 1,
+            "is_chord": False,
+            "source_ids": [source_id],
+        })
+        source_files.append({
+            "path": str(path.relative_to(source_folder)),
+            "sha256": _hash_file(path),
+        })
+        pattern = patterns[sequence % len(patterns)]
+        position += pattern[index % len(pattern)]
+        index += 1
+
+    peak = float(np.max(np.abs(rendered)))
+    if peak > 0.9:
+        rendered *= 0.9 / peak
+    output_audio.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(output_audio, rendered, sample_rate, subtype="PCM_16")
+    group_id = f"egfxset-synthetic:seed-{seed}:sequence-{sequence:02d}"
+    result = {
+        "schema": "rb3charts-structure-labels",
+        "schema_version": STRUCTURE_LABEL_VERSION,
+        "source_format": "egfxset-deterministic-synthetic-phrase",
+        "source_annotation": f"seed-{seed}-sequence-{sequence}",
+        "source_annotation_sha256": sha256(
+            json.dumps(source_files, sort_keys=True).encode("utf-8")
+        ).hexdigest(),
+        "source_files": source_files,
+        "provenance": {
+            **EGFXSET_PROVENANCE,
+            "dataset_id": "egfxset-synthetic-phrases",
+        },
+        "group_id": group_id,
+        "split_keys": [group_id, "performer:egfxset:unknown"],
+        "duration": duration,
+        "targets": ["attack", "polyphony"],
+        "augmentation": {
+            "seed": seed,
+            "sequence": sequence,
+            "clip_seconds": clip_seconds,
+            "fade_seconds": fade_seconds,
+            "gain": 0.55,
+        },
+        "notes": notes,
+        "attacks": attacks,
+        "beats": [],
+        "summary": _label_summary(notes, attacks),
+    }
+    save_json(output_labels, result)
     return result
 
 
@@ -666,6 +880,15 @@ def extract_structure_features(audio_path, labels_path, output):
     ):
         raise TrainingDataError("Unsupported structure-label schema")
     beat_times = [beat["time"] for beat in labels.get("beats", [])]
+    targets = labels.get("targets") or ["attack", "polyphony", "sustain"]
+    if (
+        not isinstance(targets, list)
+        or "attack" not in targets
+        or any(target not in {"attack", "polyphony", "sustain"} for target in targets)
+    ):
+        raise TrainingDataError(
+            "Structure labels require an attack target and may include polyphony and sustain"
+        )
     audio = _extract_audio_features(audio_path, beat_times)
     audio_duration = audio["duration"]
     log_mel = audio["log_mel"]
@@ -735,7 +958,7 @@ def extract_structure_features(audio_path, labels_path, output):
         "beat_count": audio["beat_count"],
         "beat_phase_valid": audio["beat_phase_valid"],
         "beat_phase_coverage": audio["beat_phase_coverage"],
-        "targets": ["attack", "polyphony", "sustain"],
+        "targets": targets,
         "provenance": labels.get("provenance"),
         "group_id": labels.get("group_id"),
         "split_keys": labels.get("split_keys"),
@@ -948,6 +1171,56 @@ def _attack_peaks(scores, threshold=None):
     return peaks
 
 
+def _periodic_peak_support(times, ranks):
+    """Score candidates centered between two short, equally spaced peaks."""
+    times = np.asarray(times, dtype=float)
+    ranks = np.asarray(ranks, dtype=float)
+    support = np.zeros(len(times), dtype=float)
+    for index, seconds in enumerate(times):
+        for previous in range(index):
+            gap = seconds - times[previous]
+            if gap > 0.3:
+                continue
+            if gap < 0.08:
+                continue
+            target = seconds + gap
+            insertion = int(np.searchsorted(times, target))
+            for following in (insertion - 1, insertion):
+                if (
+                    following > index
+                    and following < len(times)
+                    and abs(times[following] - target) <= 0.025
+                ):
+                    support[index] = max(
+                        support[index],
+                        min(ranks[previous], ranks[following]),
+                    )
+    return support
+
+
+def _rank_percentiles(values):
+    values = np.asarray(values, dtype=float)
+    percentiles = np.zeros(len(values), dtype=float)
+    if len(values) == 1:
+        percentiles[0] = 1.0
+    elif len(values) > 1:
+        order = np.argsort(values, kind="stable")
+        percentiles[order] = np.linspace(0.0, 1.0, len(values))
+    return percentiles
+
+
+def _peak_width_rank_percentiles(scores, peaks):
+    """Rank local peaks by their half-prominence width."""
+    from scipy import signal
+
+    widths = signal.peak_widths(
+        np.asarray(scores, dtype=float),
+        np.asarray(peaks, dtype=int),
+        rel_height=0.5,
+    )[0]
+    return _rank_percentiles(widths)
+
+
 def _onset_metrics(records, threshold, tolerance_frames):
     matched = predicted_total = actual_total = 0
     for scores, actual_frames in records:
@@ -1048,7 +1321,7 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
     epoch_losses = []
 
     def tensors(item):
-        arrays, _ = _load_feature_artifact(item["path"])
+        arrays, metadata = _load_feature_artifact(item["path"])
         features = np.concatenate(
             (arrays["log_mel"], arrays["mel_delta"], arrays["beat_phase"]),
             axis=1,
@@ -1058,13 +1331,14 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
             torch.from_numpy(arrays["attack_target"]).unsqueeze(0).to(device),
             torch.from_numpy(arrays["polyphony_target"].astype(np.int64)).unsqueeze(0).to(device),
             torch.from_numpy(arrays["sustain_target"].astype(np.int64)).unsqueeze(0).to(device),
+            set(metadata.get("targets") or ("attack", "polyphony", "sustain")),
         )
 
     for _ in range(epochs):
         model.train()
         total = 0.0
         for item in train_items:
-            features, attacks, polyphony, sustain = tensors(item)
+            features, attacks, polyphony, sustain, targets = tensors(item)
             outputs = model(features)
             attack_loss = functional.binary_cross_entropy_with_logits(
                 outputs["attack"],
@@ -1072,16 +1346,20 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
                 pos_weight=torch.tensor(positive_weight, device=device),
             )
             attack_mask = attacks > 0.5
-            if torch.any(attack_mask):
+            if "polyphony" in targets and torch.any(attack_mask):
                 polyphony_loss = functional.cross_entropy(
                     outputs["polyphony"][attack_mask],
                     polyphony[attack_mask],
                 )
             else:
                 polyphony_loss = outputs["polyphony"].sum() * 0
-            sustain_loss = functional.cross_entropy(
-                outputs["sustain"].reshape(-1, 7),
-                sustain.reshape(-1),
+            sustain_loss = (
+                functional.cross_entropy(
+                    outputs["sustain"].reshape(-1, 7),
+                    sustain.reshape(-1),
+                )
+                if "sustain" in targets
+                else outputs["sustain"].sum() * 0
             )
             loss = attack_loss + 0.5 * polyphony_loss + 0.25 * sustain_loss
             optimizer.zero_grad()
@@ -1096,13 +1374,13 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
     tolerance_frames = max(1, round(0.05 * FEATURE_SAMPLE_RATE / FEATURE_HOP_LENGTH))
     with torch.no_grad():
         for item in validation_items:
-            features, attacks, polyphony, _ = tensors(item)
+            features, attacks, polyphony, _, targets = tensors(item)
             outputs = model(features)
             actual = attacks > 0.5
             scores = torch.sigmoid(outputs["attack"][0]).cpu().numpy()
             actual_frames = torch.nonzero(actual[0], as_tuple=False).flatten().cpu().tolist()
             onset_records.append((scores, actual_frames))
-            if torch.any(actual):
+            if "polyphony" in targets and torch.any(actual):
                 predicted_polyphony = torch.argmax(outputs["polyphony"], dim=-1)
                 polyphony_correct += int(torch.sum(predicted_polyphony[actual] == polyphony[actual]).cpu())
                 polyphony_total += int(torch.sum(actual).cpu())
@@ -1118,13 +1396,13 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
         test_records = []
         with torch.no_grad():
             for item in test_items:
-                features, attacks, polyphony, _ = tensors(item)
+                features, attacks, polyphony, _, targets = tensors(item)
                 outputs = model(features)
                 actual = attacks > 0.5
                 scores = torch.sigmoid(outputs["attack"][0]).cpu().numpy()
                 actual_frames = torch.nonzero(actual[0], as_tuple=False).flatten().cpu().tolist()
                 test_records.append((scores, actual_frames))
-                if torch.any(actual):
+                if "polyphony" in targets and torch.any(actual):
                     predicted_polyphony = torch.argmax(outputs["polyphony"], dim=-1)
                     test_polyphony_correct += int(
                         torch.sum(predicted_polyphony[actual] == polyphony[actual]).cpu()
@@ -1269,26 +1547,57 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
     threshold = float(configuration.get("attack_threshold", 0.5))
     candidate_peaks = _attack_peaks(attack_scores)
     candidate_heights=attack_scores[candidate_peaks]
-    rank_percentiles=np.zeros(len(candidate_peaks),dtype=float)
-    if len(candidate_peaks)==1:
-        rank_percentiles[0]=1.0
-    elif len(candidate_peaks)>1:
-        order=np.argsort(candidate_heights,kind="stable")
-        rank_percentiles[order]=np.linspace(0.0,1.0,len(candidate_peaks))
+    rank_percentiles = _rank_percentiles(candidate_heights)
     rank_by_frame={
         int(frame):float(percentile)
         for frame,percentile in zip(candidate_peaks,rank_percentiles)
+    }
+    candidate_times = audio["frame_times"][candidate_peaks]
+    periodic_support = _periodic_peak_support(candidate_times, rank_percentiles)
+    reranked_scores = 0.95 * rank_percentiles + 0.05 * periodic_support
+    reranked_percentiles = _rank_percentiles(reranked_scores)
+    periodic_by_frame = {
+        int(frame): (float(support), float(score), float(percentile))
+        for frame, support, score, percentile in zip(
+            candidate_peaks,
+            periodic_support,
+            reranked_scores,
+            reranked_percentiles,
+        )
+    }
+    width_rank_percentiles = _peak_width_rank_percentiles(
+        attack_scores,
+        candidate_peaks,
+    )
+    width_reranked_scores = 0.9 * reranked_scores + 0.1 * width_rank_percentiles
+    width_reranked_percentiles = _rank_percentiles(width_reranked_scores)
+    width_by_frame = {
+        int(frame): (float(width), float(score), float(percentile))
+        for frame, width, score, percentile in zip(
+            candidate_peaks,
+            width_rank_percentiles,
+            width_reranked_scores,
+            width_reranked_percentiles,
+        )
     }
 
     def event_rows(peaks, heights, prefix):
         rows = []
         for index, frame in enumerate(peaks):
             voices = max(1, int(polyphony[frame]))
+            support, reranked_score, reranked_percentile = periodic_by_frame[int(frame)]
+            width_rank, width_score, width_percentile = width_by_frame[int(frame)]
             rows.append({
                 "source_id": f"{prefix}-{index}",
                 "start": float(audio["frame_times"][frame]),
                 "attack_probability": float(heights[index]),
                 "attack_rank_percentile": rank_by_frame[int(frame)],
+                "periodic_support": support,
+                "periodic_attack_score": reranked_score,
+                "periodic_attack_rank_percentile": reranked_percentile,
+                "peak_width_rank_percentile": width_rank,
+                "periodic_width_attack_score": width_score,
+                "periodic_width_attack_rank_percentile": width_percentile,
                 "polyphony": voices,
                 "is_chord": voices > 1,
                 "active_voices": int(sustain[frame]),
@@ -1341,3 +1650,95 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
     }
     save_json(output, result)
     return result
+
+
+def evaluate_structure_ranking(
+    predictions_path,
+    labels_path,
+    output=None,
+    rank_field="periodic_width_attack_rank_percentile",
+    selection_count=None,
+    tolerance_ms=50,
+):
+    """Evaluate a fixed candidate ranking against lane-independent attack labels."""
+    predictions_path = Path(predictions_path).resolve()
+    labels_path = Path(labels_path).resolve()
+    try:
+        predictions = json.loads(predictions_path.read_text(encoding="utf-8"))
+        labels = json.loads(labels_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise TrainingDataError(f"Cannot read structure evaluation input: {exc}") from exc
+    if predictions.get("schema") != "rb3charts-structure-predictions":
+        raise TrainingDataError("Unsupported structure-predictions artifact")
+    if labels.get("schema") != "rb3charts-structure-labels":
+        raise TrainingDataError("Unsupported structure-labels artifact")
+    candidates = predictions.get("candidates")
+    notes = labels.get("notes")
+    if not isinstance(candidates, list) or not isinstance(notes, list):
+        raise TrainingDataError("Structure evaluation inputs must contain candidates and notes")
+    try:
+        reference = sorted({round(float(note["start"]), 6) for note in notes})
+    except (KeyError, TypeError, ValueError) as exc:
+        raise TrainingDataError(f"Invalid structure label attack: {exc}") from exc
+    if not all(np.isfinite(start) for start in reference):
+        raise TrainingDataError("Structure label attacks must be finite")
+    if selection_count is None:
+        selection_count = len(reference)
+    if not isinstance(selection_count, int) or selection_count < 1:
+        raise TrainingDataError("Structure ranking selection count must be positive")
+    if tolerance_ms <= 0:
+        raise TrainingDataError("Structure ranking tolerance must be positive")
+    try:
+        ranked = [
+            (float(row[rank_field]), float(row["start"]), row)
+            for row in candidates
+        ]
+        if not all(np.isfinite(rank) and np.isfinite(start) for rank, start, _ in ranked):
+            raise ValueError("candidate rank and start values must be finite")
+        selected = sorted(
+            [row for _, _, row in sorted(ranked, key=lambda item: item[0], reverse=True)][
+                :selection_count
+            ],
+            key=lambda row: float(row["start"]),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise TrainingDataError(
+            f"Invalid structure candidate ranking field {rank_field}: {exc}"
+        ) from exc
+    tolerance = tolerance_ms / 1000.0
+    unmatched_reference = set(range(len(reference)))
+    matched = 0
+    for candidate in selected:
+        try:
+            start = float(candidate["start"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise TrainingDataError(f"Invalid structure candidate start: {exc}") from exc
+        possible = [
+            index
+            for index in unmatched_reference
+            if abs(reference[index] - start) <= tolerance
+        ]
+        if possible:
+            closest = min(possible, key=lambda index: abs(reference[index] - start))
+            unmatched_reference.remove(closest)
+            matched += 1
+    precision = matched / max(1, len(selected))
+    recall = matched / max(1, len(reference))
+    report = {
+        "schema": "rb3charts-structure-ranking-evaluation",
+        "schema_version": 1,
+        "predictions": predictions_path.name,
+        "labels": labels_path.name,
+        "rank_field": rank_field,
+        "selection_count": int(selection_count),
+        "tolerance_ms": int(tolerance_ms),
+        "matched_attacks": matched,
+        "selected_candidates": len(selected),
+        "reference_attacks": len(reference),
+        "precision": precision,
+        "recall": recall,
+        "f1": 2 * precision * recall / max(1e-12, precision + recall),
+    }
+    if output is not None:
+        save_json(Path(output).resolve(), report)
+    return report

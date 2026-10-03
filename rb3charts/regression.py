@@ -205,12 +205,55 @@ def compute_regression_metrics(snapshot_payload: dict, tempo):
     stages = [stage for stage in snapshot_payload.get("stages", []) if "notes" in stage]
     transitions = [transition_metrics(a, b, tempo) for a, b in zip(stages, stages[1:])]
     stage_rates = {stage["stage"]: _shape_metrics(_snapshots_to_notes(stage["notes"])) for stage in stages}
+    reductions = snapshot_payload.get("reductions", {})
+    difficulties = reductions.get("difficulties", {})
+    expert_rows = difficulties.get("expert", {}).get("notes", [])
+    expert_by_source = {
+        str(row["source_id"]):row
+        for row in expert_rows
+    }
+    reduction_metrics = {}
+    for difficulty in ("expert", "hard", "medium", "easy"):
+        rows = difficulties.get(difficulty, {}).get("notes", [])
+        row_by_source = {
+            str(row["source_id"]):row
+            for row in rows
+        }
+        common = sorted(set(expert_by_source) & set(row_by_source))
+        timing_errors = [
+            abs(
+                float(row_by_source[source_id]["start"])
+                - float(expert_by_source[source_id]["start"])
+            ) * 1000
+            for source_id in common
+        ]
+        lane_changes = sum(
+            tuple(row_by_source[source_id]["lanes"])
+            != tuple(expert_by_source[source_id]["lanes"])
+            for source_id in common
+        )
+        reduction_metrics[difficulty] = {
+            "attacks":len(rows),
+            "attack_retention":round(len(rows) / max(1, len(expert_rows)), 4),
+            "retained_source_ids":len(common),
+            "orphan_source_ids":sorted(set(row_by_source) - set(expert_by_source)),
+            "lane_changes_from_expert":lane_changes,
+            "mean_timing_error_ms":(
+                round(float(np.mean(timing_errors)), 4)
+                if timing_errors else None
+            ),
+            "max_timing_error_ms":(
+                round(float(np.max(timing_errors)), 4)
+                if timing_errors else None
+            ),
+        }
     return {
         "instrument": snapshot_payload.get("instrument"),
         "stage_count": len(stages),
         "stage_rates": stage_rates,
         "transitions": transitions,
-        "reductions": snapshot_payload.get("reductions", {}),
+        "reductions": reductions,
+        "reduction_metrics": reduction_metrics,
     }
 
 
@@ -370,6 +413,43 @@ def _match_attacks(reference, candidate, tolerance):
     return matches
 
 
+def _windowed_attack_metrics(reference, candidate, tolerance, window=4.0):
+    if not reference and not candidate:
+        return {"window_seconds": window, "worst_reference_recall": None, "windows": []}
+    first = min(row["time"] for row in reference + candidate)
+    last = max(row["time"] for row in reference + candidate)
+    start = np.floor(first / window) * window
+    windows = []
+    while start <= last:
+        end = start + window
+        left = [row for row in reference if start <= row["time"] < end]
+        right = [row for row in candidate if start <= row["time"] < end]
+        if left or right:
+            matches = len(_match_attacks(left, right, tolerance))
+            precision = matches / max(1, len(right))
+            recall = matches / max(1, len(left))
+            windows.append({
+                "start": round(float(start), 3),
+                "end": round(float(end), 3),
+                "reference": len(left),
+                "candidate": len(right),
+                "matched": matches,
+                "precision": round(precision, 4),
+                "recall": round(recall, 4),
+                "f1": round(
+                    2 * precision * recall / max(1e-12, precision + recall), 4
+                ),
+            })
+        start = end
+    active = [row for row in windows if row["reference"]]
+    worst = min(active, key=lambda row: (row["recall"], row["start"])) if active else None
+    return {
+        "window_seconds": window,
+        "worst_reference_recall": worst,
+        "windows": windows,
+    }
+
+
 def _binary_event_metrics(matches, reference, candidate, predicate):
     true_positive = sum(predicate(left) and predicate(right) for left, right, _ in matches)
     reference_positive = sum(predicate(row) for row in reference)
@@ -491,6 +571,7 @@ def compare_chart_attacks(reference, candidate, tolerance=0.08, hold_seconds=0.3
                 "p95": round(float(np.quantile(errors, .95)), 3) if errors else None,
             },
         },
+        "attack_windows": _windowed_attack_metrics(reference, candidate, tolerance),
         "chord": _binary_event_metrics(
             matches, reference, candidate, lambda row: len(row["lanes"]) > 1
         ),

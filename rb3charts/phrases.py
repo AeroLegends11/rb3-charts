@@ -484,7 +484,10 @@ def _apply_band_chord_sections(notes, tempo, evidence):
     return report
 
 
-def author_guitar_phrases(notes, tempo, chord_evidence=None):
+def author_guitar_phrases(
+    notes, tempo, chord_evidence=None,
+    sustain_threshold=BAND_GUITAR_SUSTAIN_SECONDS,
+):
     """Sight-reading pass: phrase contour, repeatable fingering, short tails.
 
     Preserve event identity, pitch, attack timing and count. Chords are barriers
@@ -637,7 +640,7 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
     tails = []
     for i, note in enumerate(result):
         duration = note.end - note.start
-        if .065 < duration < BAND_GUITAR_SUSTAIN_SECONDS:
+        if .065 < duration < sustain_threshold:
             end = note.start + .065
             if i + 1 < len(result):
                 end = min(end, result[i + 1].start - .015)
@@ -657,6 +660,7 @@ def author_guitar_phrases(notes, tempo, chord_evidence=None):
                     "continuity_summary": continuity_summary,
                     "pitch_anchor_changes": pitch_anchor_changes,
                     "supported_span_preservations": supported_span_preservations,
+                    "sustain_threshold_seconds": sustain_threshold,
                     "phrases": phrase_report, "short_tails_removed": tails,
                     "window_motif_matching": window_diagnostics,
                     "window_motif_constrained_phrases": sum(

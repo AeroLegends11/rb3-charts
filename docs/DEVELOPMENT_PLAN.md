@@ -57,9 +57,19 @@ Status update (2026-09-19):
   rhythm-only coincidences, late transposition confirmation behavior, variable
   tempo, and phrase-boundary splitting.
 
-Deferred:
+Status update (2026-10-02):
 
-- Snapshot/metric expansion beyond guitar remains future work.
+- Stage snapshots now cover every generated/replayed instrument. Pitched
+  instruments record mapping, playability, optional Band reference conformance,
+  and reductions; drums record their cleaned/replay-source Expert chart and
+  reductions.
+- Cached replay writes per-instrument regression metrics plus an aggregate
+  `regression-metrics-by-instrument.json`. The existing guitar
+  `regression-metrics.json` remains as a compatibility alias.
+- Per-instrument metrics now audit every difficulty reduction for attack
+  retention, retained/orphan source IDs, lane changes from Expert, and timing
+  error. These are observability checks; intended lane simplification remains
+  part of reduction behavior.
 
 ## 3. Consolidate motif understanding — architecture proposal
 
@@ -148,7 +158,10 @@ Status update (2026-09-20):
   eight-beat windows. The frozen 14-song baseline contains many mixed-register
   windows without a dominant evidence cluster, so confidence-only register
   selection is not enabled; additional lane-independent source evidence is
-  required before phrase-level voice tracking can alter notes.
+  required before phrase-level voice tracking can alter notes. Candidate windows
+  now appear as amber regions in the offline review highway, with register
+  separation and switch counts shown during playback so timestamped feedback
+  maps directly to the responsible source-evidence region.
 
 ## 4. Review and anomaly tools
 
@@ -158,11 +171,43 @@ Add generated-versus-human comparisons with explicit time alignment and provenan
 Never substitute reference notes into generated output. Distinguish event-level
 similarity from audio similarity; the latter needs independent audio features.
 
+The preview now exposes clickable, non-destructive markers for up to the twenty
+weakest low-confidence Expert attacks per instrument, forbidden green-to-orange
+triads, merged four-second density spikes using profile-specific limits, and up
+to twenty repeated source-event motifs whose final lane pattern differs from
+the family majority. These diagnostics remain listening evidence only.
+An automatic exact-pitch majority-lane normalization was selected only on the
+three rights-cleared development songs and rejected: it was neutral on Certain
+Death and reduced both exact-lane and movement agreement on Dirtbag and There's
+Something Wrong. The markers do not authorize lane rewriting.
+
 ## 5. Tempo and broader musical structure
 
-Address accelerating electronic tempo independently from motif fingering. The
-existing constant-tempo preference is a known limitation for Less Talk More Rokk.
-Then explore sections, phrase vocabulary, drum grooves and richer human priors.
+The accelerating electronic-tempo milestone is complete independently from
+motif fingering. A fresh production-path analysis of Less Talk More Rokk now
+detects the sustained acceleration and retains a 598-beat variable map instead
+of the historical constant 124.998 BPM grid. Against the aligned, evaluation-only
+RB tempo map, one-to-one 50 ms beat matching improved from 493/576 to 567/576
+over the full song. In the critical first 70 seconds it improved from 25/108 to
+107/108, with one missed and four extra generated beats. The exported MIDI
+contains 565 tempo changes and begins near 70.18 BPM, confirming that the
+variable analysis survives export. The draft still requires listening review;
+these timing results do not validate guitar authorship.
+
+The subsequent Less Talk review rejected Guitar even with the corrected tempo.
+The opening 284 ms source-supported electronic sustain was incorrectly shortened
+by the shared Band tail rule; final phrase authoring now uses the electronic
+90 ms threshold and preserves that hold. The scaling riff remains blocked
+upstream: lead selection retained 11/15 evaluation attacks in the first reviewed
+phrase and playability reduced both reviewed phrases to eight attacks. Directly
+reusing the flexible motif matcher before playability was rejected because it
+accepted 21,172 full-song windows yet found no safe strict match between the
+actual riff phrases. Guitar-only and ungated multi-stem variants also traded a
+minor first-phrase improvement for a worse second phrase and substantially more
+full-song attacks. Do not request another listening review until lane-independent
+voice evidence produces a stable repeated attack/pitch sequence.
+
+Next explore sections, phrase vocabulary, drum grooves and richer human priors.
 Validate one subsystem at a time rather than rewriting the entire engine.
 
 ## 6. Remote work and provider flexibility
@@ -199,11 +244,38 @@ Status update (2026-09-22):
   artist and chart-author split keys, and re-verifies every source and
   permission-evidence hash. The chart-derived conditioning is a pipeline proxy
   only; held-out generation must use independently predicted audio structure.
+- Rejected an offline nearest-neighbor symbolic lane baseline trained only on
+  the three authorized Brad Sucks charts. Across 247 independently
+  pitch-aligned single-note attacks in artist- and charter-disjoint Persephone,
+  its best configuration reached 0.190 exact-lane and 0.418 movement-direction
+  agreement, below the deterministic author's 0.265 and 0.515. A public-data
+  audit also rejected a nonexistent search result, the proprietary Frets on
+  Fire bundle and an Encore sample whose "Courtesy of" media credit does not
+  clearly grant training rights. Do not fit a lane model until the authorized
+  corpus has more artist and charter diversity.
 - Built a local, commercially reusable four-song five-lane seed from explicit
   CC BY 4.0 and CC BY-SA 3.0 sources: 3,240 Expert attacks from two artists and
   three chart authors. Three Brad Sucks charts are training-only and Zep
   Hurme's Persephone is held out by both artist and charter. The source files,
   manifests and permission evidence remain local under `.research/`.
+- Expanded the local authorized seed with 24 Fervi-authored Frets on Fire songs
+  from `IntinteDAO/FretsOnFire-Songs-GuitarMaster` at commit
+  `afc3f9520d5976bd526e2b48203faa974563337d`. Every admitted folder contains
+  synchronized audio, Expert MIDI, named chart attribution, and a per-folder
+  CC BY 3.0/4.0 or CC BY-SA 3.0 license. Five Zep Hurme songs were excluded to
+  preserve artist and chart-author split isolation from Persephone; one chart
+  with missing fretter attribution was also excluded. Full validation now
+  covers 28 items, 12 artists, four chart authors, and 12,335 Expert attacks,
+  with all 56 audio/chart rights-evidence hashes verified. Deterministic Stage B
+  conversion succeeds for all 28 items. The corpus remains local under
+  `.research/`; independent audio pitch events were extracted before a new
+  symbolic lane baseline was fit. Basic Pitch extraction completed
+  for all 24 songs. A validation-selected kNN trained on 3,625 aligned
+  single-note events regressed held-out Persephone exact lanes from 0.2915 to
+  0.2794 and movement from 0.4253 to 0.3801 versus the matched original-data
+  baseline. Chart-author-balanced sampling was worse at 0.1943/0.3665. The
+  symbolic lane fit remains blocked on additional chart-author diversity; the
+  new audio/chart pairs can still supply lane-independent attack supervision.
 - Added strict ingestion for legacy Frets on Fire MIDI and Clone Hero `.chart`
   files without weakening the Rock Band `PART GUITAR` requirement. The local
   seed's Basic Pitch attack recall within 80 ms ranged from 0.570 to 0.959 on
@@ -232,6 +304,20 @@ Status update (2026-09-22):
   sustain F1, 0.0513 phrase-boundary F1 and only 0.069 relative motif-lane
   agreement. This confirms that timing/density are ready for preliminary review
   while phrase, chord, sustain and lane authoring remain the primary work.
+- Removed the two intermediate Band Guitar lane-rewriting passes from fresh
+  generation and cached replay so corpus conformance now feeds the authoritative
+  phrase author directly. Against the local evaluation-only Hail reference,
+  0-40 second movement agreement rose from 0.256 to 0.353 and motif lane-shape
+  agreement from 0.000 to 0.022. On authorized held-out Persephone, movement
+  agreement rose from 0.389 to 0.518 and motif lane-shape agreement from 0.069
+  to 0.290 while attack F1 remained effectively level (0.555 to 0.554).
+  Listening review found the same Hail failure despite the metric gains. The
+  aligned evaluation exposed a localized source-time 20-24 second attack-recall
+  collapse that was hidden by the aggregate 0-40 second score. Broad focus
+  bypass, octave folding, and recurrence-aware spike-filter variants were
+  rejected because they regressed lane or motif quality on Hail or held-out
+  Persephone. Human-chart comparisons now report fixed four-second attack
+  windows before another transcription candidate is accepted.
 - Added a versioned dataset-manifest validator with separate audio/annotation
   licenses, attribution, commercial-use status, file hashes and path checks.
 - Artist leakage across train, validation and test splits is rejected.
@@ -282,6 +368,157 @@ Status update (2026-09-22):
   Relative to the preceding 20-epoch checkpoint, untouched test attack F1 rose
   from 0.7311 to 0.7982 and matched-attack polyphony accuracy rose from 0.6009 to
   0.8194.
+- Verified the 8,970-file EGFxSet release directly against Zenodo record
+  7044411: dataset audio and annotations are CC BY 4.0, and the downloaded clean
+  archive matches its published MD5. Added deterministic `string-fret.wav`
+  conversion with effect/pickup provenance and leakage-resistant group keys.
+  EGFxSet's fixed five-second intervals are limited to attack and single-note
+  polyphony targets; target-aware training losses prevent effect tails from
+  becoming false sustain supervision. A real `Clean/Neck/6-0.wav` pilot
+  produced one MIDI-40 attack and a 431-frame feature artifact.
+  Training pilots did not pass the untouched-set gate. Adding 30 clean examples
+  lowered test attack F1 from 0.7982 to 0.6374; a bounded six-example run reached
+  0.7017. Seeded per-epoch shuffling produced a 0.7799 control but the matched
+  six-example candidate reached only 0.7276. EGFxSet therefore remains an
+  available research converter, not accepted runtime training data, and
+  `hybrid-guitar-techs-v1` remains the selected checkpoint.
+- Reframed EGFxSet as deterministic multi-attack phrase augmentation rather
+  than one five-second optimizer item per isolated note. Twelve ten-second
+  phrases contain 236 known attacks, use 280 ms source excerpts with 25 ms
+  fades, retain every source hash, and remain attack/polyphony-only. The
+  committed `synthesize-egfxset-phrase` command exactly reproduces the measured
+  sequence audio, attack times and pitches from seed 1337.
+  - Untouched hybrid test attack F1 improved from 0.7982 to 0.8471 and
+    polyphony accuracy from 0.8194 to 0.8250.
+  - External EGSet12 attack F1 improved from 0.7994 to 0.8346 and polyphony
+    accuracy from 0.6737 to 0.6995.
+  - Authorized Persephone threshold attack F1 improved from 0.5235 to 0.5430;
+    equal-count ranking F1 improved from 0.4536 to 0.4697.
+  - Across 14 commercial stems, equal-count top-peak support rose from 0.6409
+    to 0.6515, improving eight songs and tying one.
+  - Hail full-song equal-count ranking F1 improved from 0.3098 to 0.3251, but
+    the reviewed 20-24 second window fell from 0.5000 to 0.3860. The checkpoint
+    is therefore the strongest offline research candidate, but remains blocked
+    from runtime generation and does not justify a new listening review.
+  - A matched phrase set with synthetic dyads raised untouched polyphony
+    accuracy to 0.8441 and Persephone threshold F1 to 0.5533, but reduced
+    untouched attack F1 to 0.8270, EGSet12 F1 to 0.8221, and Persephone ranking
+    F1 to 0.4649. It produced only one Hail chord prediction and none on
+    Persephone, while Hail's reviewed-window ranking remained below baseline at
+    0.4590. The dyad variant is rejected; synthetic mixing is not yet a
+    substitute for real phrase-level chord recordings.
+  - Faster synthetic timing did not repair the protected Hail window. A
+    six-ordinary/six-rapid mix reached 0.8163 untouched attack F1 and 0.4211 in
+    Hail's 20-24 second ranking window; reducing the rapid dose to two of twelve
+    phrases reached only 0.8128 and 0.4068. The latter also measured 0.8245
+    polyphony accuracy and 0.3135 Hail full-song ranking F1. Both variants are
+    rejected, and synthetic rapid-phrase proportion is no longer an active
+    tuning direction.
+  - Repeating short three- and four-note source motifs in an equal-size
+    ordinary-tempo synthetic set improved EGSet12 ranking to 0.8537, but
+    untouched attack F1 was only 0.8257 and Persephone lost most of the
+    nonrepeating candidate's gain. Its protected Hail-window match count fell
+    below both the selected model and the nonrepeating synthetic candidate, so
+    it is rejected.
+  - Oversampling the twelve densest real GuitarSet/Guitar-TECHS training
+    recordings produced the strongest untouched attack F1 so far (0.8511) and
+    EGSet12 F1 of 0.8689. It also improved Hail full-song ranking and tied the
+    nonrepeating synthetic candidate on Persephone, but reduced matched-attack
+    polyphony accuracy to 0.8066 and still missed the protected Hail gate.
+    Halving the dose collapsed untouched F1 to 0.7536, exposing fixed-order
+    sensitivity. Direct 1.5x loss weighting of rapid labeled attacks likewise
+    regressed untouched F1 to 0.7639 and polyphony to 0.7517. Item duplication
+    and dense-positive weighting are therefore rejected. A matched
+    deterministic per-epoch shuffle then produced 0.7654 attack F1 for the
+    twelve-recording dense candidate versus 0.7799 for its shuffled control, so
+    the fixed-order gain is not reproducible. Future work needs a more robust
+    sampling/training design before revisiting real rapid phrase emphasis.
+  - The two-layer baseline's receptive field is only nine frames (about
+    104 ms), so temporal-context controls were tested on the unchanged corpus.
+    A three-layer dilated model spanning about 337 ms improved untouched attack
+    F1 to 0.8221, polyphony to 0.8296, and EGSet12 to 0.8815, but regressed
+    Persephone and both Hail ranking gates. A same-parameter 151 ms dilation
+    then reduced untouched attack F1 to 0.7232 and polyphony to 0.7986.
+    Both architecture controls are rejected; the original 104 ms network is
+    restored.
+  - A validation-selected 5% symmetric-periodicity prior now accompanies raw
+    attack ranks in offline prediction artifacts. It reranks existing peaks
+    only: no attack or timestamp is invented. Cleared validation equal-count
+    F1 improved from 0.8533 to 0.8584; EGSet12 improved from approximately
+    0.7994 to 0.8172; Persephone tied at 274/614; Hail full-song matches rose
+    from 540 to 542 while its protected 20-24 second window held at 18/31.
+    Fourteen-song raw-event support was neutral-to-positive (0.64091 to
+    0.64116; five wins, four ties, five losses). The prior remains offline
+    evidence because it also strongly supports a known false Hail reattack;
+    independent `model_start` evidence is still mandatory for recovery.
+    A conservative recovery audit requiring periodic rank at least 0.90,
+    periodic support at least 0.50, and independent `model_start` evidence
+    found 9/11 Hail proposals but only 2/4 Persephone proposals in the
+    authorized chart. Stricter thresholds isolated a Persephone false
+    positive, so periodic ranking is not a safe post-authoring recovery gate.
+    Weighting support by exact interval symmetry fell below raw validation
+    ranking, while requiring a four-peak run improved raw validation ranking
+    but underperformed the retained three-peak prior. Neither refinement is
+    retained.
+  - Peak-width rank provides independent score-curve evidence without adding or
+    moving candidates. A validation-selected blend of 90% periodic score and
+    10% peak-width rank improved cleared equal-count matches from 2027/2366 to
+    2040/2366, with six wins, six ties, and one loss across thirteen
+    recordings. Frozen evaluation improved Hail by three matched attacks at
+    both tested selection counts while preserving its protected 20-24 second
+    window, improved Persephone by five, and improved every EGSet12 recording
+    (638 to 657 total matches). Fourteen-song commercial raw-event support rose
+    from 0.64124 to 0.64682 with twelve wins, one tie, and one loss. Prediction
+    artifacts expose the width and combined ranks for offline analysis;
+    generation and attack recovery remain unchanged.
+  - Deterministic multi-recording gradient accumulation was tested as a remedy
+    for fixed-order sensitivity. Four-recording steps raised untouched test F1
+    from 0.7982 to 0.8278, Hail ranking by 44-61 matches, its protected window
+    by two, and EGSet12 from 657 to 701 matches. It nevertheless reduced
+    fourteen-song macro support from 0.64682 to 0.64456, including large
+    regressions on When You Were Young and Empty Walls. Two-recording steps
+    reduced validation F1 to 0.7957 and polyphony accuracy to 0.4958. Gradient
+    accumulation and dense-real duplication under accumulation are rejected;
+    the original per-recording optimizer remains selected.
+  - The 24 newly authorized GuitarMaster full mixes were converted into
+    lane-independent structure features and interleaved through the unchanged
+    186-recording training corpus. Recomputing class weight from the expanded,
+    sparse full-mix corpus regressed validation/test attack F1 to 0.8124/0.7924
+    and polyphony to 0.5055/0.6218. Holding the selected baseline's 26.25
+    positive weight improved validation/test F1 to 0.8417/0.8511 and raised
+    EGSet12 combined-rank matches from 658 to 720, but broad commercial support
+    fell from 0.63536 to 0.62898 with seven losses. Large regressions on Beast
+    and the Harlot, Less Talk, and When You Were Young reject this checkpoint
+    and the experimental weight override. The licensed full mixes remain
+    research evidence rather than selected training inputs.
+  - Low-rate one-, two-, and four-epoch refits of the strongest full-mix
+    checkpoint back onto the original corpus restored cleared attack metrics.
+    The four-epoch result reached validation/test F1 of 0.8325/0.8455 and kept
+    gains on EGSet12, Persephone, and Hail. It nevertheless reduced the broad
+    commercial proxy from 0.63536 to 0.62576 with eleven losses, including 60
+    fewer supported Less Talk attacks. Warm-start refitting and its temporary
+    trainer controls are rejected.
+  - A 25% adjacent-frame soft attack target reduced untouched attack F1 to
+    0.7395 and was removed. A fixed eight-beat phrase bound appeared to improve
+    Persephone against an older baseline, but an isolated comparison against
+    the current no-bound replay showed no such gain. It also regressed Hail
+    exact lanes from 0.1761 to 0.1472 and protected-window exact lanes from
+    0.2857 to 0.1905.
+  - Phrase bounds of 8, 12, 16, and 24 beats were then selected only on the
+    three rights-cleared development songs. Twelve beats gave the strongest
+    mean movement agreement (0.4521 to 0.4956) and motif shape (0.1850 to
+    0.1948), though mean exact lanes fell from 0.1548 to 0.1037. Frozen
+    evaluation preserved Persephone movement and motifs but lowered exact
+    lanes from 0.2624 to 0.2595. Hail movement rose only from 0.3877 to 0.3936
+    while exact lanes fell from 0.1761 to 0.1544, motif shape from 0.0238 to
+    0.0060, and protected-window exact lanes from 0.2857 to 0.2381. Fixed
+    phrase bounds are rejected; rest-based boundaries remain selected.
+  - Variable-tempo grid-supported playability recovered two attacks in Less
+    Talk's first reviewed riff and one in the second with only 17 additions
+    song-wide, but lane-sequence edit distance changed from 7+6 to 7+7.
+    Hard exact internal motif reuse made the repeated detected pitches
+    consistent but increased collapsed changes and did not repair the
+    evaluation pattern. Both chart-authoring experiments are rejected.
 - On the separate CC BY 4.0 EGSet12 electric-guitar evaluation, the same
   checkpoint measured 0.7994 attack F1 and 0.6737 polyphony accuracy. Attack F1
   was effectively unchanged from the preceding checkpoint's 0.8013, while

@@ -80,11 +80,14 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli validate-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' --verify-hashes
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-chart-pairs 'C:\Path\To\ChartPairs\manifest.json' 'C:\Path\To\AuthoringExamples'
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-guitarset 'C:\Path\To\annotation.jams' 'C:\Path\To\labels.json'
+.\.venv\Scripts\python.exe -m rb3charts.cli convert-egfxset 'C:\Path\To\Clean\Neck\6-0.wav' 'C:\Path\To\labels.json'
+.\.venv\Scripts\python.exe -m rb3charts.cli synthesize-egfxset-phrase 'C:\Path\To\Selected_EGFxSet' 'C:\Path\To\phrase.wav' 'C:\Path\To\phrase.json' --sequence 0
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-slakh 'C:\Path\To\Track00001' 'C:\Path\To\labels.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli convert-guitar-techs 'C:\Path\To\midi.mid' 'C:\Path\To\micamp.wav' 'C:\Path\To\labels.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli extract-structure-features 'C:\Path\To\audio.wav' 'C:\Path\To\labels.json' 'C:\Path\To\features.npz'
 .\.venv\Scripts\python.exe -m rb3charts.cli train-structure-baseline 'C:\Path\To\feature-index.json' 'C:\Path\To\baseline.pt' --device cuda
 .\.venv\Scripts\python.exe -m rb3charts.cli predict-structure 'C:\Path\To\baseline.pt' 'C:\Path\To\guitar.wav' 'C:\Path\To\predictions.json' --beats 'C:\Path\To\tempo.json'
+.\.venv\Scripts\python.exe -m rb3charts.cli evaluate-structure-ranking 'C:\Path\To\predictions.json' 'C:\Path\To\labels.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli predict-tabcnn 'C:\Path\To\TabCNN.pt' 'C:\Path\To\guitar.wav' 'C:\Path\To\tabcnn.json' --attacks 'C:\Path\To\structure-predictions.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli demo --compile
 .\.venv\Scripts\python.exe -m pytest -q
@@ -135,9 +138,19 @@ duplicate-free Slakh2100-redux splits; do not train from its `omitted` directory
 Guitar-TECHS corpus. Its labels retain the performer identity as an authoritative
 split key; all excerpts by one player must remain in the same data split.
 
+`convert-egfxset` converts one CC BY 4.0 EGFxSet `string-fret.wav` recording.
+All effect variants of one pickup/string/fret source share a group key, and the
+unknown performer key keeps the entire corpus in one split. EGFxSet's fixed
+five-second effect intervals are accepted only as attack and single-note
+polyphony supervision; they are never treated as musical sustain labels.
+`synthesize-egfxset-phrase` deterministically combines short, faded excerpts
+into a ten-second multi-attack training phrase. The seed, sequence number,
+source hashes and augmentation parameters remain in the labels, which still
+expose only attack and single-note polyphony targets.
+
 `extract-structure-features` writes fixed-reference 128-bin log-mel audio,
 128 positive spectral-change bins, source-time frame positions, variable-tempo
-beat phase, and aligned attack, polyphony, and sustain targets. The compressed
+beat phase, and the aligned targets declared by each label artifact. The compressed
 artifact includes audio/label hashes and fixed feature parameters so training
 runs can reject stale or incompatible caches.
 
@@ -147,7 +160,9 @@ paths, explicit train/validation/test splits, a `group_id`, and a validated
 dataset-manifest reference for every item. Training verifies source file hashes,
 converted-label lineage, dataset licensing metadata, and manifest splits before
 reading features. Authoritative artifact split keys prevent either a musical
-progression or performer identity from crossing splits. Validation calibrates
+progression or performer identity from crossing splits. Losses are applied only
+to targets declared by each artifact, allowing attack-only corpora without
+inventing sustain labels. Validation calibrates
 the attack threshold after applying the same local-peak suppression used by
 inference; the untouched test split uses that threshold without retuning.
 Checkpoints retain manifest and feature hashes, the feature configuration, seed,
@@ -159,7 +174,16 @@ model.
 auditable attack/polyphony predictions plus the complete ranked set of local
 attack candidates. It does not alter a transcription or generated chart.
 Supplying a generation run's `analysis/tempo.json` reproduces beat-phase
-conditioning; without it the model uses audio features alone.
+conditioning; without it the model uses audio features alone. Candidate rows
+also expose raw, symmetric-periodicity, peak-width, and combined rank
+percentiles. These are offline evidence and are not runtime attack-recovery
+instructions.
+
+`evaluate-structure-ranking` makes the offline gate reproducible: it selects a
+fixed top-K candidate set by a named rank field and performs one-to-one attack
+matching against lane-independent labels at a fixed tolerance. By default K is
+the number of distinct labeled attacks and the accepted combined rank is used.
+The report records all matching parameters and can be saved with `--output`.
 
 `predict-tabcnn` evaluates the CC BY 4.0 augmented TabCNN checkpoint published
 with EGSet12. It writes string/fret, pitch and polyphony evidence and can sample
@@ -244,37 +268,21 @@ keeps recognizable musical patterns instead of choosing isolated high-confidence
 artifacts. Each run writes pattern counts, occurrence times, lane use and melodic
 contour checks to `analysis/patterns.json`.
 
-After chord cleanup, Band Guitar also performs conservative phrase stabilization.
-When the same four-note pitch sequence occurs at least three times with compatible
-beat spacing, the program derives one compact fingering and reuses it for those
-occurrences. Equal pitches always receive equal frets inside the shape. The rule
-can recognize the same established riff after a root or key change when three
-pitches agree, and it can repair two low-confidence pitch errors in a repetition
-immediately beside a confirmed occurrence. A confirmed transposition supplies a
-local two-measure pitch-to-fret vocabulary: weak nearby octave or harmonic errors
-fold into that vocabulary, including uncertain overlapping harmonics that would
-otherwise appear as a chord. Strong unmatched notes, distant sections, one-off
-fills and chord-based riffs remain independent. Its exact changes are saved to
-`analysis/pattern-stabilization.json`.
+After chord cleanup, one final Band Guitar phrase author owns Expert fingering.
+It compares whole phrases and bounded three-to-five-note windows, reuses compact
+lane shapes only for supported motif matches, and keeps strong variations
+independent. Its decisions and rejected matches are saved to
+`analysis/phrase-authoring.json`; earlier passes no longer rewrite lanes before
+this authoritative stage.
 
 Ordinary Band guitar, bass and keys passages are limited to three attacks per
 quarter beat with a minimum spacing guard. A fourth attack is retained only when
 it belongs to a detected recurring fast riff, allowing deliberate sixteenth-note
 figures while removing one-off transcription congestion.
 
-Band Guitar receives a dedicated authoring pass before difficulty reduction.
-Detected attacks within 28 ms of a sixteenth-note or triplet grid are aligned,
-green/orange-spanning chord shapes are rewritten to standard playable shapes,
-and Hard removes every fourth attack from long eighth-note runs at 160 BPM or
-faster. Hard also replaces green/orange chords and keeps at most two-note chords.
-Each eight-measure section maps its active guitar register independently using
-the pitches carrying meaningful local weight. Common pitches move through
-adjacent frets, while rare low or high events use the remaining edge lanes.
-Narrow riffs therefore keep natural motion without stray detections compressing
-the section. During a phrase, pitch changes of four semitones or less move at
-most one fret and intervals below an octave move at most two. Wide jumps remain
-available for octave-scale changes and phrase breaks. Hard also wraps quick
-green/orange jumps inward.
+Band Guitar receives its authoritative phrase authoring pass before difficulty
+reduction. Hard removes every fourth attack from long eighth-note runs at 160
+BPM or faster, replaces green/orange chords and keeps at most two-note chords.
 
 Every song now receives `analysis/quality-assessment.json` and an editable
 `review_notes.md`. Automatic triage checks congestion, hold and chord frequency,
@@ -338,11 +346,18 @@ output/Artist_Song_TIMESTAMP/
   import/              song.ini, MIDI, audio for Onyx import
   onyx-project/        imported project and compilation intermediates
   rb3/*.con            compiled package when successful
-  review.html          offline scrolling chart preview
+  review.html          offline scrolling chart preview with diagnostic overlays
   validation_report.txt
   result.json          explicit completion / failure / playtest status
   logs/generation.log
 ```
+
+The review page includes clickable, non-destructive markers for up to the 20
+weakest low-confidence Expert attacks per instrument, forbidden green-to-orange
+triads, merged four-second density spikes, and up to 20 repeated-source motifs
+whose final lane pattern differs from the family majority. Marker thresholds
+follow the selected Band or Electronic chart profile; they guide listening and
+never alter the authored chart.
 
 `cache/stems` is keyed by decoded-audio hash and quality settings. Source/stems
 are retained, which uses disk space but permits troubleshooting without repeating

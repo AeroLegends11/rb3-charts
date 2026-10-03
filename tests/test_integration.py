@@ -118,14 +118,52 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     (tmp_path/"audio").mkdir()
     sf.write(tmp_path/"audio"/"song.wav",np.zeros((44100*2,2),dtype=np.float32),44100)
     tempo=TempoMap([0,.5,1,1.5,2])
-    notes=[Note(.5,.6,(0,),confidence=.9,source_id="one")]
+    notes=[
+        Note(.5,.6,(0,),confidence=.4,source_id="one"),
+        Note(1.0,1.1,(0,2,4),confidence=.9,source_id="two"),
+    ]
     charts={"guitar":{d:notes for d in ("expert","hard","medium","easy")}}
-    create_preview(tmp_path,charts,tempo,0,{"title":"Review","artist":"Tester"})
+    voice={
+        "guitar":{
+            "windows":[{
+                "start_seconds":.25,
+                "end_seconds":1.25,
+                "register_separation":14.0,
+                "dominant_evidence_share":.6,
+                "register_switches":4,
+                "candidate_for_tracking":True,
+            }]
+        }
+    }
+    patterns={
+        "guitar":{
+            "top_patterns":[{
+                "lane_variants":2,
+                "lane_mismatch_times":[1.25],
+            }]
+        }
+    }
+    create_preview(
+        tmp_path,
+        charts,
+        tempo,
+        0,
+        {"title":"Review","artist":"Tester"},
+        voice,
+        patterns=patterns,
+    )
     page=(tmp_path/"review.html").read_text(encoding="utf-8")
     assert "Play / Pause" in page and "−5 seconds" in page
     assert "Highway spacing" in page and "Spread out" in page
     assert "const payload=" in page and '"beats": [0, 0.5, 1, 1.5, 2]' in page
     assert '"lead": 0' in page and "local density" in page
+    assert '"overlays": {"guitar":' in page and '"register_switches": 4' in page
+    assert '"kind": "low confidence"' in page
+    assert '"kind": "unusual chord"' in page
+    assert '"kind": "motif lane mismatch"' in page
+    assert "Review markers jump to low-confidence notes" in page
+    assert "Amber regions mark conflicting guitar-register evidence" in page
+    assert "voice conflict" in page
     assert 'height="700"' in page and "NOTES APPROACH THIS LINE" in page
     assert (tmp_path/"audio"/"timing-audit-guitar.wav").is_file()
 

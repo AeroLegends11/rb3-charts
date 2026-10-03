@@ -195,6 +195,46 @@ def test_pattern_analysis_finds_repeated_riff_and_checks_contour():
     assert report["contour_agreement_ratio"]==1
     assert report["adjacent_motion_rate"]==pytest.approx(2/3,abs=.001)
     assert report["wide_jump_rate"]==0
+    assert report["top_patterns"][0]["lane_variants"]==1
+    assert report["top_patterns"][0]["exact_pitch_repetitions"]==2
+    assert report["top_patterns"][0]["lane_mismatch_times"]==[]
+
+def test_pattern_analysis_reports_repeated_source_shape_lane_mismatches():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    notes=[]
+    for offset,lanes in ((0.0,(0,1,3,2)),(2.0,(0,1,2,3))):
+        for step,pitch in enumerate((48,50,53,51)):
+            notes.append(Note(
+                offset+step*.25,
+                offset+step*.25+.065,
+                (lanes[step],),
+                source_id=f"{offset}-{step}",
+                pitch=pitch,
+            ))
+    pattern=analyze_patterns(notes,tempo,"guitar")["top_patterns"][0]
+    assert pattern["exact_pitch_repetitions"]==2
+    assert pattern["lane_variants"]==2
+    assert pattern["lane_mismatch_times"]==[2.0]
+
+def test_pattern_analysis_does_not_flag_transposed_lane_variants():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    notes=[]
+    for offset,pitches,lanes in (
+        (0.0,(48,50,53,51),(0,1,3,2)),
+        (2.0,(55,57,60,58),(1,2,4,3)),
+    ):
+        for step,pitch in enumerate(pitches):
+            notes.append(Note(
+                offset+step*.25,
+                offset+step*.25+.065,
+                (lanes[step],),
+                source_id=f"{offset}-{step}",
+                pitch=pitch,
+            ))
+    pattern=analyze_patterns(notes,tempo,"guitar")["top_patterns"][0]
+    assert pattern["exact_pitch_repetitions"]==0
+    assert pattern["lane_variants"]==1
+    assert pattern["lane_mismatch_times"]==[]
 
 def test_band_guitar_refinement_snaps_jitter_and_removes_wide_shapes():
     tempo=TempoMap(np.arange(0,4,.5).tolist())
