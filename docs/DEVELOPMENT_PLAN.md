@@ -70,6 +70,17 @@ Status update (2026-10-02):
   retention, retained/orphan source IDs, lane changes from Expert, and timing
   error. These are observability checks; intended lane simplification remains
   part of reduction behavior.
+- Assessments compare generated Expert-to-Hard attack retention with the
+  existing aggregate human-chart p10/p90 range for each instrument. This is a
+  review flag only. Hail measured 0.53 guitar retention (below the 0.60 p10)
+  and 0.97 drum retention (above the 0.82 p90); changing reduction behavior
+  remains gated on broader replay evidence.
+- A six-song cached-replay sweep then reduced guitar Hard minimum spacing from
+  0.46 to 0.38 beats. Retention moved from 0.531-0.724 to 0.606-0.810, placing
+  every song inside the aggregate guitar p10-p90 range (0.599-0.854). Worst
+  four-second Hard density rose only from 4.25 to 4.50 attacks/s; assessment
+  status, Expert notes, timing, ancestry, and structural validation were
+  unchanged. Hail Hard is a listening-review candidate, not an Expert rewrite.
 - Corpus `benchmark-replays` comparisons now select guitar, bass, drums, or
   keys and aggregate Expert-to-Hard/Medium/Easy retention. Simultaneous drum
   attacks are reported independently from pitched-instrument chords. Two
@@ -238,6 +249,10 @@ Status update (2026-10-02):
 - Song assessments and `review_notes.md` now surface neutral activity-block,
   ranked-boundary, and repeated-groove counts plus supported drum-attack
   coverage. This changes review visibility only, not assessment status or notes.
+- Corpus replay benchmarks now aggregate those neutral structure metrics when
+  both roots provide them. Independent Hail replay roots matched exactly:
+  19 blocks, 12 ranked boundaries, 19 repeated groove families, and 0.6299
+  supported drum-attack ratio, with zero deltas across all structure fields.
 
 ## 6. Remote work and provider flexibility
 

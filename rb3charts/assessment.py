@@ -150,6 +150,18 @@ def _reference_style(key):
     except (OSError,ValueError):return {}
 
 
+def _reference_retention(instrument):
+    path=Path(__file__).resolve().parents[1]/"reference"/"style-profile.json"
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get(
+            "expert_to_hard_retention",{}
+        ).get(instrument,{})
+    except (OSError,ValueError):
+        return {}
+
+
 def assess_chart(
     charts,
     patterns,
@@ -184,6 +196,31 @@ def assess_chart(
               "chord_ratio":round(chord_ratio,3),"removed_ratio":round(removed_ratio,3),
               "peak_four_second_nps":peak,
               "recurring_pattern_families":pattern.get("recurring_pattern_families",0)}
+        hard_retention=len(parts.get("hard",[]))/max(1,attacks)
+        item["hard_attack_retention"]=round(hard_retention,4)
+        retention_reference=_reference_retention(name)
+        item["reference_hard_retention_p10"]=retention_reference.get("p10")
+        item["reference_hard_retention_p90"]=retention_reference.get("p90")
+        if (
+            attacks>=30
+            and retention_reference.get("p90") is not None
+            and hard_retention>retention_reference["p90"]
+        ):
+            concerns.append(
+                f"{name}: Hard retains {hard_retention:.0%} of Expert attacks, "
+                f"above the reference p90 of "
+                f"{retention_reference['p90']:.0%}"
+            )
+        elif (
+            attacks>=30
+            and retention_reference.get("p10") is not None
+            and hard_retention<retention_reference["p10"]
+        ):
+            concerns.append(
+                f"{name}: Hard retains {hard_retention:.0%} of Expert attacks, "
+                f"below the reference p10 of "
+                f"{retention_reference['p10']:.0%}"
+            )
         if name=="guitar":
             difficulty_score,difficulty_tier,difficulty_rank=_guitar_difficulty(
                 attacks,chord_ratio,triad_ratio,peak,pattern)

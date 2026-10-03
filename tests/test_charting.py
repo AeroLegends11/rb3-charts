@@ -32,6 +32,15 @@ def test_reductions_preserve_ancestry_and_reduce_density():
         assert {n.source_id for n in charts[c]} <= {n.source_id for n in charts[p]}
     assert max(max(n.lanes) for n in charts["easy"])<=2
 
+def test_hard_reduction_preserves_playable_point_four_beat_pattern():
+    tempo=TempoMap([beat*.5 for beat in range(20)])
+    expert=[
+        Note(index*.2,index*.2+.065,(index%5,),source_id=str(index))
+        for index in range(20)
+    ]
+    hard=reductions(expert,"guitar",tempo)["hard"]
+    assert len(hard)==len(expert)
+
 def test_repeated_riff_has_identical_mapping():
     events=[{"start":i*0.5,"end":i*0.5+0.3,"pitch":p,"confidence":0.9,"source_id":str(i)} for i,p in enumerate([48,52,55,50]*3)]
     notes=map_pitched(events,"guitar")

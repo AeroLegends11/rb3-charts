@@ -148,6 +148,19 @@ def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
             }),
             encoding="utf-8",
         )
+        (root/"analysis"/"structure-diagnostics.json").write_text(
+            json.dumps({
+                "sections":[{},{}],
+                "strongest_activity_boundaries":[
+                    {"activity_change":.25}
+                ],
+                "drum_grooves":{
+                    "repeated_families":2,
+                    "supported_attack_ratio":.5,
+                },
+            }),
+            encoding="utf-8",
+        )
 
     write_run(tmp_path/"baseline"/"run",(0,1,2))
     write_run(tmp_path/"candidate"/"run",(0,0,2))
@@ -162,6 +175,11 @@ def test_benchmark_replays_aggregates_matching_song_metrics(tmp_path):
     assert report["macro"]["delta"]["collapsed_pitch_changes"]==1
     assert report["macro"]["baseline"]["lane_coverage"]==[0,1,2]
     assert report["macro"]["baseline"]["hard_retention"]==.6667
+    assert report["structure_macro_song_mean"]["songs_matched"]==1
+    assert (
+        report["structure_macro_song_mean"]["baseline"]
+        ["repeated_drum_groove_families"]==2
+    )
     assert report["macro"]["candidate"]["assessment_status_counts"]=={"missing":1}
     assert (tmp_path/"benchmark.json").is_file()
 

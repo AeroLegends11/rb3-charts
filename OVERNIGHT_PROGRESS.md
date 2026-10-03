@@ -392,3 +392,46 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - A fresh Hail replay exposed 19 activity blocks, 19 repeated groove families,
   and 63.0% supported Expert drum attacks directly in its review notes.
 - Focused assessment/integration validation passed 21 tests.
+
+### 2026-10-03 00:31 - Corpus structure benchmark retained
+
+- Extended replay-corpus reports with additive song-mean comparisons for
+  neutral activity blocks, boundary count/strength, repeated drum-groove
+  families, and groove-supported attack coverage when both roots provide
+  structure diagnostics.
+- Independent Hail roots matched exactly at 19 blocks, 12 ranked boundaries,
+  mean/max boundary change 0.1544/0.3088, 19 repeated groove families, and
+  0.6299 supported drum-attack ratio. Every structure delta was zero.
+- Focused replay benchmark validation passed 15 tests.
+
+### 2026-10-03 00:35 - Human-prior reduction triage retained
+
+- Added assessment-only Expert-to-Hard retention checks against the existing
+  aggregate human-chart p10/p90 range for each instrument.
+- A real Hail replay now flags guitar retention of 53% below the 60% reference
+  p10 and drum retention of 97% above the 82% reference p90. Bass remained
+  inside its aggregate range.
+- No reduction behavior changed. These outliers need broader replay evidence
+  before any spacing or density thresholds are adjusted.
+- Focused assessment validation passed 8 tests.
+
+### 2026-10-03 00:44 - Guitar Hard spacing calibrated and retained
+
+- Swept Hard minimum attack spacing across six distinct cached songs. The
+  existing 0.46-beat spacing left Hail, Certain Death, and There's Something
+  Wrong below the aggregate human guitar p10 retention.
+- Rejected removal of the separate fast-eighth reducer because it changed only
+  the 160 BPM song and did not address the broad result.
+- A 0.40-beat control improved every song but left Hail below p10 at 0.581.
+- Retained 0.38 beats. Per-song Expert-to-Hard retention changed:
+  - Hail: 0.5312 -> 0.6056; peak Hard density 3.75 -> 4.25/s.
+  - Less Talk: 0.6242 -> 0.6776; 3.75 -> 4.00/s.
+  - Certain Death: 0.5875 -> 0.7125; 3.75 -> 4.50/s.
+  - Dirtbag: 0.7244 -> 0.8099; 4.25 -> 4.50/s.
+  - There's Something Wrong: 0.5809 -> 0.6940; 3.75 -> 4.50/s.
+  - Persephone: 0.6160 -> 0.6576; 3.00 -> 3.25/s.
+- All six now fall inside the aggregate guitar p10-p90 range of 0.5992-0.8543.
+  Assessment statuses were unchanged. Expert notes, source ancestry, timing,
+  MIDI validation, and package-input integrity remained intact.
+- Hail's Hard chart is saved as a morning listening candidate under the local
+  ignored `.research/hard-spacing-38` replay root. Work continues elsewhere.

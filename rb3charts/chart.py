@@ -621,7 +621,7 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
 def reductions(expert, instrument, tempo):
     charts = {"expert": expert}
     parent = expert
-    for difficulty, spacing, max_lanes, chord_size in [("hard",0.46,5,2), ("medium",0.95,4,2), ("easy",1.90,3,1)]:
+    for difficulty, spacing, max_lanes, chord_size in [("hard",0.38,5,2), ("medium",0.95,4,2), ("easy",1.90,3,1)]:
         candidates = []
         last_beat = -100.0
         for n in parent:

@@ -96,7 +96,10 @@ uses the removed `pkg_resources` compatibility module.
 
 `benchmark-replays` defaults to guitar and also supports bass, drums, and keys.
 Its macro report includes difficulty-retention totals; simultaneous drum hits
-are reported separately rather than classified as chords.
+are reported separately rather than classified as chords. When both replay
+roots contain structure diagnostics, the report also compares mean activity
+blocks, boundary strengths, repeated drum-groove families, and groove-supported
+attack coverage.
 
 New review drafts record hashes for `import/notes.mid`, `song.wav`, and
 `song.ini`. The `package` command rejects any of those inputs if they changed

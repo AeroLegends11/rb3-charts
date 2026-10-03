@@ -327,6 +327,33 @@ def _benchmark_stage_metrics(folder: Path, instrument: str):
     return shape
 
 
+def _benchmark_structure_metrics(folder: Path):
+    path=folder/"analysis"/"structure-diagnostics.json"
+    if not path.is_file():
+        return None
+    payload=json.loads(path.read_text(encoding="utf-8"))
+    boundaries=payload.get("strongest_activity_boundaries",[])
+    grooves=payload.get("drum_grooves",{})
+    return {
+        "activity_blocks":len(payload.get("sections",[])),
+        "activity_boundaries":len(boundaries),
+        "mean_boundary_change":round(float(np.mean([
+            float(item.get("activity_change",0))
+            for item in boundaries
+        ])),4) if boundaries else 0.0,
+        "max_boundary_change":round(max(
+            [float(item.get("activity_change",0)) for item in boundaries],
+            default=0.0,
+        ),4),
+        "repeated_drum_groove_families":int(
+            grooves.get("repeated_families",0)
+        ),
+        "drum_groove_supported_attack_ratio":float(
+            grooves.get("supported_attack_ratio",0)
+        ),
+    }
+
+
 def benchmark_replays(
     baseline_root: Path,
     candidate_root: Path,
@@ -354,11 +381,14 @@ def benchmark_replays(
     lanes={"baseline":set(),"candidate":set()}
     statuses={"baseline":defaultdict(int),"candidate":defaultdict(int)}
     reduction_songs={"baseline":0,"candidate":0}
+    structure_pairs=[]
     for key in shared:
         baseline_folder,metadata=baseline[key]
         candidate_folder,_=candidate[key]
         before=_benchmark_stage_metrics(baseline_folder,instrument)
         after=_benchmark_stage_metrics(candidate_folder,instrument)
+        before_structure=_benchmark_structure_metrics(baseline_folder)
+        after_structure=_benchmark_structure_metrics(candidate_folder)
         for metric in total_keys:
             if before[metric] is not None:
                 totals["baseline"][metric]+=before[metric]
@@ -380,7 +410,11 @@ def benchmark_replays(
                 metric:round(after[metric]-before[metric],4)
                 for metric in before if isinstance(before[metric],(int,float))
             },
+            "baseline_structure":before_structure,
+            "candidate_structure":after_structure,
         })
+        if before_structure is not None and after_structure is not None:
+            structure_pairs.append((before_structure,after_structure))
     for label in ("baseline","candidate"):
         total_attacks=max(1,totals[label]["attacks"])
         totals[label].update({
@@ -420,6 +454,31 @@ def benchmark_replays(
         "macro":{"baseline":totals["baseline"],"candidate":totals["candidate"],"delta":delta},
         "songs":songs,
     }
+    structure_keys=(
+        "activity_blocks",
+        "activity_boundaries",
+        "mean_boundary_change",
+        "max_boundary_change",
+        "repeated_drum_groove_families",
+        "drum_groove_supported_attack_ratio",
+    )
+    structure_macro={"songs_matched":len(structure_pairs)}
+    for label,index in (("baseline",0),("candidate",1)):
+        structure_macro[label]={
+            key:round(float(np.mean([
+                pair[index][key] for pair in structure_pairs
+            ])),4)
+            for key in structure_keys
+        } if structure_pairs else None
+    structure_macro["delta"]={
+        key:round(
+            structure_macro["candidate"][key]
+            - structure_macro["baseline"][key],
+            4,
+        )
+        for key in structure_keys
+    } if structure_pairs else None
+    report["structure_macro_song_mean"]=structure_macro
     output=Path(output)
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")

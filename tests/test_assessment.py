@@ -119,6 +119,29 @@ def test_assessment_flags_motion_outside_reference_range(monkeypatch):
     assert any("wide fret jumps" in concern for concern in result["concerns"])
 
 
+def test_assessment_flags_hard_reduction_outside_reference_range(monkeypatch):
+    charts=chart()
+    patterns={"guitar":{
+        "lane_counts":{lane:8 for lane in range(5)},
+        "recurring_pattern_families":2,
+        "contour_agreement_ratio":1,
+        "flattened_change_ratio":0,
+    }}
+    playability={"guitar":{
+        "before":40,
+        "removed":0,
+        "holds":0,
+        "peak_four_second_nps":4,
+    }}
+    monkeypatch.setattr(
+        "rb3charts.assessment._reference_retention",
+        lambda instrument:{"p10":.5,"p90":.8},
+    )
+    result=assess_chart(charts,patterns,playability,"band")
+    assert result["instruments"]["guitar"]["hard_attack_retention"]==1
+    assert any("above the reference p90" in item for item in result["concerns"])
+
+
 def test_guitar_difficulty_estimate_keeps_fast_repeatable_chart_challenging():
     score,tier,rank=_guitar_difficulty(900,.23,.02,7.0,{"pattern_supported_attacks":190})
     assert 4<=score<=5.5
