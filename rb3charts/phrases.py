@@ -196,65 +196,113 @@ def _stabilize_repeated_pitch_lanes(rows, lanes):
 def _stabilize_repeat_fingerings(notes, tempo):
     ordered, groups = _motif_groups(notes, tempo, "guitar")
     by_source = {note.source_id: note for note in ordered}
-    locked = set()
-    changed = []
-    families = 0
-    occurrences = 0
-    for _, _, rows in groups:
-        exact = {}
-        for index, phrase in rows:
-            if any(len(note.lanes) != 1 for note in phrase):
-                continue
-            key = tuple(round(float(note.pitch), 3) for note in phrase)
-            exact.setdefault(key, []).append((index, phrase))
-        for repeated in exact.values():
-            available = [
-                (index, [by_source[note.source_id] for note in phrase])
-                for index, phrase in repeated
-                if all(
-                    note.source_id in by_source
-                    and note.source_id not in locked
+    changed = set()
+
+    def exact_groups(motif_groups):
+        for _, _, rows in motif_groups:
+            exact = {}
+            for index, phrase in rows:
+                if any(len(note.lanes) != 1 for note in phrase):
+                    continue
+                key = tuple(
+                    round(float(note.pitch), 3)
                     for note in phrase
                 )
-            ]
-            if len(available) < 3:
-                continue
-            shapes = [
-                tuple(note.lanes[0] for note in phrase)
-                for _, phrase in available
-            ]
-            counts = {
-                shape: shapes.count(shape)
-                for shape in set(shapes)
-            }
-            target = max(
-                counts,
-                key=lambda shape: (
-                    counts[shape],
-                    -shapes.index(shape),
-                    tuple(-lane for lane in shape),
-                ),
-            )
-            if (
-                counts[target] < 3
-                or counts[target] * 2 <= len(available)
-            ):
-                continue
-            families += 1
-            occurrences += len(available)
-            for (_, phrase), shape in zip(available, shapes):
-                for note in phrase:
-                    locked.add(note.source_id)
-                if shape == target:
-                    continue
-                for note, lane in zip(phrase, target):
-                    if note.lanes != (lane,):
-                        note.lanes = (lane,)
-                        changed.append(note)
+                exact.setdefault(key, []).append((index, phrase))
+            yield from exact.values()
+
+    def select_target(available, shapes):
+        counts = {
+            shape: shapes.count(shape)
+            for shape in set(shapes)
+        }
+
+        def boundary_cost(shape):
+            cost = 0.0
+            for index, phrase in available:
+                if index > 0 and len(ordered[index - 1].lanes) == 1:
+                    previous = ordered[index - 1]
+                    cost += _transition_cost(
+                        phrase[0].pitch - previous.pitch,
+                        previous.lanes[0],
+                        shape[0],
+                        phrase[0].start - previous.start,
+                    )
+                following_index = index + len(phrase)
+                if (
+                    following_index < len(ordered)
+                    and len(ordered[following_index].lanes) == 1
+                ):
+                    following = ordered[following_index]
+                    cost += _transition_cost(
+                        following.pitch - phrase[-1].pitch,
+                        shape[-1],
+                        following.lanes[0],
+                        following.start - phrase[-1].start,
+                    )
+            return cost
+
+        target = min(
+            counts,
+            key=lambda shape: (
+                -counts[shape],
+                boundary_cost(shape),
+                shapes.index(shape),
+                shape,
+            ),
+        )
+        return target, counts
+
+    offset_plans = []
+    for repeated in exact_groups(groups):
+        available = [
+            (index, [by_source[note.source_id] for note in phrase])
+            for index, phrase in repeated
+            if all(note.source_id in by_source for note in phrase)
+        ]
+        if len(available) < 2:
+            continue
+        shapes = [
+            tuple(note.lanes[0] for note in phrase)
+            for _, phrase in available
+        ]
+        relative_shapes = {
+            tuple(lane - shape[0] for lane in shape)
+            for shape in shapes
+        }
+        if len(relative_shapes) != 1 or len(set(shapes)) == 1:
+            continue
+        target, _ = select_target(available, shapes)
+        assignments = {
+            note.source_id: lane
+            for (_, phrase), shape in zip(available, shapes)
+            if shape != target
+            for note, lane in zip(phrase, target)
+            if note.lanes != (lane,)
+        }
+        if assignments:
+            offset_plans.append((assignments, len(available)))
+    proposed = {}
+    for assignments, _ in offset_plans:
+        for source_id, lane in assignments.items():
+            proposed.setdefault(source_id, set()).add(lane)
+    accepted_offsets = [
+        (assignments, count)
+        for assignments, count in offset_plans
+        if all(len(proposed[source_id]) == 1 for source_id in assignments)
+    ]
+    for assignments, _ in accepted_offsets:
+        for source_id, lane in assignments.items():
+            by_source[source_id].lanes = (lane,)
+            changed.add(source_id)
+
     return {
-        "families": families,
-        "occurrences": occurrences,
-        "notes_changed": len({note.source_id for note in changed}),
+        "families": len(accepted_offsets),
+        "occurrences": sum(
+            count for _, count in accepted_offsets
+        ),
+        "offset_families": len(accepted_offsets),
+        "notes_changed": len(changed),
     }
 
 

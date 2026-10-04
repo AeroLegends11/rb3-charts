@@ -134,13 +134,13 @@ def test_phrase_fingering_preserves_repeated_supported_lane_span():
     assert lanes == [0, 1, 3, 4] * 8
 
 
-def test_repeated_exact_riff_reuses_established_fingering():
+def test_repeated_exact_riff_preserves_structural_variation():
     notes = []
     for occurrence, lanes in enumerate((
         (0, 1, 2, 1),
         (0, 1, 2, 1),
         (0, 1, 2, 1),
-        (1, 2, 3, 2),
+        (1, 2, 2, 2),
     )):
         start = 1 + occurrence * 2
         notes.extend(
@@ -155,26 +155,51 @@ def test_repeated_exact_riff_reuses_established_fingering():
             in enumerate(zip((60, 62, 64, 62), lanes))
         )
 
+    before = [note.lanes for note in notes]
+
     report = _stabilize_repeat_fingerings(notes, grid())
 
-    assert [note.lanes[0] for note in notes] == [0, 1, 2, 1] * 4
-    assert report == {
-        "families": 1,
-        "occurrences": 4,
-        "notes_changed": 4,
-    }
+    assert [note.lanes for note in notes] == before
+    assert report["notes_changed"] == 0
+
+
+def test_repeated_exact_riff_reuses_relative_fingering_offset():
+    notes = [
+        Note(
+            1 + occurrence * 2 + index * .125,
+            1 + occurrence * 2 + index * .125 + .065,
+            (lane,),
+            pitch=pitch,
+            source_id=f"{occurrence}-{index}",
+        )
+        for occurrence, lanes in enumerate((
+            (0, 1, 2, 1),
+            (1, 2, 3, 2),
+        ))
+        for index, (pitch, lane)
+        in enumerate(zip((60, 62, 64, 62), lanes))
+    ]
+
+    report = _stabilize_repeat_fingerings(notes, grid())
+
+    first = [note.lanes[0] for note in notes[:4]]
+    second = [note.lanes[0] for note in notes[4:]]
+    assert first == second
+    assert first in ([0, 1, 2, 1], [1, 2, 3, 2])
+    assert report["offset_families"] == 1
+    assert report["notes_changed"] == 4
 
 
 def test_repeated_riff_requires_three_example_strict_majority():
     for lane_shapes in (
-        ((0, 1, 2, 1), (0, 1, 2, 1), (1, 2, 3, 2)),
+        ((0, 1, 2, 1), (0, 1, 2, 1), (1, 2, 2, 2)),
         (
             (0, 1, 2, 1),
             (0, 1, 2, 1),
             (0, 1, 2, 1),
-            (1, 2, 3, 2),
-            (1, 2, 3, 2),
-            (1, 2, 3, 2),
+            (1, 2, 2, 2),
+            (1, 2, 2, 2),
+            (1, 2, 2, 2),
         ),
     ):
         notes = [

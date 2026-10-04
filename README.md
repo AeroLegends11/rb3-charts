@@ -127,7 +127,9 @@ for Expert, Hard, Medium, and Easy. Pattern artifacts add song-mean recurring
 family/occurrence counts, supported-attack coverage, and pitched lane-motion
 metrics. Guitar reports also measure exact repeated-riff fingering agreement;
 automatic review flags charts below 80% when at least twelve repeated
-occurrences are available.
+occurrences are available. Final authoring can normalize a repeated riff's
+absolute fretboard offset only when every occurrence has identical relative
+lane steps and all overlapping proposals agree.
 Each root must contain at most one run for a given artist/title; ambiguous
 duplicate song keys and missing artist/title metadata are rejected instead of
 selecting or matching a run implicitly.

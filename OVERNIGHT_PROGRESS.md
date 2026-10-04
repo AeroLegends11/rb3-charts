@@ -1323,3 +1323,22 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   known 13.8-19.0 second handoff is unchanged; its 0.7527 repeatability is now
   explicitly flagged for human review rather than hidden by direction-only
   contour metrics.
+
+### 2026-10-04 16:00 - Repeated-riff offsets resolved by consensus
+
+- The retained strict-majority rule did not change Hail and introduced a small
+  frozen Cliffs movement regression. A narrower follow-up separated identical
+  relative fingering from genuinely different riff structure.
+- Final authoring now gathers every exact pitch/rhythm family whose lane shapes
+  differ only by a constant offset. It chooses the most frequent offset, uses
+  entry/exit transition cost only to break ties, and applies overlapping
+  families only when every proposal agrees on every affected source note.
+- Structurally different variants are never rewritten automatically; the 80%
+  review gate continues to expose them.
+- Cached results: Hail 0.7527 to 0.8011, Cliffs of Dover 0.6437 to 0.6667,
+  Mr. Brightside 0.8049 to 0.8537, Joker and the Thief 0.6511 to 0.7072, and
+  held-out Persephone 0.5833 to 0.8750.
+- Frozen post-generation checks preserve Hail movement at 0.4496 while interval
+  error improves 1.6657 to 1.6597. Cliffs movement remains 0.3440, exact lanes
+  improve 0.1744 to 0.1816, and interval error improves 1.7352 to 1.7336.
+  Attacks, timing, pitches and source IDs are unchanged.
