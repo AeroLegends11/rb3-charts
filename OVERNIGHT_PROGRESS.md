@@ -1366,3 +1366,25 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   movement-direction agreement fell 0.4496 to 0.4254, and interval error
   worsened 1.6597 to 1.6999. The constraint was removed. Raw-guide substitution
   alone does not identify which guitar voice should own the controller pattern.
+
+### 2026-10-04 17:30 - My Name Is Jonas becomes chord-texture benchmark
+
+- Replayed My Name Is Jonas with current authoring and opened synchronized
+  Project Expert, Project Hard and official Expert review at the corrected
+  4.34-second alignment. The project-only review exposes all four generated
+  difficulties and retains Hyper 1-4 highway speeds.
+- Current guitar counts are Expert 869, Hard 584, Medium 320 and Easy 168.
+  Against the post-generation official chart, attack F1 is 0.6989/0.5097/
+  0.3287/0.1730. Expert has near-reference density (869 versus 848 attacks)
+  but only 72 chords versus 461, 0.1017 exact-lane agreement, 0.3384 movement
+  agreement and zero relative motif-shape agreement.
+- The existing source-only detector finds 197 fifth-interval seed attacks but
+  retains 72 after its repeated-root section gate. Removing that final gate
+  raised Jonas chords to 130 and chord F1 from 0.1576 to 0.2200, but reduced
+  motif coverage from 0.3580 to 0.2870.
+- The same relaxation changed Hail chords 18 to 85, Cliffs 44 to 131,
+  Mr. Brightside 42 to 86, Joker 104 to 182 and held-out Persephone 3 to 7.
+  Cliffs exact lanes fell 0.1816 to 0.1715 and motif coverage 0.1272 to 0.0822.
+  The rule was fully reverted. Jonas is retained as the primary evaluation
+  example for separating rhythm-guitar chord texture from lead-note motifs;
+  official notes remain evaluation-only.
