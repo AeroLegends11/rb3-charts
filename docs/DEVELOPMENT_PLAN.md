@@ -358,6 +358,15 @@ Status update (2026-09-20):
   direct non-mutating lane constraint was also rejected: nine local Hail lane
   changes reduced exact agreement 0.1528→0.1492, movement-direction agreement
   0.4496→0.4254, and increased interval error 1.6597→1.6999.
+- Band-guitar chord sections now distinguish fifth/fourth-dominant harmonic
+  evidence from generic octave doubling before propagating a repeatedly
+  supported root to intervening attacks in the same bounded evidence run. The
+  gate is an exact chart no-op on three rights-cleared songs plus Cliffs of
+  Dover, Hail to the King, Mr. Brightside, Joker and the Thief, and Persephone.
+  Frozen Jonas evaluation improves chords 72→144 and chord F1 0.1538→0.2678,
+  with exact lanes 0.1047→0.1279 and unchanged motif coverage. Propagated
+  texture remains explicitly review-gated rather than receiving an automatic
+  close-enough label.
 
 ## 4. Review and anomaly tools
 

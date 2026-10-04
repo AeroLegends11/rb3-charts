@@ -390,6 +390,43 @@ def test_band_chord_sections_reject_sparse_evidence_independent_of_guide_stabili
     assert unstable_report["chord_sections"]["gate_passed"]
 
 
+def test_band_chord_sections_propagate_only_when_fifths_dominate_octaves():
+    supported=set(index for index in range(75) if index%3)
+    repeated_supported=set(sorted(supported)[:10])
+    notes=[
+        Note(
+            1+index*.25,
+            1+index*.25+.09,
+            (2,),
+            .8,
+            f"note-{index}",
+            60 if index not in supported or index in repeated_supported else 70+index,
+        )
+        for index in range(75)
+    ]
+    candidates=[]
+    for index in supported:
+        start=notes[index].start
+        candidates.extend([
+            {"start":start,"end":start+.1,"pitch":48,"confidence":.7,
+             "model_onset_strength":.7,"source_id":f"low-{index}","accepted":True},
+            {"start":start,"end":start+.1,"pitch":55,"confidence":.5,
+             "model_onset_strength":.65,"source_id":f"high-{index}","accepted":True},
+        ])
+    result,report=author_guitar_phrases(
+        notes,grid(),chord_evidence={
+            "candidates":candidates,
+            "focus":{"onset_groups":75,"pitch_corrections":3,"octave_anchors":5},
+        }
+    )
+    chord_report=report["chord_sections"]
+    assert chord_report["propagation_gate_passed"]
+    assert chord_report["candidate_notes"]>=50
+    assert chord_report["direct_notes_changed"]==10
+    assert chord_report["propagated_notes"]>0
+    assert sum(len(note.lanes)>1 for note in result)>10
+
+
 def test_voice_rejects_weak_isolated_register_spike_but_keeps_strong_jump():
     events=[event(1,60,.8,"other"),event(1.2,48,.41,"other"),event(1.4,62,.8,"other")]
     result,report=select_lead_phrases([events])

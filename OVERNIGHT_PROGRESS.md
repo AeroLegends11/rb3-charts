@@ -39,10 +39,18 @@ Window: 2026-10-02 22:03 through 2026-10-03 07:00 America/Chicago.
 - The chord-balanced Guitar-TECHS shadow was also rejected for runtime use. Its
   matched-attack chord-label F1 ranged from 0.876 on rights-cleared Certain
   Death to 0.456 on There's Something Wrong and 0.261 on Jonas.
-- Runtime chord authoring remains unchanged. Automatic assessment now reports
-  the source-only realization gap from existing phrase-authoring evidence, so
-  Jonas's 72/187 realized chord candidates produce `Review closely` rather than
-  the misleading `Close enough to review`.
+- A follow-up source-only gate retains direct evidence when fifth/fourth groups
+  dominate octave doubles, at least 50 chart attacks have direct candidates,
+  and the conservative repeated-root pass realizes under half of them. It then
+  propagates only repeatedly supported roots to intervening attacks in the same
+  bounded evidence run. This is an exact no-op on Certain Death, Dirtbag,
+  There's Something Wrong, Cliffs of Dover, Hail to the King, Mr. Brightside,
+  Joker and the Thief, and Persephone.
+- On frozen Jonas evaluation, the gated pass raises generated chords 72→144,
+  chord F1 0.1538→0.2678, exact lanes 0.1047→0.1279, and movement agreement
+  0.3422→0.3473 while reducing mean interval error 2.0876→2.0735 and preserving
+  motif coverage at 0.3432. Automatic assessment still reports `Review closely`
+  because 72 attacks required evidence propagation.
 
 ### 2026-10-02 22:03 - Baseline reconciled
 

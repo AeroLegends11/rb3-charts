@@ -233,6 +233,7 @@ def assess_chart(
             )
             chord_candidates=int(chord_sections.get("candidate_notes",0))
             chord_realized=int(chord_sections.get("notes_changed",0))
+            chord_propagated=int(chord_sections.get("propagated_notes",0))
             chord_realization=(
                 chord_realized/chord_candidates
                 if chord_candidates
@@ -240,12 +241,18 @@ def assess_chart(
             )
             item["source_chord_candidates"]=chord_candidates
             item["source_chord_realized"]=chord_realized
+            item["source_chord_propagated"]=chord_propagated
             item["source_chord_realization_ratio"]=(
                 round(chord_realization,4)
                 if chord_realization is not None
                 else None
             )
-            if (
+            if chord_propagated:
+                concerns.append(
+                    "guitar: chord texture required source-evidence propagation "
+                    f"for {chord_propagated} attacks"
+                )
+            elif (
                 chord_candidates>=12
                 and chord_realization<.5
                 and (chord_candidates-chord_realized)/max(1,attacks)>=.05

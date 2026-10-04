@@ -514,7 +514,11 @@ def _apply_band_chord_sections(notes, tempo, evidence):
         "method": "repeated fifth-evidence sections with locally matched power-chord attacks",
         "gate_passed": False,
         "candidate_seeds": 0,
+        "octave_seeds": 0,
         "candidate_notes": 0,
+        "propagation_gate_passed": False,
+        "direct_notes_changed": 0,
+        "propagated_notes": 0,
         "notes_changed": 0,
         "regions": [],
     }
@@ -540,8 +544,10 @@ def _apply_band_chord_sections(notes, tempo, evidence):
         else:
             groups.append([event])
     seed_rows = []
+    octave_seed_count = 0
     for group in groups:
         supported = False
+        octave_supported = False
         for index, left in enumerate(group):
             for right in group[index + 1:]:
                 interval = abs(int(left["pitch"]) - int(right["pitch"]))
@@ -554,12 +560,14 @@ def _apply_band_chord_sections(notes, tempo, evidence):
                 )
                 if interval in (5, 7) and ratio >= .5 and onset >= .5:
                     supported = True
-                    break
-            if supported:
-                break
+                if interval == 12 and ratio >= .5 and onset >= .5:
+                    octave_supported = True
+        if octave_supported:
+            octave_seed_count += 1
         if supported:
             seed_rows.append((group[0]["start"], tempo.beat_at(group[0]["start"])))
     report["candidate_seeds"] = len(seed_rows)
+    report["octave_seeds"] = octave_seed_count
     if len(seed_rows) < 3:
         return report
     seed_rows.sort(key=lambda row: row[1])
@@ -594,6 +602,7 @@ def _apply_band_chord_sections(notes, tempo, evidence):
                     proposals.add(index)
     report["candidate_notes"] = len(proposals)
     changed = []
+    changed_indices = set()
     runs = []
     for index in sorted(support_indices):
         if (
@@ -621,6 +630,38 @@ def _apply_band_chord_sections(notes, tempo, evidence):
             root = note.lanes[0]
             note.lanes = (root, root + 2) if root <= 2 else (root - 2, root)
             changed.append(note)
+            changed_indices.add(index)
+    report["direct_notes_changed"] = len(changed)
+    propagation_gate = (
+        len(proposals) >= 50
+        and len(changed) / len(proposals) < .5
+        and len(seed_rows) / max(1, octave_seed_count) >= 1.5
+    )
+    report["propagation_gate_passed"] = propagation_gate
+    if propagation_gate:
+        for run in runs:
+            if len(run) < 3:
+                continue
+            pitch_counts = {
+                pitch: sum(notes[index].pitch == pitch for index in run)
+                for pitch in {notes[index].pitch for index in run}
+            }
+            repeated_roots = {
+                pitch for pitch, count in pitch_counts.items() if count >= 3
+            }
+            for index in range(run[0], run[-1] + 1):
+                note = notes[index]
+                if (
+                    index in changed_indices
+                    or len(note.lanes) != 1
+                    or note.pitch not in repeated_roots
+                ):
+                    continue
+                root = note.lanes[0]
+                note.lanes = (root, root + 2) if root <= 2 else (root - 2, root)
+                changed.append(note)
+                changed_indices.add(index)
+                report["propagated_notes"] += 1
     if not changed:
         return report
     report["notes_changed"] = len(changed)
