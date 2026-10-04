@@ -116,7 +116,9 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
     report={"candidates":len(rows),"onset_groups":len(groups),"ambiguous_groups":0,
             "groups_resolved":0,"pitch_corrections":0,"octave_anchors":0,
             "candidate_supported_registers":0,
-            "rapid_duplicates_removed":0}
+            "rapid_duplicates_removed":0,
+            "guided_onset_groups":0,
+            "raw_guide_samples":[]}
     for group in groups:
         start=min(event["start"] for event in group)
         end=min(max(event["end"] for event in group),start+.115)
@@ -124,6 +126,9 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
         values=midi_f0[mask]
         guide=None
         register_proposal=None
+        raw_guide=None
+        anchored_guide=None
+        center=None
         if len(values)>=3:
             median=float(np.median(values))
             dispersion=float(np.median(np.abs(values-median)))
@@ -151,6 +156,25 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
             if anchored!=guide:
                 guide=anchored
                 report["octave_anchors"]+=1
+            anchored_guide=guide
+
+        def record_guide(chosen):
+            if raw_guide is None:
+                return
+            report["guided_onset_groups"]+=1
+            if len(report["raw_guide_samples"])>=240:
+                return
+            report["raw_guide_samples"].append({
+                "start":round(float(start),3),
+                "raw_pitch":int(raw_guide),
+                "anchored_pitch":int(anchored_guide),
+                "selected_pitches":[
+                    int(event["pitch"]) for event in chosen
+                ],
+                "selected_source_ids":[
+                    str(event["source_id"]) for event in chosen
+                ],
+            })
         if len(group)>1:
             report["ambiguous_groups"]+=1
             # Preserve a strongly supported real chord. Distorted harmonics in
@@ -158,6 +182,7 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
             strong=[event for event in group if event["confidence"]>=.58]
             if len(strong)>=2:
                 selected.extend(group)
+                record_guide(group)
                 continue
             if guide is not None:
                 chosen=min(group,key=lambda event:(abs(event["pitch"]-guide),-event["confidence"]))
@@ -170,6 +195,7 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
                 chosen["lead_focus_corrected"]=True
                 report["pitch_corrections"]+=1
             selected.append(chosen)
+            record_guide([chosen])
             if register_proposal is not None:
                 register_proposal.update({
                     "index":len(selected)-1,
@@ -190,6 +216,7 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
                 chosen["lead_focus_corrected"]=True
                 report["pitch_corrections"]+=1
         selected.append(chosen)
+        record_guide([chosen])
         if register_proposal is not None:
             register_proposal.update({
                 "index":len(selected)-1,

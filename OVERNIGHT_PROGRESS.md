@@ -1342,3 +1342,22 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   error improves 1.6657 to 1.6597. Cliffs movement remains 0.3440, exact lanes
   improve 0.1744 to 0.1816, and interval error improves 1.7352 to 1.7336.
   Attacks, timing, pitches and source IDs are unchanged.
+
+### 2026-10-04 16:35 - Raw register lineage retained without rewriting
+
+- Added non-mutating Band-guitar lead-focus lineage for raw pYIN guides,
+  octave-anchored guides, selected pitches and selected source IDs. Hail
+  reports 554 guided onset groups and retains the first 240 samples for
+  bounded diagnostics.
+- The lineage exposed recurring weak Hail selections nineteen semitones above
+  a raw 51/58 family. A correction gated by local direct-register support,
+  seven-semitone family span and original-attack provenance became an exact
+  chart no-op on Cliffs of Dover, Mr. Brightside, Joker and the Thief, and
+  held-out Persephone; it changed ten Hail source pitches and 25 final notes.
+- Frozen Hail evaluation rejected the runtime rule: movement-direction
+  agreement fell 0.4496 to 0.4318, mean interval error worsened 1.6597 to
+  1.6920, attack F1 fell 0.6147 to 0.6139, and motif coverage fell 0.3267 to
+  0.3211. The source-pitch correction and its tests were removed.
+- Diagnostic-only replay is byte-identical to the retained Hail MIDI. Future
+  mixed-voice work should consume the lineage as a non-mutating role signal so
+  a local voice decision cannot perturb the song-wide pitch dictionary.

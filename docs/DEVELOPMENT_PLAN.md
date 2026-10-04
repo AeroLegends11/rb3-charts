@@ -345,6 +345,16 @@ Status update (2026-09-20):
   on rights-cleared selection before Hail evaluation: Persephone Expert attack
   F1 fell 0.5537→0.5363 and exact lanes 0.2624→0.2523. The diagnosis is retained;
   confidence/register heuristics remain disabled.
+- Band-guitar lead-focus reports now preserve non-mutating raw pYIN lineage for
+  up to 240 guided onset groups: the raw guide, octave-anchored guide, selected
+  pitches, and selected source IDs. Hail exposes recurring selected pitches
+  nineteen semitones above its raw 51/58 family, but a runtime correction was
+  rejected. Even after strict confidence, family-span, and source-lineage
+  gates made the rule an exact chart no-op on Cliffs of Dover, Mr. Brightside,
+  Joker and the Thief, and held-out Persephone, Hail movement-direction
+  agreement fell 0.4496→0.4318, mean interval error worsened 1.6597→1.6920,
+  and attack F1 fell 0.6147→0.6139. The diagnostic remains evidence for a
+  future non-mutating voice-role tag; source-pitch rewriting stays disabled.
 
 ## 4. Review and anomaly tools
 

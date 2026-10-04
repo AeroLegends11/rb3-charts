@@ -736,6 +736,13 @@ def test_band_guitar_lead_focus_anchors_isolated_octave_to_recent_register():
     assert [event["pitch"] for event in result[-2:]]==[53,53]
     assert report["octave_anchors"]>=2
     assert report["candidate_supported_registers"]==0
+    assert report["guided_onset_groups"]>=2
+    assert any(
+        row["raw_pitch"]==41
+        and row["anchored_pitch"]==53
+        and row["selected_pitches"]==[53]
+        for row in report["raw_guide_samples"]
+    )
 
 
 def test_band_guitar_lead_focus_preserves_repeated_register_evidence():
