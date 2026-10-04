@@ -27,6 +27,23 @@ Window: 2026-10-02 22:03 through 2026-10-03 07:00 America/Chicago.
 
 ## Checkpoints
 
+### 2026-10-04 18:05 - Jonas chord-texture triage corrected
+
+- Corrected alignment shows that My Name Is Jonas is not an attack-density
+  failure: generated Expert has 869 attacks versus 848 in the evaluation-only
+  official chart, but only 72 generated chords versus 461.
+- Relaxing the repeated-root chord gate, proportional root gates, and local or
+  section-wide same-root propagation all improved Jonas chord recall, but were
+  rejected because they reduced motif or lane quality on Cliffs of Dover, Hail
+  to the King, or the rights-cleared There's Something Wrong.
+- The chord-balanced Guitar-TECHS shadow was also rejected for runtime use. Its
+  matched-attack chord-label F1 ranged from 0.876 on rights-cleared Certain
+  Death to 0.456 on There's Something Wrong and 0.261 on Jonas.
+- Runtime chord authoring remains unchanged. Automatic assessment now reports
+  the source-only realization gap from existing phrase-authoring evidence, so
+  Jonas's 72/187 realized chord candidates produce `Review closely` rather than
+  the misleading `Close enough to review`.
+
 ### 2026-10-02 22:03 - Baseline reconciled
 
 - Branch: `codex/authorized-chart-pilot`.

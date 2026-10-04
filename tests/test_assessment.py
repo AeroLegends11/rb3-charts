@@ -151,6 +151,39 @@ def test_assessment_flags_inconsistent_repeated_riff_fingering():
     )
 
 
+def test_assessment_flags_under_realized_source_chord_texture():
+    charts=chart()
+    patterns={"guitar":{
+        "lane_counts":{lane:8 for lane in range(5)},
+        "recurring_pattern_families":4,
+        "contour_agreement_ratio":1,
+        "flattened_change_ratio":0,
+    }}
+    playability={"guitar":{
+        "before":40,
+        "removed":0,
+        "holds":0,
+        "peak_four_second_nps":4,
+    }}
+    phrase_authoring={"guitar":{"chord_sections":{
+        "candidate_notes":20,
+        "notes_changed":6,
+    }}}
+
+    result=assess_chart(
+        charts,patterns,playability,"band",
+        phrase_authoring=phrase_authoring,
+    )
+
+    assert result["status"]=="review_closely"
+    assert result["instruments"]["guitar"]["source_chord_realization_ratio"]==.3
+    assert any(
+        "source-supported chord texture was realized at only 6/20"
+        in concern
+        for concern in result["concerns"]
+    )
+
+
 def test_assessment_flags_hard_reduction_outside_reference_range(monkeypatch):
     charts=chart()
     patterns={"guitar":{

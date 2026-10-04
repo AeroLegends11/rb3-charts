@@ -169,6 +169,7 @@ def assess_chart(
     profile,
     missing=(),
     structure_diagnostics=None,
+    phrase_authoring=None,
 ):
     concerns=[]
     severe=[]
@@ -226,6 +227,34 @@ def assess_chart(
                 f"{retention_reference['p10']:.0%}"
             )
         if name=="guitar":
+            chord_sections=(
+                (phrase_authoring or {}).get(name,{})
+                .get("chord_sections",{})
+            )
+            chord_candidates=int(chord_sections.get("candidate_notes",0))
+            chord_realized=int(chord_sections.get("notes_changed",0))
+            chord_realization=(
+                chord_realized/chord_candidates
+                if chord_candidates
+                else None
+            )
+            item["source_chord_candidates"]=chord_candidates
+            item["source_chord_realized"]=chord_realized
+            item["source_chord_realization_ratio"]=(
+                round(chord_realization,4)
+                if chord_realization is not None
+                else None
+            )
+            if (
+                chord_candidates>=12
+                and chord_realization<.5
+                and (chord_candidates-chord_realized)/max(1,attacks)>=.05
+            ):
+                concerns.append(
+                    "guitar: source-supported chord texture was realized at "
+                    f"only {chord_realized}/{chord_candidates} candidate "
+                    f"attacks ({chord_realization:.0%})"
+                )
             difficulty_score,difficulty_tier,difficulty_rank=_guitar_difficulty(
                 attacks,chord_ratio,triad_ratio,peak,pattern)
             item.update({"difficulty_score_0_6":difficulty_score,"difficulty_tier":difficulty_tier,

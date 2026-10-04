@@ -428,6 +428,7 @@ def generate(options: Options, progress=print):
             resolved_profile,
             missing,
             structure_diagnostics,
+            phrase_authoring,
         )
         difficulty_tiers={name:item["difficulty_tier"] for name,item in assessment["instruments"].items() if "difficulty_tier" in item}
         write_import(folder/"import",midi,folder/"audio"/"song.wav",metadata,charts,difficulty_tiers)
@@ -916,6 +917,7 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
         resolved_profile,
         missing,
         structure_diagnostics,
+        phrase_authoring,
     )
     difficulty_tiers={name:item["difficulty_tier"] for name,item in assessment["instruments"].items() if "difficulty_tier" in item}
     write_import(folder/"import",midi,folder/"audio"/"song.wav",metadata,charts,difficulty_tiers)
