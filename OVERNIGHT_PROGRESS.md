@@ -1359,5 +1359,10 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   1.6920, attack F1 fell 0.6147 to 0.6139, and motif coverage fell 0.3267 to
   0.3211. The source-pitch correction and its tests were removed.
 - Diagnostic-only replay is byte-identical to the retained Hail MIDI. Future
-  mixed-voice work should consume the lineage as a non-mutating role signal so
-  a local voice decision cannot perturb the song-wide pitch dictionary.
+  mixed-voice work must not perturb the song-wide pitch dictionary.
+- A follow-up passed the same source evidence as a local lane-only constraint
+  through final phrase authoring. It changed nine Hail lanes without changing
+  attacks or pitches, but exact lanes fell 0.1528 to 0.1492,
+  movement-direction agreement fell 0.4496 to 0.4254, and interval error
+  worsened 1.6597 to 1.6999. The constraint was removed. Raw-guide substitution
+  alone does not identify which guitar voice should own the controller pattern.

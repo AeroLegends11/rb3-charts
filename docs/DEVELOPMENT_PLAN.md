@@ -354,7 +354,10 @@ Status update (2026-09-20):
   Joker and the Thief, and held-out Persephone, Hail movement-direction
   agreement fell 0.4496→0.4318, mean interval error worsened 1.6597→1.6920,
   and attack F1 fell 0.6147→0.6139. The diagnostic remains evidence for a
-  future non-mutating voice-role tag; source-pitch rewriting stays disabled.
+  future richer voice-role model; source-pitch rewriting stays disabled. A
+  direct non-mutating lane constraint was also rejected: nine local Hail lane
+  changes reduced exact agreement 0.1528→0.1492, movement-direction agreement
+  0.4496→0.4254, and increased interval error 1.6597→1.6999.
 
 ## 4. Review and anomaly tools
 
