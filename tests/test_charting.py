@@ -848,3 +848,24 @@ def test_hard_reduction_preserves_omitted_contour_anchors():
         tempo.beat_at(b.start)-tempo.beat_at(a.start)
         for a,b in zip(hard,hard[1:])
     )>=.32
+
+
+def test_hard_reduction_rejects_weak_contour_replacement():
+    tempo=TempoMap(np.arange(0,8,.5).tolist())
+    expert=[]
+    for index in range(12):
+        selected=index%2==0
+        start=1+(index//2)*.35+(index%2)*.12
+        expert.append(Note(
+            start,start+.065,
+            (2,) if selected else (3,),
+            confidence=.8 if selected else .5,
+            source_id=str(index),
+            pitch=(58,77,63,75,70,73)[index%6],
+        ))
+
+    hard=reductions(expert,"guitar",tempo)["hard"]
+
+    assert {note.source_id for note in hard}=={
+        str(index) for index in range(0,12,2)
+    }

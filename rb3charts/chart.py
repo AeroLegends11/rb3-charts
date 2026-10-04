@@ -519,6 +519,8 @@ def _preserve_hard_contour_anchors(expert,hard,tempo,spacing):
             for alternative in alternatives:
                 available=[note for note in collapsed if note in result]
                 for target in available:
+                    if alternative.confidence+.05<target.confidence:
+                        continue
                     trial=sorted(
                         [note for note in result if note is not target]
                         +[alternative],

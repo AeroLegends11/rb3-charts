@@ -197,7 +197,8 @@ Status update (2026-10-02):
 - Hard guitar reduction now checks only five-plus-note same-lane runs whose
   retained source pitches span at least four semitones. It may swap up to three
   retained attacks for omitted Expert contour anchors when the resulting Hard
-  chart keeps at least 0.32 beats between attacks. It never adds attacks or
+  chart keeps at least 0.32 beats between attacks and the anchor is no more than
+  0.05 less confident than the attack it replaces. It never adds attacks or
   invents lanes/source IDs. The rule was an exact no-op on all four
   rights-cleared replay songs, including held-out Persephone. On Hail it
   replaced three yellow selections with existing blue Expert anchors, retained

@@ -1256,3 +1256,27 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   `comparisons/morning-review/Hail_Hard_Contour_Anchors_AB.html`. They open on
   Expert and Hard respectively; the Hard review highlights exactly the three
   removed and three replacement attacks.
+
+### 2026-10-03 19:25 - Hard contour safeguard audited across local corpus
+
+- Ran the Hard reduction with and without the contour safeguard over 11
+  deduplicated local Band-guitar Expert charts. No reference notes participated
+  in selection. The initial rule changed 12 attacks across Hail, Beast and the
+  Harlot, and When You Were Young; collapsed-contour markers fell from eight to
+  five.
+- Two Beast replacements were 0.145-0.200 less confident than the retained
+  attacks. Added a source-only guard requiring each omitted contour anchor to
+  be no more than 0.05 less confident than its replacement target. A synthetic
+  test rejects materially weaker anchors.
+- The guarded rule changes ten attacks across the same three songs and remains
+  an exact no-op on the four rights-cleared generated replays. Hail's three
+  accepted swaps are unchanged.
+- Frozen post-generation checks after threshold selection:
+  - Beast Hard attack F1 0.4335 to 0.4327, exact lanes 0.1600 to 0.1584,
+    movement 0.3127 to 0.3268 and interval error 1.5856 to 1.5801.
+  - When You Were Young Hard attack F1 0.5225 to 0.5244, exact lanes
+    0.1056 to 0.1053, movement unchanged at 0.3239 and interval error
+    1.4179 to 1.4222.
+- Aggregate audit artifacts remain local at
+  `comparisons/hard-contour-corpus-audit-v2.json`; official/reference notes
+  remain post-generation evaluation only.
