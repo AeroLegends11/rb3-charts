@@ -232,11 +232,22 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
         ]
         if len(family)>=4:
             supported_proposals.add(index)
-    for proposal_index in supported_proposals:
+    for proposal_index in sorted(supported_proposals):
         proposal=eligible_proposals[proposal_index]
         selected[proposal["index"]]=dict(selected[proposal["index"]])
         selected[proposal["index"]]["_lead_focus_register_proposal"]=proposal
+    accepted_proposals=[
+        eligible_proposals[index]
+        for index in sorted(supported_proposals)
+    ]
     report["candidate_supported_registers"]=len(supported_proposals)
+    selected,resolved_voice_groups=_resolve_supported_register_voice_groups(
+        selected,
+        accepted_proposals,
+        support_window,
+    )
+    report["supported_voice_groups_resolved"]=len(resolved_voice_groups)
+    report["supported_voice_group_samples"]=resolved_voice_groups[:20]
     # Consolidate two estimates of the same attack after harmonic correction.
     # The limit stays below a sixteenth note at common tempos, retaining fast
     # authored strumming while removing split model activations.
@@ -256,6 +267,81 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
         result.append(event)
     report["retained"]=len(result)
     return result,report
+
+
+def _resolve_supported_register_voice_groups(
+    events,accepted_proposals,support_window
+):
+    """Select one voice from wide groups only inside a supported register run."""
+    groups=[]
+    for event in sorted(events,key=lambda row:(row["start"],row["pitch"])):
+        if groups and event["start"]-groups[-1][0]["start"]<=.045:
+            groups[-1].append(event)
+        else:
+            groups.append([event])
+    result=[]
+    resolved=[]
+    for group in groups:
+        strong=[
+            event for event in group
+            if float(event.get("confidence",0))>=.58
+        ]
+        if (
+            len(strong)<2
+            or max(event["pitch"] for event in strong)
+            -min(event["pitch"] for event in strong)<12
+        ):
+            result.extend(group)
+            continue
+        start=min(event["start"] for event in group)
+        nearby=[
+            proposal for proposal in accepted_proposals
+            if abs(proposal["event"]["start"]-start)<=support_window
+        ]
+        families=[]
+        for proposal in nearby:
+            family=[
+                candidate for candidate in nearby
+                if candidate["side"]==proposal["side"]
+                and abs(candidate["pitch"]-proposal["pitch"])<=7
+                and abs(candidate["anchor"]-proposal["anchor"])<=3
+            ]
+            if len(family)>=4:
+                families.append(family)
+        if not families:
+            result.extend(group)
+            continue
+        family=max(families,key=len)
+        target=float(np.median([
+            proposal["pitch"] for proposal in family
+        ]))
+        chosen=dict(min(
+            group,
+            key=lambda event:(
+                abs(event["pitch"]-target),
+                -float(event.get("confidence",0)),
+            ),
+        ))
+        if abs(chosen["pitch"]-target)<12:
+            result.extend(group)
+            continue
+        chosen["source_id"]="+".join(
+            event["source_id"] for event in group
+        )
+        chosen["register_voice_selected"]=True
+        result.append(chosen)
+        resolved.append({
+            "start":round(float(start),3),
+            "group_pitches":sorted(int(event["pitch"]) for event in group),
+            "group_confidences":[
+                round(float(event.get("confidence",0)),4)
+                for event in sorted(group,key=lambda row:row["pitch"])
+            ],
+            "proposal_support":len(family),
+            "proposal_target":round(target,3),
+            "selected_pitch":int(chosen["pitch"]),
+        })
+    return result,resolved
 
 
 def _filter_sequential_lead_outliers(events,beat_period=None):
@@ -399,6 +485,18 @@ def _filter_sequential_lead_outliers(events,beat_period=None):
             key=lambda row:(row["support"],row["direct_support"]),
             reverse=True,
         )[:8],
+        "accepted_register_proposals":[
+            {
+                "start":round(
+                    float(record["proposal"]["event"]["start"]),3
+                ),
+                "pitch":int(record["proposal"]["pitch"]),
+                "anchor":round(float(record["proposal"]["anchor"]),3),
+                "side":int(record["proposal"]["side"]),
+            }
+            for record in records
+            if record["id"] in accepted
+        ],
     }
 
 

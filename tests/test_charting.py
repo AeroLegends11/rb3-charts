@@ -5,7 +5,7 @@ from rb3charts.model import Note,TempoMap
 from rb3charts.chart import reductions,map_pitched,clean,enforce_playability,analyze_patterns,refine_band_guitar,conform_expert_to_reference,stabilize_repeated_phrases
 from rb3charts.midi import authored_tick, write_midi,note_times
 from rb3charts.validate import validate
-from rb3charts.transcribe import analyze_band_guitar_voice,electronic_lead_events,electronic_bass_events,_refine_pitched_articulations,_focus_band_guitar_candidates,_filter_sequential_lead_outliers
+from rb3charts.transcribe import analyze_band_guitar_voice,electronic_lead_events,electronic_bass_events,_refine_pitched_articulations,_focus_band_guitar_candidates,_filter_sequential_lead_outliers,_resolve_supported_register_voice_groups
 
 def test_tempo_map_roundtrip_drifting_and_pickups():
     tempo=TempoMap([0.7,1.2,1.69,2.17,2.8,3.4])
@@ -634,6 +634,86 @@ def test_band_guitar_lead_focus_preserves_strong_chord():
     assert report["groups_resolved"]==0
 
 
+def test_supported_register_run_preserves_root_containing_group():
+    events=[
+        {"start":1.0,"end":1.2,"pitch":51,"confidence":.70,
+         "source_id":"rhythm","source":"guitar"},
+        {"start":1.0,"end":1.2,"pitch":75,"confidence":.68,
+         "source_id":"lead","source":"guitar"},
+    ]
+    proposals=[
+        {
+            "event":{"start":start},
+            "pitch":pitch,
+            "side":-1,
+            "anchor":72,
+        }
+        for start,pitch in ((.7,51),(.85,58),(1.15,51),(1.3,58))
+    ]
+
+    result,resolved=_resolve_supported_register_voice_groups(
+        events,proposals,.7
+    )
+
+    assert [event["pitch"] for event in result]==[51,75]
+    assert [event["source_id"] for event in result]==[
+        "rhythm","lead"
+    ]
+    assert resolved==[]
+
+
+def test_displaced_register_run_separates_wide_harmonic_group():
+    events=[
+        {"start":1.0,"end":1.2,"pitch":70,"confidence":.70,
+         "source_id":"lower-harmonic","source":"guitar"},
+        {"start":1.0,"end":1.2,"pitch":82,"confidence":.68,
+         "source_id":"upper-harmonic","source":"guitar"},
+    ]
+    proposals=[
+        {
+            "event":{"start":start},
+            "pitch":pitch,
+            "side":-1,
+            "anchor":72,
+        }
+        for start,pitch in ((.7,51),(.85,58),(1.15,51),(1.3,58))
+    ]
+
+    result,resolved=_resolve_supported_register_voice_groups(
+        events,proposals,.7
+    )
+
+    assert [event["pitch"] for event in result]==[70]
+    assert result[0]["source_id"]=="lower-harmonic+upper-harmonic"
+    assert result[0]["register_voice_selected"] is True
+    assert len(resolved)==1
+    assert resolved[0]["proposal_support"]==4
+
+
+def test_sparse_register_evidence_preserves_wide_strong_group():
+    events=[
+        {"start":1.0,"end":1.2,"pitch":51,"confidence":.70,
+         "source_id":"rhythm","source":"guitar"},
+        {"start":1.0,"end":1.2,"pitch":75,"confidence":.68,
+         "source_id":"lead","source":"guitar"},
+    ]
+    proposals=[
+        {
+            "event":{"start":.8},
+            "pitch":51,
+            "side":-1,
+            "anchor":72,
+        },
+    ]
+
+    result,resolved=_resolve_supported_register_voice_groups(
+        events,proposals,.7
+    )
+
+    assert [event["pitch"] for event in result]==[51,75]
+    assert resolved==[]
+
+
 def test_band_guitar_lead_focus_anchors_isolated_octave_to_recent_register():
     times=np.arange(0,1.5,.01)
     midi=np.where(times<.70,48.0,41.0)
@@ -679,6 +759,10 @@ def test_band_guitar_lead_focus_preserves_repeated_register_evidence():
     assert [event["pitch"] for event in result]==list(pitches)
     assert report["candidate_supported_registers"]==2
     assert outlier_report["candidate_supported_registers"]==2
+    assert [
+        row["pitch"]
+        for row in outlier_report["accepted_register_proposals"]
+    ]==[58,58]
 
 
 def test_band_guitar_lead_focus_keeps_two_supported_repeated_attacks():
@@ -765,6 +849,7 @@ def test_band_guitar_voice_filter_requires_repeated_register_proposals():
     assert accepted["candidate_supported_registers"]==4
     assert [event["pitch"] for event in sparse]==[70]*9
     assert rejected["candidate_supported_registers"]==0
+    assert rejected["accepted_register_proposals"]==[]
     assert rejected["unsupported_register_recoveries_reverted"]==2
     assert all(
         "_lead_focus_register_proposal" not in event

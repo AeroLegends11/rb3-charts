@@ -1280,3 +1280,24 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
 - Aggregate audit artifacts remain local at
   `comparisons/hard-contour-corpus-audit-v2.json`; official/reference notes
   remain post-generation evaluation only.
+
+### 2026-10-04 15:10 - Mixed guitar voices tested across eight songs
+
+- Added fresh precision Band baselines for Mr. Brightside, Cliffs of Dover and
+  Joker and the Thief, then evaluated guitar-role experiments alongside Hail,
+  held-out Persephone, Certain Death, Dirtbag and There's Something Wrong.
+- Rejected splitting every wide strong onset group: it changed held-out
+  Persephone and cascaded through hundreds of downstream lane choices.
+- Rejected a persistent raw-pYIN register reset: it changed 196 held-out
+  Persephone events and reduced frozen movement agreement on both Hail
+  (0.4317 to 0.4105) and Cliffs of Dover (0.3355 to 0.3079).
+- Retained only displaced harmonic groups inside an already accepted compact
+  register family. A root-containing group remains a chord; every candidate in
+  a removed layer must still be at least 12 semitones from the supported family.
+- The retained gate resolves four Hail groups and is an exact chart no-op on
+  all seven additional songs. Hail Expert attack F1 moved 0.6091 to 0.6096,
+  exact lanes 0.1791 to 0.1801, motif coverage 0.2772 to 0.2857, movement
+  0.4317 to 0.4309 and interval error 1.7295 to 1.7329. In the reviewed
+  handoff window, movement agreement improved 0.6078 to 0.6275.
+- Saved synchronized listening review:
+  `comparisons/morning-review/Hail_Displaced_Harmonic_Voice_AB.html`.

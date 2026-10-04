@@ -194,6 +194,17 @@ Status update (2026-10-02):
   second window recovered alternating 51/58 pedal notes instead of a repeated
   pitch-70 line. This is source-derived voice evidence, not permission to use
   reference-chart notes for register selection.
+- Inside those independently supported alternate-register runs, simultaneous
+  strong candidates are now treated as competing voices only when the entire
+  group remains at least one octave from the supported family. This removes a
+  displaced harmonic layer without collapsing a root-containing chord. The
+  rule changes four Hail groups but is event-for-event inert on held-out
+  Persephone, three other rights-cleared replays, Mr. Brightside, Cliffs of
+  Dover and Joker and the Thief. Frozen Hail Expert evaluation changed attack
+  F1 0.6091 to 0.6096, exact lanes 0.1791 to 0.1801 and motif coverage 0.2772
+  to 0.2857; overall movement shifted 0.4317 to 0.4309 while the reviewed
+  handoff window improved 0.6078 to 0.6275. Keep the saved A/B as the deciding
+  listening check rather than broadening this gate from one song's result.
 - Hard guitar reduction now checks only five-plus-note same-lane runs whose
   retained source pitches span at least four semitones. It may swap up to three
   retained attacks for omitted Expert contour anchors when the resulting Hard
