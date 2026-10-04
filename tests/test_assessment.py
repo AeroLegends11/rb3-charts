@@ -125,6 +125,32 @@ def test_assessment_flags_motion_outside_reference_range(monkeypatch):
     assert any("wide fret jumps" in concern for concern in result["concerns"])
 
 
+def test_assessment_flags_inconsistent_repeated_riff_fingering():
+    charts=chart()
+    patterns={"guitar":{
+        "lane_counts":{lane:8 for lane in range(5)},
+        "recurring_pattern_families":4,
+        "contour_agreement_ratio":1,
+        "flattened_change_ratio":0,
+        "repeatable_fingering_occurrences":20,
+        "repeatable_fingering_ratio":.75,
+    }}
+    playability={"guitar":{
+        "before":40,
+        "removed":0,
+        "holds":0,
+        "peak_four_second_nps":4,
+    }}
+
+    result=assess_chart(charts,patterns,playability,"band")
+
+    assert any(
+        "repeated riffs use inconsistent fingerings at 75% agreement"
+        in concern
+        for concern in result["concerns"]
+    )
+
+
 def test_assessment_flags_hard_reduction_outside_reference_range(monkeypatch):
     charts=chart()
     patterns={"guitar":{

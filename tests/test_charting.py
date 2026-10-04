@@ -412,6 +412,8 @@ def test_pattern_analysis_finds_repeated_riff_and_checks_contour():
     assert report["top_patterns"][0]["lane_variants"]==1
     assert report["top_patterns"][0]["exact_pitch_repetitions"]==2
     assert report["top_patterns"][0]["lane_mismatch_times"]==[]
+    assert report["repeatable_fingering_occurrences"]==2
+    assert report["repeatable_fingering_ratio"]==1
 
 def test_pattern_analysis_reports_repeated_source_shape_lane_mismatches():
     tempo=TempoMap(np.arange(0,8,.5).tolist())
@@ -425,10 +427,13 @@ def test_pattern_analysis_reports_repeated_source_shape_lane_mismatches():
                 source_id=f"{offset}-{step}",
                 pitch=pitch,
             ))
-    pattern=analyze_patterns(notes,tempo,"guitar")["top_patterns"][0]
+    report=analyze_patterns(notes,tempo,"guitar")
+    pattern=report["top_patterns"][0]
     assert pattern["exact_pitch_repetitions"]==2
     assert pattern["lane_variants"]==2
     assert pattern["lane_mismatch_times"]==[2.0]
+    assert report["repeatable_fingering_occurrences"]==2
+    assert report["repeatable_fingering_ratio"]==.5
 
 def test_pattern_analysis_does_not_flag_transposed_lane_variants():
     tempo=TempoMap(np.arange(0,8,.5).tolist())

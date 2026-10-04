@@ -146,6 +146,42 @@ def analyze_patterns(notes, tempo, instrument):
             "recurring_pattern_families":len(groups),
             "recurring_pattern_occurrences":sum(len(row[2]) for row in groups),
             "pattern_supported_attacks":len(supported),"top_patterns":[]}
+    repeatable_families = 0
+    repeatable_occurrences = 0
+    consistent_fingering_occurrences = 0
+    if instrument != "drums":
+        for _, _, occurrences in groups:
+            exact_pitch_groups = {}
+            for occurrence in occurrences:
+                pitch_shape = tuple(
+                    round(float(note.pitch), 3)
+                    for note in occurrence[1]
+                )
+                exact_pitch_groups.setdefault(
+                    pitch_shape, []
+                ).append(occurrence)
+            for repeated in exact_pitch_groups.values():
+                if len(repeated) < 2:
+                    continue
+                lane_shapes = [
+                    tuple(tuple(note.lanes) for note in phrase)
+                    for _, phrase in repeated
+                ]
+                counts = Counter(lane_shapes)
+                repeatable_families += 1
+                repeatable_occurrences += len(repeated)
+                consistent_fingering_occurrences += max(counts.values())
+        report.update({
+            "repeatable_fingering_families": repeatable_families,
+            "repeatable_fingering_occurrences": repeatable_occurrences,
+            "consistent_fingering_occurrences":
+                consistent_fingering_occurrences,
+            "repeatable_fingering_ratio": round(
+                consistent_fingering_occurrences
+                / max(1, repeatable_occurrences),
+                4,
+            ),
+        })
     for signature,rhythm,occurrences in groups[:12]:
         shape=signature if instrument=="drums" else signature[0]
         pattern = {

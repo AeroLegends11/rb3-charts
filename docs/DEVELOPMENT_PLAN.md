@@ -286,6 +286,12 @@ Status update (2026-09-20):
 - Added indexed 3-5-note window matching for related figures embedded in unequal
   phrases. Accepted windows act as bounded final-authoring constraints and defer
   to exact phrase reuse, whole-phrase motifs and strong-variation rejection.
+- Exact repeated pitch-and-rhythm riffs now report a song-level repeatable
+  fingering ratio. Final authoring may reuse an established four-note fingering
+  only after at least three occurrences agree and form a strict majority; tied
+  or merely two-example patterns remain untouched. Automatic review flags
+  guitar charts below 80% agreement when at least twelve repeated occurrences
+  exist.
 - Cached replay now records window matching coverage, rejection counts and a
   capped accepted-match sample in `analysis/phrase-authoring.json`.
 - Band playability now permits four well-spaced attacks per beat even when motif
@@ -311,6 +317,12 @@ Status update (2026-09-20):
   Dover improved from 109/8 to 70/7. These are automated replay measurements,
   not listening review or Xbox validation; human review remains the acceptance
   gate.
+- The strict-majority reuse check improved exact-repeat fingering agreement on
+  cached Cliffs of Dover from 0.6437 to 0.6954 and Joker and the Thief from
+  0.6511 to 0.6916. Hail (0.7527) and Mr. Brightside (0.8049) were exact
+  authoring no-ops; Hail is still flagged for review. Frozen Cliffs movement
+  changed 0.3440 to 0.3422 with unchanged attacks and timing. These metrics are
+  diagnostics and post-generation evaluation, not reference-fed selection.
 - Whole-song canonical family selection and calibration against broader listening
   examples remain in progress; this does not complete Milestone 3.
 - Added non-destructive Band-guitar voice-continuity diagnostics over overlapping

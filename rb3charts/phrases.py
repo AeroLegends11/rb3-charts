@@ -5,7 +5,7 @@ It never creates an audio event or replaces a detected pitch with a fret number.
 """
 from dataclasses import replace
 import numpy as np
-from .chart import BAND_GUITAR_SUSTAIN_SECONDS
+from .chart import BAND_GUITAR_SUSTAIN_SECONDS, _motif_groups
 from .motifs import discover_phrase_motifs, discover_window_motifs
 
 MOTIF_CONSTRAINT_WEIGHT = 2.0
@@ -191,6 +191,71 @@ def _stabilize_repeated_pitch_lanes(rows, lanes):
         for index, lane in enumerate(lanes)
     ]
     return stabilized, len(proposals) - len(protected), len(protected)
+
+
+def _stabilize_repeat_fingerings(notes, tempo):
+    ordered, groups = _motif_groups(notes, tempo, "guitar")
+    by_source = {note.source_id: note for note in ordered}
+    locked = set()
+    changed = []
+    families = 0
+    occurrences = 0
+    for _, _, rows in groups:
+        exact = {}
+        for index, phrase in rows:
+            if any(len(note.lanes) != 1 for note in phrase):
+                continue
+            key = tuple(round(float(note.pitch), 3) for note in phrase)
+            exact.setdefault(key, []).append((index, phrase))
+        for repeated in exact.values():
+            available = [
+                (index, [by_source[note.source_id] for note in phrase])
+                for index, phrase in repeated
+                if all(
+                    note.source_id in by_source
+                    and note.source_id not in locked
+                    for note in phrase
+                )
+            ]
+            if len(available) < 3:
+                continue
+            shapes = [
+                tuple(note.lanes[0] for note in phrase)
+                for _, phrase in available
+            ]
+            counts = {
+                shape: shapes.count(shape)
+                for shape in set(shapes)
+            }
+            target = max(
+                counts,
+                key=lambda shape: (
+                    counts[shape],
+                    -shapes.index(shape),
+                    tuple(-lane for lane in shape),
+                ),
+            )
+            if (
+                counts[target] < 3
+                or counts[target] * 2 <= len(available)
+            ):
+                continue
+            families += 1
+            occurrences += len(available)
+            for (_, phrase), shape in zip(available, shapes):
+                for note in phrase:
+                    locked.add(note.source_id)
+                if shape == target:
+                    continue
+                for note, lane in zip(phrase, target):
+                    if note.lanes != (lane,):
+                        note.lanes = (lane,)
+                        changed.append(note)
+    return {
+        "families": families,
+        "occurrences": occurrences,
+        "notes_changed": len({note.source_id for note in changed}),
+    }
 
 
 def _fingering(rows, previous=None, preferred=None):
@@ -685,6 +750,7 @@ def author_guitar_phrases(
         return {"collapsed_pitch_changes": sum(a.pitch != b.pitch and a.lanes == b.lanes for a,b in pairs),
                 "reversed_pitch_changes": sum((b.pitch-a.pitch)*(b.lanes[0]-a.lanes[0]) < 0 for a,b in pairs)}
     chord_sections = _apply_band_chord_sections(result, tempo, chord_evidence)
+    repeat_fingerings = _stabilize_repeat_fingerings(result, tempo)
     for phrase, rows in zip(phrase_report, phrases):
         phrase["final_lanes"] = [list(note.lanes) for note in rows]
     return result, {"method": "phrase-local fingering with whole-sequence ergonomic costs and bounded motif windows",
@@ -693,6 +759,7 @@ def author_guitar_phrases(
                     "pitch_anchor_changes": pitch_anchor_changes,
                     "pitch_anchor_contours_protected": pitch_anchor_contours_protected,
                     "supported_span_preservations": supported_span_preservations,
+                    "repeat_fingerings": repeat_fingerings,
                     "sustain_threshold_seconds": sustain_threshold,
                     "phrases": phrase_report, "short_tails_removed": tails,
                     "window_motif_matching": window_diagnostics,

@@ -2,6 +2,7 @@ import numpy as np
 from rb3charts.model import Note, TempoMap
 from rb3charts.phrases import (
     _preserve_supported_lane_span,
+    _stabilize_repeat_fingerings,
     _stabilize_repeated_pitch_lanes,
     author_guitar_phrases,
     select_lead_phrases,
@@ -131,6 +132,69 @@ def test_phrase_fingering_preserves_repeated_supported_lane_span():
 
     assert changed
     assert lanes == [0, 1, 3, 4] * 8
+
+
+def test_repeated_exact_riff_reuses_established_fingering():
+    notes = []
+    for occurrence, lanes in enumerate((
+        (0, 1, 2, 1),
+        (0, 1, 2, 1),
+        (0, 1, 2, 1),
+        (1, 2, 3, 2),
+    )):
+        start = 1 + occurrence * 2
+        notes.extend(
+            Note(
+                start + index * .125,
+                start + index * .125 + .065,
+                (lane,),
+                pitch=pitch,
+                source_id=f"{occurrence}-{index}",
+            )
+            for index, (pitch, lane)
+            in enumerate(zip((60, 62, 64, 62), lanes))
+        )
+
+    report = _stabilize_repeat_fingerings(notes, grid())
+
+    assert [note.lanes[0] for note in notes] == [0, 1, 2, 1] * 4
+    assert report == {
+        "families": 1,
+        "occurrences": 4,
+        "notes_changed": 4,
+    }
+
+
+def test_repeated_riff_requires_three_example_strict_majority():
+    for lane_shapes in (
+        ((0, 1, 2, 1), (0, 1, 2, 1), (1, 2, 3, 2)),
+        (
+            (0, 1, 2, 1),
+            (0, 1, 2, 1),
+            (0, 1, 2, 1),
+            (1, 2, 3, 2),
+            (1, 2, 3, 2),
+            (1, 2, 3, 2),
+        ),
+    ):
+        notes = [
+            Note(
+                1 + occurrence * 2 + index * .125,
+                1 + occurrence * 2 + index * .125 + .065,
+                (lane,),
+                pitch=pitch,
+                source_id=f"{occurrence}-{index}",
+            )
+            for occurrence, lanes in enumerate(lane_shapes)
+            for index, (pitch, lane)
+            in enumerate(zip((60, 62, 64, 62), lanes))
+        ]
+        before = [note.lanes for note in notes]
+
+        report = _stabilize_repeat_fingerings(notes, grid())
+
+        assert [note.lanes for note in notes] == before
+        assert report["notes_changed"] == 0
 
 
 def test_phrase_authoring_keeps_supported_pitch_lanes_consistent():

@@ -243,6 +243,9 @@ def assess_chart(
             item["flattened_change_ratio"]=pattern["flattened_change_ratio"]
             item["adjacent_motion_rate"]=pattern.get("adjacent_motion_rate",0)
             item["wide_jump_rate"]=pattern.get("wide_jump_rate",0)
+            item["repeatable_fingering_ratio"]=pattern.get(
+                "repeatable_fingering_ratio"
+            )
         instruments[name]=item
         if name!="drums" and attacks>=30 and lane_coverage<3:
             severe.append(f"{name}: only {lane_coverage} lanes are used")
@@ -250,6 +253,15 @@ def assess_chart(
             severe.append(f"{name}: lane direction often conflicts with pitch direction")
         if name!="drums" and pattern.get("flattened_change_ratio",0)>.40:
             concerns.append(f"{name}: many detected pitch changes remain on one lane")
+        if (
+            name=="guitar"
+            and pattern.get("repeatable_fingering_occurrences",0)>=12
+            and pattern.get("repeatable_fingering_ratio",1)<.8
+        ):
+            concerns.append(
+                "guitar: repeated riffs use inconsistent fingerings at "
+                f"{pattern['repeatable_fingering_ratio']:.0%} agreement"
+            )
         if profile=="band" and name=="guitar" and pattern.get("lane_motion_comparisons",0)>=20:
             reference=_reference_style("guitar.expert")
             adjacent_floor=reference.get("song_adjacent_motion_rate",{}).get("p10")

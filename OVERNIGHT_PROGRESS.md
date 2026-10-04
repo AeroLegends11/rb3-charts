@@ -1301,3 +1301,25 @@ Checkpoint time: 2026-10-02 22:45 America/Chicago.
   handoff window, movement agreement improved 0.6078 to 0.6275.
 - Saved synchronized listening review:
   `comparisons/morning-review/Hail_Displaced_Harmonic_Voice_AB.html`.
+
+### 2026-10-04 15:45 - Repeatable riff fingering made measurable
+
+- Listening feedback established a project-wide playability requirement:
+  repeated riffs should become stable motor patterns that can be replayed from
+  muscle memory without watching the highway.
+- Added exact pitch-and-rhythm repeat metrics. The committed baseline measured
+  repeatable-fingering agreement of 0.7527 on Hail, 0.6437 on Cliffs of Dover,
+  0.6511 on Joker and the Thief, 0.8049 on Mr. Brightside and 0.5833 on held-out
+  Persephone. Existing aggregate contour agreement had hidden these differences.
+- A broad two-example reuse rule improved consistency but changed 36 Hail,
+  36 Cliffs, 80 Joker and eight Persephone notes, so it was rejected.
+- Retained a bounded rule requiring at least three identical fingerings and a
+  strict majority among exact repeated four-note pitch/rhythm occurrences.
+  It leaves Hail and Mr. Brightside unchanged, improves Cliffs to 0.6954 and
+  Joker to 0.6916, and changes Persephone only where four of six exact
+  occurrences already agree.
+- Frozen Cliffs attack timing/count remained unchanged. Movement agreement
+  shifted 0.3440 to 0.3422 and interval error 1.7352 to 1.7383. Current Hail's
+  known 13.8-19.0 second handoff is unchanged; its 0.7527 repeatability is now
+  explicitly flagged for human review rather than hidden by direction-only
+  contour metrics.
