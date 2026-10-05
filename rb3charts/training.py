@@ -1408,6 +1408,7 @@ def _peak_width_rank_percentiles(scores, peaks):
 
 def _onset_metrics(records, threshold, tolerance_frames):
     matched = predicted_total = actual_total = 0
+    timing_errors_ms = []
     for scores, actual_frames in records:
         predicted_frames = _attack_peaks(scores, threshold).tolist()
         unmatched_actual = set(range(len(actual_frames)))
@@ -1418,6 +1419,12 @@ def _onset_metrics(records, threshold, tolerance_frames):
             ]
             if candidates:
                 best = min(candidates, key=lambda index: abs(actual_frames[index] - predicted_frame))
+                timing_errors_ms.append(
+                    abs(actual_frames[best] - predicted_frame)
+                    * FEATURE_HOP_LENGTH
+                    / FEATURE_SAMPLE_RATE
+                    * 1000
+                )
                 unmatched_actual.remove(best)
                 matched += 1
         predicted_total += len(predicted_frames)
@@ -1433,6 +1440,14 @@ def _onset_metrics(records, threshold, tolerance_frames):
         "matched_attacks": matched,
         "predicted_attacks": predicted_total,
         "positive_attacks": actual_total,
+        "median_timing_error_ms": (
+            float(np.median(timing_errors_ms))
+            if timing_errors_ms else None
+        ),
+        "p95_timing_error_ms": (
+            float(np.percentile(timing_errors_ms, 95))
+            if timing_errors_ms else None
+        ),
     }
 
 
@@ -1462,9 +1477,15 @@ def train_structure_baseline(
         )
     if focal_gamma < 0:
         raise TrainingDataError("Focal gamma cannot be negative")
-    if architecture not in ("conv1d", "dilated-tcn"):
+    if architecture not in (
+        "conv1d",
+        "dilated-tcn",
+        "multi-scale",
+        "multi-scale-local",
+    ):
         raise TrainingDataError(
-            "Structure architecture must be conv1d or dilated-tcn"
+            "Structure architecture must be conv1d, dilated-tcn, multi-scale, "
+            "or multi-scale-local"
         )
     output = Path(output).resolve()
     if output.suffix.lower() != ".pt":
@@ -1742,7 +1763,12 @@ def train_structure_baseline(
         )
     report = {
         "model": f"structure-{architecture}",
-        "model_version": 2 if architecture == "dilated-tcn" else 1,
+        "model_version": {
+            "conv1d": 1,
+            "dilated-tcn": 2,
+            "multi-scale": 3,
+            "multi-scale-local": 4,
+        }[architecture],
         "architecture": architecture,
         "feature_version": FEATURE_VERSION,
         "device_requested": requested_device,
@@ -1765,6 +1791,12 @@ def train_structure_baseline(
             "attack_recall": calibrated["recall"],
             "attack_f1": calibrated["f1"],
             "macro_attack_f1": calibrated["macro_f1"],
+            "median_timing_error_ms": calibrated[
+                "median_timing_error_ms"
+            ],
+            "p95_timing_error_ms": calibrated[
+                "p95_timing_error_ms"
+            ],
             "polyphony_accuracy": polyphony_correct / max(1, polyphony_total),
             "positive_attacks": calibrated["positive_attacks"],
             "onset_tolerance_ms": 50,
@@ -1870,7 +1902,12 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
     if device == "cuda" and not torch.cuda.is_available():
         raise TrainingDataError("CUDA inference was requested but is unavailable")
     architecture = str(configuration.get("architecture", "conv1d"))
-    if architecture not in ("conv1d", "dilated-tcn"):
+    if architecture not in (
+        "conv1d",
+        "dilated-tcn",
+        "multi-scale",
+        "multi-scale-local",
+    ):
         raise TrainingDataError(
             f"Unsupported structure architecture: {architecture}"
         )

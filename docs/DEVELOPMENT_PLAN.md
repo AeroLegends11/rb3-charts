@@ -962,6 +962,18 @@ Status update (2026-09-22):
   runs were also mixed and substantially weaker, with expanded common-domain
   macro F1 values of 0.2230, 0.1947 and 0.3783. No expanded-corpus checkpoint
   earned frozen Persephone evaluation and nothing is wired into generation.
+- A multi-scale temporal model combined the existing local encoder with pooled
+  approximately 0.4, 1.5 and 3.0 second context. Across three expanded-corpus
+  seeds it improved validation macro attack F1 from 0.6351/0.6144/0.6122 to
+  0.7597/0.7008/0.7221 while raising aggregate precision from about 0.48 to
+  0.80. Validation-selected seed 0 improved frozen Persephone attack F1 from
+  0.3559 to 0.5616 (precision 0.2219 to 0.4323), but median timing error
+  worsened from 11.61 to 34.83 ms and P95 from 34.83 to 46.44 ms. A separate
+  local attack head did not match the context model's validation F1. Snapping
+  context-selected peaks to local maxima worsened validation F1/timing, and a
+  guarded score blend restored Persephone timing only by collapsing F1 to
+  0.2534. The context model is retained offline as a substantial attack-ranking
+  result, but timing prevents runtime integration.
 - Structure prediction artifacts now record per-song attack-peak rank percentiles
   and score quantiles so offline fusion experiments do not assume cleared-data
   probabilities are calibrated on commercial stems. A 14-song shadow run still

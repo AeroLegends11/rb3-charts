@@ -518,6 +518,8 @@ def test_structure_baseline_trains_and_writes_auditable_checkpoint(tmp_path):
     assert len(report["epoch_losses"]) == 1
     assert 0 <= report["validation"]["attack_f1"] <= 1
     assert 0 <= report["validation"]["macro_attack_f1"] <= 1
+    assert report["validation"]["median_timing_error_ms"] is not None
+    assert report["validation"]["p95_timing_error_ms"] is not None
     assert 0 <= report["test"]["f1"] <= 1
     assert set(report["validation"]["by_song"]) == {"validation-song"}
     assert set(report["test"]["by_song"]) == {"test-song"}
@@ -620,6 +622,50 @@ def test_structure_baseline_supports_dilated_tcn(tmp_path):
     assert prediction["schema"] == "rb3charts-structure-predictions"
 
 
+def test_structure_baseline_supports_multi_scale_context(tmp_path):
+    index = _write_feature_index_fixture(tmp_path)
+    output = tmp_path / "multi-scale.pt"
+    report = train_structure_baseline(
+        index,
+        output,
+        epochs=1,
+        device="cpu",
+        seed=7,
+        architecture="multi-scale",
+    )
+    assert report["architecture"] == "multi-scale"
+    assert report["model_version"] == 3
+    prediction = predict_structure(
+        output,
+        tmp_path / "validation" / "audio.wav",
+        tmp_path / "multi-scale-prediction.json",
+        device="cpu",
+    )
+    assert prediction["schema"] == "rb3charts-structure-predictions"
+
+
+def test_structure_baseline_supports_local_attack_with_context(tmp_path):
+    index = _write_feature_index_fixture(tmp_path)
+    output = tmp_path / "multi-scale-local.pt"
+    report = train_structure_baseline(
+        index,
+        output,
+        epochs=1,
+        device="cpu",
+        seed=7,
+        architecture="multi-scale-local",
+    )
+    assert report["architecture"] == "multi-scale-local"
+    assert report["model_version"] == 4
+    prediction = predict_structure(
+        output,
+        tmp_path / "validation" / "audio.wav",
+        tmp_path / "multi-scale-local-prediction.json",
+        device="cpu",
+    )
+    assert prediction["schema"] == "rb3charts-structure-predictions"
+
+
 def test_structure_ranking_evaluation_uses_fixed_top_k_and_one_to_one_matches(tmp_path):
     predictions = tmp_path / "predictions.json"
     predictions.write_text(json.dumps({
@@ -693,12 +739,18 @@ def test_structure_baseline_rejects_audio_outside_validated_manifest(tmp_path):
 
 def test_onset_metrics_use_same_peak_suppression_as_inference():
     metrics = _onset_metrics(
-        [(np.asarray([0.1, 0.8, 0.8, 0.1], dtype=np.float32), [1])],
+        [(np.asarray([0.1, 0.8, 0.8, 0.1], dtype=np.float32), [2])],
         threshold=0.5,
         tolerance_frames=1,
     )
     assert metrics["predicted_attacks"] == 1
     assert metrics["f1"] == 1
+    assert metrics["median_timing_error_ms"] == pytest.approx(
+        FEATURE_HOP_LENGTH / FEATURE_SAMPLE_RATE * 1000
+    )
+    assert metrics["p95_timing_error_ms"] == pytest.approx(
+        FEATURE_HOP_LENGTH / FEATURE_SAMPLE_RATE * 1000
+    )
 
 
 def test_periodic_peak_support_requires_three_short_regular_attacks():

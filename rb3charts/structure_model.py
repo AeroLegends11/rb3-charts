@@ -14,6 +14,7 @@ def build_structure_model(
     input_features=130,
     hidden_features=64,
 ):
+    import torch
     import torch.nn as nn
 
     class StructureModel(nn.Module):
@@ -43,6 +44,48 @@ def build_structure_model(
                     )
                     for dilation in (1, 2, 4, 8, 16, 32)
                 ])
+            elif architecture in ("multi-scale", "multi-scale-local"):
+                self.input_projection = nn.Conv1d(
+                    input_features,
+                    hidden_features,
+                    kernel_size=1,
+                )
+                self.encoder = nn.Sequential(
+                    nn.Conv1d(
+                        hidden_features,
+                        hidden_features,
+                        kernel_size=5,
+                        padding=2,
+                    ),
+                    nn.ReLU(),
+                    nn.Conv1d(
+                        hidden_features,
+                        hidden_features,
+                        kernel_size=5,
+                        padding=2,
+                    ),
+                    nn.ReLU(),
+                )
+                self.context_pools = nn.ModuleList([
+                    nn.AvgPool1d(
+                        kernel_size=kernel_size,
+                        stride=1,
+                        padding=kernel_size // 2,
+                        count_include_pad=False,
+                    )
+                    for kernel_size in (33, 129, 257)
+                ])
+                self.context_fusion = nn.Conv1d(
+                    hidden_features * 4,
+                    hidden_features,
+                    kernel_size=1,
+                )
+                if architecture == "multi-scale-local":
+                    self.local_attack = nn.Conv1d(
+                        hidden_features,
+                        1,
+                        kernel_size=1,
+                    )
             else:
                 raise ValueError(f"Unsupported structure architecture: {architecture}")
             self.attack = nn.Conv1d(hidden_features, 1, kernel_size=1)
@@ -55,10 +98,27 @@ def build_structure_model(
             if architecture == "dilated-tcn":
                 for layer in self.encoder:
                     encoded = self.activation(encoded + layer(encoded))
+            elif architecture in ("multi-scale", "multi-scale-local"):
+                local_encoded = self.encoder(encoded)
+                encoded = self.activation(self.context_fusion(
+                    torch.cat(
+                        [local_encoded] + [
+                            pool(local_encoded) for pool in self.context_pools
+                        ],
+                        dim=1,
+                    )
+                ))
             else:
                 encoded = self.encoder(encoded)
             return {
-                "attack": self.attack(encoded).squeeze(1),
+                "attack": (
+                    self.attack(encoded)
+                    + (
+                        self.local_attack(local_encoded)
+                        if architecture == "multi-scale-local"
+                        else 0
+                    )
+                ).squeeze(1),
                 "polyphony": self.polyphony(encoded).transpose(1, 2),
                 "sustain": self.sustain(encoded).transpose(1, 2),
             }

@@ -321,6 +321,11 @@ recordings cannot hide regressions elsewhere in the split.
 `--architecture dilated-tcn` selects a versioned residual temporal model with
 about three seconds of receptive context; checkpoints record and restore the
 architecture explicitly.
+`--architecture multi-scale` combines local convolutions with pooled
+approximately 0.4, 1.5 and 3.0 second context, while
+`--architecture multi-scale-local` adds a separate local attack head for
+controlled timing experiments. Both remain offline research architectures;
+validation and frozen-test timing gates still apply before runtime use.
 `--skip-test` omits test evaluation during candidate selection while retaining
 the indexed test count in the report; rerun the selected deterministic
 configuration without that flag only after it wins on validation.

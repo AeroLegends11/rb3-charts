@@ -235,7 +235,12 @@ def main():
     )
     training.add_argument(
         "--architecture",
-        choices=["conv1d","dilated-tcn"],
+        choices=[
+            "conv1d",
+            "dilated-tcn",
+            "multi-scale",
+            "multi-scale-local",
+        ],
         default="conv1d",
     )
     training.add_argument(
