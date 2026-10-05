@@ -995,6 +995,19 @@ Status update (2026-09-22):
   F1/recall/P95 and a strict median-timing improvement, so untouched Persephone
   was not evaluated. The offset architecture remains only to make the negative
   result reproducible; it is rejected from runtime.
+- A second primary-representation experiment replaced framewise peak
+  classification with 46.44 ms non-overlapping event cells. One head predicts
+  whether a cell contains a chart attack and a second predicts its exact
+  four-way frame phase, so attack selection and timing are supervised as an
+  object-detection problem rather than inferred from score-peak location. The
+  best seed-0 validation run collapsed to the weighted class-prior solution:
+  macro precision 0.2260, recall 1.0000, F1 0.3644, macro median timing
+  24.879 ms and macro P95 46.440 ms. Reducing phase loss tenfold, removing it,
+  and training new cell heads on the frozen 0.7597-F1 multi-scale encoder did
+  not recover discrimination. The predeclared validation gate failed, so
+  untouched Persephone was not evaluated. This rules out the tested fixed-grid
+  cell representation without spending frozen-test evidence or weakening the
+  artist/chart-author-disjoint split.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

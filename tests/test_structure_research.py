@@ -13,6 +13,7 @@ import structure_timing_snap as timing_snap
 import structure_local_peak_rerank as local_peak_rerank
 import structure_candidate_classifier as candidate_classifier
 import structure_candidate_sequence as candidate_sequence
+import structure_cell_detector as cell_detector
 import predicted_authoring_sequence as predicted_authoring
 import predicted_authoring_self_train as self_trained_authoring
 import audio_authoring_sequence as audio_authoring
@@ -167,6 +168,46 @@ def test_candidate_sequence_model_preserves_sequence_length():
     logits = model(torch.zeros((2, 5, 8)))
 
     assert logits.shape == (2, 5)
+
+
+def test_cell_detector_encodes_objectness_and_within_cell_phase():
+    attacks = np.zeros(12, dtype=np.float32)
+    attacks[[1, 7, 10]] = 1
+
+    objectness, phase = cell_detector._cell_targets(attacks)
+
+    assert objectness.tolist() == [1.0, 1.0, 1.0]
+    assert phase.tolist() == [1, 3, 2]
+
+
+def test_cell_detector_decodes_phase_and_suppresses_close_cells():
+    frames = cell_detector._decode_cells(
+        objectness=np.asarray([0.8, 0.9, 0.7]),
+        phase=np.asarray([3, 0, 2]),
+        threshold=0.5,
+    )
+
+    assert frames == [4, 10]
+
+
+def test_cell_detector_model_outputs_one_row_per_four_frames():
+    torch = pytest.importorskip("torch")
+    model = cell_detector._build_model(input_features=6)
+
+    outputs = model(torch.zeros((2, 11, 6)))
+
+    assert outputs["objectness"].shape == (2, 3)
+    assert outputs["phase"].shape == (2, 3, 4)
+
+
+def test_cell_detector_packs_adjacent_frames_within_each_cell():
+    torch = pytest.importorskip("torch")
+    encoded = torch.arange(8, dtype=torch.float32).reshape(1, 1, 8)
+
+    packed = cell_detector._pack_cells(encoded)
+
+    assert packed[0, :, 0].tolist() == [0.0, 1.0, 2.0, 3.0]
+    assert packed[0, :, 1].tolist() == [4.0, 5.0, 6.0, 7.0]
 
 
 def test_predicted_authoring_metrics_require_timing_and_lane_agreement():
