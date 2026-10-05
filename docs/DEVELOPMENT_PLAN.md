@@ -1034,6 +1034,17 @@ Status update (2026-09-22):
   the frozen validation selection rule, so their different test behavior
   cannot be used to choose a checkpoint. The richer-context variant is
   rejected as domain overfit.
+- Compact audio-derived pitch contour generalized better. Spectral centroid,
+  peak bin, rest-reset delta, within-phrase pitch rank and change strength
+  improved validation joint exact F1 at all three seeds; validation selected
+  seed 2 at 0.1247 versus the prior 0.1200. The same checkpoint improved
+  untouched Persephone from 0.1187 to 0.1210, matched exact lanes from 0.1955
+  to 0.1992 and overlap from 0.2312 to 0.2387. This replaces the prior selected
+  offline lane bridge, but is still far below runtime-quality lane ownership.
+  Combining contour with the broader spectral summaries raised selected
+  validation F1 to 0.1295 but regressed Persephone to 0.0970; keeping only
+  transposition-relative contour reduced validation and returned Persephone to
+  the prior 0.1187. Both variants are rejected.
 - The two external acquisition issues still had no comments on 2026-10-05, and
   no timestamped Hail listening-feedback export was present locally. These are
   genuine external gates, not reasons to weaken automated acceptance criteria.

@@ -209,6 +209,28 @@ def test_predicted_authoring_context_features_summarize_fixed_windows():
     assert features[1, 640] == 9
 
 
+def test_predicted_authoring_pitch_contour_resets_after_rest():
+    arrays = {
+        "log_mel": np.full((4, 128), -20.0, dtype=np.float32),
+        "mel_delta": np.zeros((4, 128), dtype=np.float32),
+    }
+    arrays["log_mel"][0, 10] = 0
+    arrays["log_mel"][1, 30] = 0
+    arrays["log_mel"][2, 50] = 0
+    arrays["log_mel"][3, 70] = 0
+
+    features = predicted_authoring._pitch_contour_features(
+        arrays,
+        np.asarray([0, 1, 2, 3]),
+        [0.0, 0.2, 2.0, 2.2],
+    )
+
+    assert features.shape == (4, 5)
+    assert features[1, 2] > 0
+    assert features[2, 2] == 0
+    assert features[:, 3].tolist() == [0.0, 1.0, 0.0, 1.0]
+
+
 def test_self_trained_authoring_targets_only_matched_single_notes():
     reference = {
         "times": [1.0, 2.0, 3.0],

@@ -77,12 +77,80 @@ def _augment_reference_audio(records, items):
         ), axis=1)
 
 
+def _pitch_contour_features(arrays, frames, times):
+    mel = arrays["log_mel"][frames]
+    shifted = np.clip(mel - np.max(mel, axis=1, keepdims=True), -20, 0)
+    weights = np.exp(shifted)
+    bins = np.linspace(0.0, 1.0, mel.shape[1], dtype=np.float32)
+    centroids = (weights * bins).sum(axis=1) / np.maximum(
+        weights.sum(axis=1),
+        1e-6,
+    )
+    peaks = np.argmax(mel, axis=1) / max(1, mel.shape[1] - 1)
+    deltas = np.zeros(len(frames), dtype=np.float32)
+    phrase_ranks = np.zeros(len(frames), dtype=np.float32)
+    starts = [0]
+    for index in range(1, len(frames)):
+        if float(times[index]) - float(times[index - 1]) >= 1.0:
+            starts.append(index)
+        else:
+            deltas[index] = centroids[index] - centroids[index - 1]
+    starts.append(len(frames))
+    for left, right in zip(starts, starts[1:]):
+        order = np.argsort(centroids[left:right], kind="stable")
+        if right - left == 1:
+            phrase_ranks[left] = 0.5
+        else:
+            phrase_ranks[left + order] = np.linspace(
+                0.0,
+                1.0,
+                right - left,
+            )
+    change = np.mean(np.abs(arrays["mel_delta"][frames]), axis=1)
+    return np.column_stack((
+        centroids,
+        peaks,
+        deltas,
+        phrase_ranks,
+        change,
+    )).astype(np.float32)
+
+
+def _augment_reference_pitch(records, items, relative_only=False):
+    paths = {
+        item["song_id"]: item["path"]
+        for item in items
+    }
+    for record in records:
+        arrays, _ = _load_feature_artifact(paths[record["song_id"]])
+        frames = np.clip(
+            np.rint(
+                np.asarray(record["times"])
+                * FEATURE_SAMPLE_RATE
+                / FEATURE_HOP_LENGTH
+            ).astype(int),
+            0,
+            len(arrays["log_mel"]) - 1,
+        )
+        contour = _pitch_contour_features(
+            arrays,
+            frames,
+            record["times"],
+        )
+        record["features"] = np.concatenate((
+            record["features"],
+            contour[:, 2:] if relative_only else contour,
+        ), axis=1)
+
+
 def _predicted_record(
     item,
     arrays,
     outputs,
     threshold,
     context_features=False,
+    pitch_contour_features=False,
+    relative_pitch_only=False,
 ):
     import torch
 
@@ -115,12 +183,19 @@ def _predicted_record(
             arrays["mel_delta"][peaks],
         ), axis=1)
     )
+    contour = (
+        _pitch_contour_features(arrays, peaks, times)
+        if pitch_contour_features
+        else np.empty((len(peaks), 0), dtype=np.float32)
+    )
+    if relative_pitch_only:
+        contour = contour[:, 2:]
     return {
         "song_id": item["song_id"],
         "split": item["split"],
         "times": times.tolist(),
         "symbolic_features": symbolic,
-        "features": np.concatenate((audio, symbolic), axis=1),
+        "features": np.concatenate((audio, symbolic, contour), axis=1),
     }
 
 
@@ -222,10 +297,14 @@ def run(
     epochs=20,
     device="auto",
     context_features=False,
+    pitch_contour_features=False,
+    relative_pitch_only=False,
 ):
     import torch
     import torch.nn.functional as functional
 
+    if relative_pitch_only and not pitch_contour_features:
+        raise ValueError("relative pitch features require pitch contour features")
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -239,6 +318,12 @@ def run(
     _, items = _load_feature_index(feature_index)
     if context_features:
         _augment_reference_audio(records, items)
+    if pitch_contour_features:
+        _augment_reference_pitch(
+            records,
+            items,
+            relative_only=relative_pitch_only,
+        )
     train = [record for record in records if record["split"] == "train"]
     validation = [
         record for record in records if record["split"] == "validation"
@@ -301,6 +386,8 @@ def run(
                 outputs,
                 float(structure_configuration["attack_threshold"]),
                 context_features=context_features,
+                pitch_contour_features=pitch_contour_features,
+                relative_pitch_only=relative_pitch_only,
             ))
     validation_predicted = [
         record for record in predicted if record["split"] == "validation"
@@ -358,6 +445,8 @@ def run(
         "seed": seed,
         "epochs": epochs,
         "context_features": context_features,
+        "pitch_contour_features": pitch_contour_features,
+        "relative_pitch_only": relative_pitch_only,
         "guard_passed": guard_passed,
         "test_evaluated": bool(guard_passed and test_predicted),
         "feature_index_sha256": _hash_file(feature_index),
@@ -407,6 +496,8 @@ def main():
     parser.add_argument("--seed", type=int, default=2)
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--context-features", action="store_true")
+    parser.add_argument("--pitch-contour-features", action="store_true")
+    parser.add_argument("--relative-pitch-only", action="store_true")
     parser.add_argument(
         "--device",
         choices=["auto", "cpu", "cuda"],
@@ -422,6 +513,8 @@ def main():
         epochs=args.epochs,
         device=args.device,
         context_features=args.context_features,
+        pitch_contour_features=args.pitch_contour_features,
+        relative_pitch_only=args.relative_pitch_only,
     )
     print(json.dumps(report, indent=2))
 
