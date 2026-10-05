@@ -18,6 +18,22 @@ def build_structure_model(
     import torch.nn as nn
     import torch.nn.functional as functional
 
+    class CausalConv1d(nn.Module):
+        def __init__(self, input_channels, output_channels, kernel_size):
+            super().__init__()
+            self.left_padding = kernel_size - 1
+            self.conv = nn.Conv1d(
+                input_channels,
+                output_channels,
+                kernel_size=kernel_size,
+            )
+
+        def forward(self, values):
+            return self.conv(functional.pad(
+                values,
+                (self.left_padding, 0),
+            ))
+
     class StructureModel(nn.Module):
         def __init__(self):
             super().__init__()
@@ -51,26 +67,31 @@ def build_structure_model(
                 "multi-scale-offset",
                 "multi-scale-gated",
                 "transient-pyramid",
+                "causal-context",
             ):
                 self.input_projection = nn.Conv1d(
                     input_features,
                     hidden_features,
                     kernel_size=1,
                 )
+                convolution = (
+                    lambda: CausalConv1d(
+                        hidden_features,
+                        hidden_features,
+                        kernel_size=5,
+                    )
+                    if architecture == "causal-context"
+                    else nn.Conv1d(
+                        hidden_features,
+                        hidden_features,
+                        kernel_size=5,
+                        padding=2,
+                    )
+                )
                 self.encoder = nn.Sequential(
-                    nn.Conv1d(
-                        hidden_features,
-                        hidden_features,
-                        kernel_size=5,
-                        padding=2,
-                    ),
+                    convolution(),
                     nn.ReLU(),
-                    nn.Conv1d(
-                        hidden_features,
-                        hidden_features,
-                        kernel_size=5,
-                        padding=2,
-                    ),
+                    convolution(),
                     nn.ReLU(),
                 )
                 self.context_pools = nn.ModuleList([
@@ -168,6 +189,12 @@ def build_structure_model(
                         padding=8,
                         count_include_pad=False,
                     )
+                if architecture == "causal-context":
+                    self.causal_attack = nn.Conv1d(
+                        hidden_features * 2,
+                        1,
+                        kernel_size=1,
+                    )
             else:
                 raise ValueError(f"Unsupported structure architecture: {architecture}")
             self.attack = nn.Conv1d(hidden_features, 1, kernel_size=1)
@@ -186,6 +213,7 @@ def build_structure_model(
                 "multi-scale-offset",
                 "multi-scale-gated",
                 "transient-pyramid",
+                "causal-context",
             ):
                 input_frames = features.transpose(1, 2)
                 local_encoded = self.encoder(encoded)
@@ -247,6 +275,11 @@ def build_structure_model(
                 outputs["attack"] = (
                     log_probability - torch.log1p(-probability)
                 )
+            if architecture == "causal-context":
+                outputs["attack"] = self.causal_attack(torch.cat(
+                    (local_encoded, encoded),
+                    dim=1,
+                )).squeeze(1)
             return outputs
 
     return StructureModel()

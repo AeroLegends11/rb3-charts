@@ -1595,11 +1595,12 @@ def train_structure_baseline(
         "multi-scale-offset",
         "multi-scale-gated",
         "transient-pyramid",
+        "causal-context",
     ):
         raise TrainingDataError(
             "Structure architecture must be conv1d, dilated-tcn, multi-scale, "
             "multi-scale-local, multi-scale-offset, multi-scale-gated, or "
-            "transient-pyramid"
+            "transient-pyramid, or causal-context"
         )
     output = Path(output).resolve()
     if output.suffix.lower() != ".pt":
@@ -1948,6 +1949,7 @@ def train_structure_baseline(
             "multi-scale-offset": 5,
             "multi-scale-gated": 6,
             "transient-pyramid": 7,
+            "causal-context": 8,
         }[architecture],
         "architecture": architecture,
         "feature_version": FEATURE_VERSION,
@@ -2102,6 +2104,7 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
         "multi-scale-offset",
         "multi-scale-gated",
         "transient-pyramid",
+        "causal-context",
     ):
         raise TrainingDataError(
             f"Unsupported structure architecture: {architecture}"

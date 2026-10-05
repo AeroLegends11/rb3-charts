@@ -243,6 +243,7 @@ def main():
             "multi-scale-offset",
             "multi-scale-gated",
             "transient-pyramid",
+            "causal-context",
         ],
         default="conv1d",
     )

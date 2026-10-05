@@ -1056,6 +1056,13 @@ Status update (2026-09-22):
   selection/timing gate, so further seeds and untouched Persephone evaluation
   were skipped. The result rejects this transient representation as trained;
   it is not a runtime feature.
+- A causal/local-context fusion then replaced the symmetric local encoder with
+  two strictly left-looking convolutions and predicted attacks jointly from
+  causal local evidence plus symmetric pooled context. Seed-0 validation
+  reached only 0.5913 macro F1, 0.5292 recall, 24.88 ms macro median timing and
+  39.81 ms macro P95. Causality did not preserve the selected model's attack
+  ranking and did not improve timing. Untouched Persephone was not evaluated;
+  the architecture is rejected from runtime.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

@@ -780,6 +780,29 @@ def test_structure_baseline_supports_learned_transient_pyramid(tmp_path):
     assert prediction["schema"] == "rb3charts-structure-predictions"
 
 
+def test_structure_baseline_supports_causal_context_fusion(tmp_path):
+    index = _write_feature_index_fixture(tmp_path)
+    output = tmp_path / "causal-context.pt"
+    report = train_structure_baseline(
+        index,
+        output,
+        epochs=1,
+        device="cpu",
+        seed=7,
+        architecture="causal-context",
+    )
+
+    assert report["architecture"] == "causal-context"
+    assert report["model_version"] == 8
+    prediction = predict_structure(
+        output,
+        tmp_path / "validation" / "audio.wav",
+        tmp_path / "causal-context-prediction.json",
+        device="cpu",
+    )
+    assert prediction["schema"] == "rb3charts-structure-predictions"
+
+
 def test_structure_offset_head_can_freeze_initialized_selector(tmp_path):
     index = _write_feature_index_fixture(tmp_path)
     initialized = tmp_path / "initialized.pt"
