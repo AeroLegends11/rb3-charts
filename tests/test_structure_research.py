@@ -10,6 +10,8 @@ sys.path.insert(0, str(SCRIPTS))
 
 import structure_score_ensemble as ensemble
 import structure_timing_snap as timing_snap
+import structure_local_peak_rerank as local_peak_rerank
+import structure_candidate_classifier as candidate_classifier
 import audio_authoring_sequence as audio_authoring
 import symbolic_authoring_sequence as symbolic_authoring
 
@@ -61,6 +63,98 @@ def test_score_ensemble_blends_scores_before_peak_selection():
 
     assert local["macro_f1"] == 1
     assert context["macro_f1"] == 0
+
+
+def test_local_peak_rerank_preserves_peak_times_and_samples_context_radius():
+    local = np.asarray([0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.7, 0.0])
+    context = np.asarray([0.0, 0.1, 0.9, 0.0, 0.0, 0.0, 0.2, 0.0])
+
+    scores = local_peak_rerank._candidate_scores(
+        local,
+        context,
+        local_weight=0.5,
+        radius=1,
+    )
+
+    assert np.flatnonzero(scores).tolist() == [1, 6]
+    assert scores[1] == pytest.approx(0.85)
+    assert scores[6] == pytest.approx(0.45)
+
+
+def test_local_peak_rerank_rejects_candidates_without_timing_matches():
+    context = {
+        "macro_f1": 0.7,
+        "macro_recall": 0.7,
+        "macro_median_timing_error_ms": 20.0,
+    }
+    local = {"macro_median_timing_error_ms": 10.0}
+    candidates = [{
+        "macro_f1": 0.8,
+        "macro_precision": 0.9,
+        "macro_recall": 0.8,
+        "macro_median_timing_error_ms": None,
+        "candidate_local_weight": 0.4,
+        "context_radius_frames": 2,
+    }]
+
+    selected, guard_passed = (
+        local_peak_rerank._select_validation_candidate(
+            candidates,
+            context,
+            local,
+        )
+    )
+
+    assert selected["candidate_local_weight"] == 0.4
+    assert selected["context_radius_frames"] == 2
+    assert guard_passed is False
+
+
+def test_local_peak_rerank_does_not_evaluate_test_when_guard_fails():
+    results = local_peak_rerank._test_evaluation(
+        test=None,
+        selected=None,
+        context_threshold=None,
+        local_threshold=None,
+        tolerance_frames=None,
+        guard_passed=False,
+    )
+
+    assert results == {}
+
+
+def test_candidate_targets_match_each_reference_only_once():
+    peaks = np.asarray([10, 14, 30])
+    actual = np.asarray([12, 31])
+
+    targets = candidate_classifier._candidate_targets(
+        peaks,
+        actual,
+        tolerance_frames=4,
+    )
+
+    assert targets.tolist() == [1.0, 0.0, 1.0]
+
+
+def test_candidate_features_keep_fixed_peak_rows():
+    arrays = {
+        "log_mel": np.zeros((12, 128), dtype=np.float32),
+        "mel_delta": np.zeros((12, 128), dtype=np.float32),
+        "beat_phase": np.zeros((12, 2), dtype=np.float32),
+    }
+    local = np.linspace(0.0, 1.0, 12, dtype=np.float32)
+    context = local[::-1].copy()
+
+    features = candidate_classifier._candidate_features(
+        arrays,
+        local,
+        context,
+        np.asarray([2, 9]),
+    )
+
+    assert features.shape == (2, 280)
+    assert features[0, 4] == local[2]
+    assert features[1, 13] == context[9]
 
 
 def test_staged_authoring_changes_single_notes_but_preserves_chords():

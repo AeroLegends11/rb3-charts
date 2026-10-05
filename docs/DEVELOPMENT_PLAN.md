@@ -974,6 +974,23 @@ Status update (2026-09-22):
   guarded score blend restored Persephone timing only by collapsing F1 to
   0.2534. The context model is retained offline as a substantial attack-ranking
   result, but timing prevents runtime integration.
+- A fixed-timestamp local-peak reranker used the short-context model only to
+  propose attack times and the multi-scale model only to rank their
+  chartability. Its best validation candidate retained useful recall at 0.7751,
+  but macro F1 fell from the context baseline's 0.7597 to 0.6811 and median
+  timing worsened from 14.93 to 27.37 ms. It failed the predeclared validation
+  gate, so untouched Persephone was not evaluated and the candidate is rejected.
+  The next attack experiment must train directly over local onset candidates
+  rather than combine independently calibrated frame scores.
+- That direct candidate experiment trained a deterministic audio/context MLP
+  over 78,622 fixed short-context peaks, including 11,453 one-to-one matched
+  positives. Seed 0 reached only 0.5731 validation macro F1, 0.7445 recall and
+  24.88 ms median timing versus the multi-scale baseline's 0.7597, 0.7549 and
+  14.93 ms. The failure is large enough that additional seeds cannot satisfy
+  the predeclared gate; untouched Persephone was not evaluated. This candidate
+  classifier is rejected, and further attack work needs better transferable
+  candidate representations or additional independently authored supervision,
+  not threshold or seed search.
 - Explicit attack-localization losses at weights 0.25 and 0.05 required each
   labeled frame to outrank negatives within about 46 ms. The stronger weight
   reduced seed-0 validation F1 from 0.7597 to 0.6631; the lighter weight changed
