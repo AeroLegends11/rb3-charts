@@ -12,6 +12,8 @@ import structure_score_ensemble as ensemble
 import structure_timing_snap as timing_snap
 import structure_local_peak_rerank as local_peak_rerank
 import structure_candidate_classifier as candidate_classifier
+import predicted_authoring_sequence as predicted_authoring
+import predicted_authoring_self_train as self_trained_authoring
 import audio_authoring_sequence as audio_authoring
 import symbolic_authoring_sequence as symbolic_authoring
 
@@ -155,6 +157,57 @@ def test_candidate_features_keep_fixed_peak_rows():
     assert features.shape == (2, 280)
     assert features[0, 4] == local[2]
     assert features[1, 13] == context[9]
+
+
+def test_predicted_authoring_metrics_require_timing_and_lane_agreement():
+    references = {
+        "fixture": {
+            "times": [1.0, 2.0],
+            "masks": [1 << 1, (1 << 1) | (1 << 3)],
+        },
+    }
+    predictions = [{
+        "song_id": "fixture",
+        "times": [1.01, 2.02, 3.0],
+    }]
+
+    metrics = predicted_authoring._timing_lane_metrics(
+        references,
+        predictions,
+        [[1 << 1, (1 << 0) | (1 << 4), 1 << 2]],
+    )
+
+    assert metrics["attack_precision"] == pytest.approx(2 / 3)
+    assert metrics["attack_recall"] == 1
+    assert metrics["matched_exact_lanes"] == 0.5
+    assert metrics["joint_exact_precision"] == pytest.approx(1 / 3)
+    assert metrics["joint_exact_recall"] == 0.5
+
+
+def test_self_trained_authoring_targets_only_matched_single_notes():
+    reference = {
+        "times": [1.0, 2.0, 3.0],
+        "masks": [1 << 1, (1 << 1) | (1 << 3), 1 << 4],
+    }
+    predicted = {
+        "times": [1.01, 2.01, 3.2],
+        "symbolic_features": np.asarray([
+            [0, 0, 0, 0.2, 0, 0],
+            [0, 0, 0, 0.4, 0, 0],
+            [0, 0, 0, 0.2, 0, 0],
+        ], dtype=np.float32),
+    }
+
+    targets = self_trained_authoring._matched_single_targets(
+        reference,
+        predicted,
+    )
+
+    assert targets.tolist() == [
+        symbolic_authoring.MASK_TO_CLASS[1 << 1],
+        -1,
+        -1,
+    ]
 
 
 def test_staged_authoring_changes_single_notes_but_preserves_chords():

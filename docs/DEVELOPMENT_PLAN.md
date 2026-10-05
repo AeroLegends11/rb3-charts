@@ -1005,9 +1005,26 @@ Status update (2026-09-22):
   validation exact lanes improved 0.1837 to 0.2152 and overlap 0.2567 to
   0.2882; frozen Persephone improved exact lanes 0.2280 to 0.2329 and overlap
   0.2448 to 0.2497 with chord accuracy unchanged. This remains offline because
-  it uses oracle authorized attack/polyphony conditioning and the transferable
-  gain is small; runtime must first supply equally reliable independent
-  conditioning.
+  its original evaluation used oracle authorized attack/polyphony conditioning.
+- A subsequent timing-aware evaluation replaced oracle inference inputs with
+  the multi-scale model's predicted attacks and polyphony and removed chart
+  duration from the lane model. Across all three deterministic lane seeds,
+  validation joint timing-plus-exact-lane F1 improved from 0.1064 to
+  0.1141/0.1132/0.1200. Validation-selected seed 2 improved untouched
+  Persephone joint exact F1 from 0.0947 to 0.1187, matched exact lanes from
+  0.1560 to 0.1955, and lane overlap from 0.2199 to 0.2312 without changing
+  attack selection. This is the first lane gain to survive predicted
+  attack/polyphony inference, but remains offline because the upstream
+  multi-scale checkpoint still fails its timing gate and checkpoint
+  distribution needs the existing license assessment.
+- Training lane ownership directly on predicted sequences provided only 3,684
+  matched single-note targets and failed validation at seed 0: joint exact F1
+  changed 0.1064 to 0.1061 while overlap regressed 0.2265 to 0.2108. Pairing
+  the oracle-trained lane model with the better-timed local attack checkpoint
+  improved its own lane baseline but reached only 0.0696 Persephone joint exact
+  F1, versus 0.1187 for multi-scale attacks. Both alternatives are rejected;
+  the selected offline bridge remains multi-scale attacks plus seed-2 staged
+  audio lanes.
 - The two external acquisition issues still had no comments on 2026-10-05, and
   no timestamped Hail listening-feedback export was present locally. These are
   genuine external gates, not reasons to weaken automated acceptance criteria.
