@@ -14,6 +14,8 @@ import structure_local_peak_rerank as local_peak_rerank
 import structure_candidate_classifier as candidate_classifier
 import structure_candidate_sequence as candidate_sequence
 import structure_cell_detector as cell_detector
+import structure_beat_grid as beat_grid
+import structure_beat_finetune as beat_finetune
 import predicted_authoring_sequence as predicted_authoring
 import predicted_authoring_self_train as self_trained_authoring
 import audio_authoring_sequence as audio_authoring
@@ -208,6 +210,73 @@ def test_cell_detector_packs_adjacent_frames_within_each_cell():
 
     assert packed[0, :, 0].tolist() == [0.0, 1.0, 2.0, 3.0]
     assert packed[0, :, 1].tolist() == [4.0, 5.0, 6.0, 7.0]
+
+
+def test_beat_grid_interpolates_twelve_positions_per_beat():
+    times = beat_grid._grid_times([0.0, 0.6, 1.2])
+
+    assert len(times) == 25
+    assert times[3] == pytest.approx(0.15)
+    assert times[18] == pytest.approx(0.9)
+
+
+def test_beat_grid_targets_preserve_exact_grid_attacks():
+    grid = beat_grid._grid_times([0.0, 0.6, 1.2])
+    targets, errors, indices = beat_grid._grid_targets(
+        grid,
+        [0.15, 0.9],
+    )
+
+    assert np.flatnonzero(targets).tolist() == [3, 18]
+    assert indices.tolist() == [3, 18]
+    assert errors.tolist() == pytest.approx([0.0, 0.0])
+
+
+def test_beat_grid_selection_suppresses_adjacent_subdivisions():
+    probabilities = np.asarray([0.0, 0.8, 0.9, 0.0, 0.7])
+    times = np.asarray([0.0, 0.03, 0.06, 0.09, 0.12])
+
+    selected = beat_grid._select_predictions(
+        probabilities,
+        times,
+        threshold=0.5,
+    )
+
+    assert selected == pytest.approx([0.06, 0.12])
+
+
+def test_beat_finetune_samples_primary_model_at_grid_frames():
+    torch = pytest.importorskip("torch")
+
+    class FixtureModel(torch.nn.Module):
+        def forward(self, features):
+            frames = features.shape[1]
+            logits = torch.arange(
+                frames,
+                dtype=torch.float32,
+                device=features.device,
+            )[None, :]
+            return {
+                "attack": logits,
+                "polyphony": torch.zeros((1, frames, 7)),
+                "sustain": torch.zeros((1, frames, 7)),
+            }
+
+    records = [{
+        "song_id": "fixture",
+        "frame_features": np.zeros((5, 2), dtype=np.float32),
+        "grid_frames": np.asarray([1, 3]),
+    }]
+    predicted = beat_finetune._predict(
+        FixtureModel(),
+        records,
+        "cpu",
+    )
+
+    assert predicted[0]["probabilities"].tolist() == pytest.approx([
+        1 / (1 + np.exp(-1)),
+        1 / (1 + np.exp(-3)),
+    ])
 
 
 def test_predicted_authoring_metrics_require_timing_and_lane_agreement():

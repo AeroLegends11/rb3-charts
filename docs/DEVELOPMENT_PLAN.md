@@ -1008,6 +1008,20 @@ Status update (2026-09-22):
   untouched Persephone was not evaluated. This rules out the tested fixed-grid
   cell representation without spending frozen-test evidence or weakening the
   artist/chart-author-disjoint split.
+- Beat-synchronous supervision then represented every song on a 12-position
+  grid per beat, with beat-domain context spanning approximately 0.75, 3 and
+  8 beats. This was motivated by an authorized-validation oracle: all 7,131
+  attacks mapped within 50 ms, with effectively zero median and P95
+  quantization error. Training from scratch with the existing attack,
+  polyphony and sustain supervision reached only 0.4835 macro F1 despite
+  1.0000 recall. Fine-tuning the selected 0.7597-F1 primary multi-scale model
+  directly against grid positions improved macro timing to 12.058 ms median
+  and 27.578 ms P95, but precision/F1 remained only 0.3215/0.4818 because
+  nearby grid positions were not suppressed. This was direct primary-model
+  supervision, not post-hoc snapping; the validation F1 gate failed and
+  untouched Persephone was not evaluated. The grid oracle remains evidence
+  that beat timing can represent these charts, but not that the tested audio
+  model can select the correct grid positions.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,
