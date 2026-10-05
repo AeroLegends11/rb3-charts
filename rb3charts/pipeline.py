@@ -614,7 +614,14 @@ def validate_existing_runs(root, output=None):
     return report
 
 
-def replay_cached(folder, output=None, progress=print, compile=False, onyx=None):
+def replay_cached(
+    folder,
+    output=None,
+    progress=print,
+    compile=False,
+    onyx=None,
+    fretnet_shadow=None,
+):
     """Replay authoring from cached analysis artifacts without new audio inference."""
     source_folder=Path(folder).resolve()
     analysis_source=source_folder/"analysis"
@@ -704,6 +711,16 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
     phrase_authoring={}
     stage_snapshots={}
     warnings=[]
+    shadow_payload=None
+    shadow_path=None
+    if fretnet_shadow is not None:
+        shadow_path=Path(fretnet_shadow).resolve()
+        if not shadow_path.is_file():
+            raise FileNotFoundError(
+                f"FretNet shadow evidence not found: {shadow_path}"
+            )
+        shadow_payload=json.loads(shadow_path.read_text(encoding="utf-8"))
+        consumed_inputs.add(shadow_path)
     for instrument in ordered:
         chord_evidence=None
         if instrument=="drums":
@@ -821,6 +838,32 @@ def replay_cached(folder, output=None, progress=print, compile=False, onyx=None)
                     "inside repeated, source-supported texture sections."
                 )
             _record_stage_snapshot(stage_snapshots,instrument,"after_author_guitar_phrases",notes)
+            if shadow_payload is not None:
+                from .shadow import apply_fretnet_note_shadow
+
+                shadow_notes,shadow_report=apply_fretnet_note_shadow(
+                    notes,shadow_payload
+                )
+                shadow_report.update({
+                    "diagnostic_only":True,
+                    "source":str(shadow_path),
+                    "source_sha256":hash_file(shadow_path),
+                })
+                save_json(
+                    analysis_folder/"guitar-fretnet-shadow.json",
+                    shadow_report,
+                )
+                _record_stage_snapshot(
+                    stage_snapshots,
+                    instrument,
+                    "fretnet_shadow_diagnostic",
+                    shadow_notes,
+                )
+                log(
+                    "Recorded diagnostic-only FretNet pitch shadow for "
+                    f"{shadow_report['changed']} repeated single guitar "
+                    "notes; generated chart unchanged"
+                )
         charts[instrument]=reductions(notes,instrument,tempo)
         _record_reduction_snapshot(
             stage_snapshots,instrument,charts[instrument]

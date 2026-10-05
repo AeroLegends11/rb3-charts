@@ -103,6 +103,66 @@ def test_cached_replay_writes_provenance_snapshots_and_metrics(tmp_path, monkeyp
     assert result_json["analysis_mode"]=="cached_replay"
 
 
+def test_cached_replay_fretnet_shadow_is_diagnostic_only(tmp_path):
+    source=tmp_path/"source-run"
+    _write_replay_fixture(source,profile="band",instruments=["guitar"])
+    baseline=replay_cached(
+        source,
+        output=tmp_path/"baseline",
+        progress=lambda _:None,
+        compile=False,
+    )
+    shadow=tmp_path/"shadow.json"
+    shadow.write_text(json.dumps({
+        "schema":1,
+        "kind":"fretnet_shadow_evidence",
+        "pitch_runs":[
+            {
+                "source_id":f"shadow-{index}",
+                "onset_s":1+index*.25,
+                "offset_s":1+index*.25+.1,
+                "midi_pitch":60,
+            }
+            for index in range(8)
+        ],
+    }),encoding="utf-8")
+
+    candidate=replay_cached(
+        source,
+        output=tmp_path/"candidate",
+        progress=lambda _:None,
+        compile=False,
+        fretnet_shadow=shadow,
+    )
+
+    baseline_charts=json.loads(
+        (Path(baseline["folder"])/"analysis"/"charts.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    candidate_folder=Path(candidate["folder"])
+    candidate_charts=json.loads(
+        (candidate_folder/"analysis"/"charts.json").read_text(encoding="utf-8")
+    )
+    snapshots=json.loads(
+        (candidate_folder/"analysis"/"guitar-stage-snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    report=json.loads(
+        (candidate_folder/"analysis"/"guitar-fretnet-shadow.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert candidate_charts==baseline_charts
+    assert any(
+        stage["stage"]=="fretnet_shadow_diagnostic"
+        for stage in snapshots["stages"]
+    )
+    assert report["diagnostic_only"] is True
+
+
 def test_cached_replay_recomputes_band_lead_from_cached_stem(
     tmp_path,monkeypatch
 ):

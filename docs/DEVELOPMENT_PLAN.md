@@ -864,3 +864,22 @@ Status update (2026-09-22):
   smoke run produced identical initial, training and final losses. FretNet
   remains an offline research candidate until a meaningful held-out pilot and
   source-contour shadow comparison beat the existing evidence.
+- Completed the first 2,500-step performer-disjoint FretNet pilot with seed 0.
+  On 12 fixed GuitarSet performer-05 windows, held-out total loss fell from
+  450.9486 to 2.6288; exact per-string active-pitch F1 reached 0.6146 and strict
+  frame/pitch onset F1 reached 0.2088, so the result is not an all-silence
+  collapse. The local checkpoint, hashes and versions remain under `.research/`.
+- Added a lane-independent FretNet shadow exporter. Its onset head transfers
+  poorly to separated/full-song audio, but frame-level tablature retains useful
+  contour evidence. On four authorized generated runs, unrestricted
+  upper-median frame pitch improved weighted source-contour agreement from
+  0.3382 to 0.4928 across 207 covered motif occurrences. The same frozen rule
+  raised Jonas from 0.0444 to 0.1000.
+- Rejected using those pitches directly in chart authoring. On the strongest
+  authorized test, changing raw pitches reduced exact-lane agreement from 0.32
+  to 0.13 and movement agreement from 0.64 to 0.52. Applying only exact
+  three-occurrence repeated four-note contours still reduced exact lanes to
+  0.28 and motif-shape agreement from 0.51 to 0.46. `replay
+  --fretnet-shadow` therefore records a diagnostic proposal and stage snapshot
+  only; verified attack, chord, lane, movement and motif chart metrics remain
+  byte-for-byte equivalent to the baseline replay.

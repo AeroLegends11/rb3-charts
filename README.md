@@ -568,6 +568,8 @@ reported as `compile_failed`, while keeping the authoring files and review page.
 - `scripts/fretnet_pilot.py`: optional, offline FretNet training pilot on
   rights-cleared GuitarSet audio. It is not a runtime dependency and does not
   feed predictions into chart generation.
+- `scripts/fretnet_shadow.py`: exports source-time, per-string FretNet note and
+  frame-pitch evidence for an audio file without assigning chart lanes.
 - `tests/`: synthetic regression fixtures; no commercial audio required.
 - `reference/style-profile.json`: compact runtime statistics; full local reference
   reports and downloaded chart repositories are excluded from Git.
@@ -596,6 +598,24 @@ The local report records the dataset fingerprint, FretNet revision, dependency
 versions, initial/final held-out losses and checkpoint name. Checkpoints and
 reports remain under `.research/`; training success alone does not authorize
 runtime integration.
+
+`fretnet_shadow.py` can then write lane-independent evidence for a separated
+guitar stem. Supplying that JSON to `replay --fretnet-shadow` records a
+`fretnet_shadow_diagnostic` stage snapshot and proposal report. The replay's
+actual chart remains unchanged; this option exists to measure transfer before
+any model output can influence authoring.
+
+```powershell
+.\.research\fretnet-venv\Scripts\python.exe scripts\fretnet_shadow.py `
+  --audio output\review\audio\timing-audit-guitar.wav `
+  --checkpoint .research\fretnet-pilot\fretnet-pilot-state.pt `
+  --fretnet-repo .research\fretnet `
+  --output .research\fretnet-shadow\review.json
+
+.\.venv\Scripts\python.exe -m rb3charts.cli replay output\review `
+  --output output\shadow-replay `
+  --fretnet-shadow .research\fretnet-shadow\review.json
+```
 
 `validate-run` rechecks an existing draft's package MIDI against its saved
 charts and tempo map, verifies the package-input manifest when present, and

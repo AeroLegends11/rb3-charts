@@ -39,6 +39,11 @@ def main():
     replay.add_argument("--output",type=Path,default=None,help="Destination root for the replay run folder")
     replay.add_argument("--onyx",type=Path)
     replay.add_argument("--compile",action="store_true",help="Compile replay output with Onyx/Magma after validation")
+    replay.add_argument(
+        "--fretnet-shadow",
+        type=Path,
+        help="Optional FretNet evidence for a diagnostic-only replay snapshot",
+    )
     benchmark=sub.add_parser(
         "benchmark-replays",
         help="Compare one instrument across two replay corpora",
@@ -722,6 +727,7 @@ def main():
                 output=args.output,
                 onyx=args.onyx,
                 compile=args.compile,
+                fretnet_shadow=args.fretnet_shadow,
             )
         except (
             FileNotFoundError,KeyError,RuntimeError,TypeError,ValueError
