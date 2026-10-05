@@ -241,6 +241,7 @@ def main():
             "multi-scale",
             "multi-scale-local",
             "multi-scale-offset",
+            "multi-scale-gated",
         ],
         default="conv1d",
     )

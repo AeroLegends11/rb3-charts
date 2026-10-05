@@ -734,6 +734,29 @@ def test_structure_baseline_supports_joint_attack_offsets(tmp_path):
     assert prediction["schema"] == "rb3charts-structure-predictions"
 
 
+def test_structure_baseline_supports_smooth_context_gate(tmp_path):
+    index = _write_feature_index_fixture(tmp_path)
+    output = tmp_path / "multi-scale-gated.pt"
+    report = train_structure_baseline(
+        index,
+        output,
+        epochs=1,
+        device="cpu",
+        seed=7,
+        architecture="multi-scale-gated",
+    )
+
+    assert report["architecture"] == "multi-scale-gated"
+    assert report["model_version"] == 6
+    prediction = predict_structure(
+        output,
+        tmp_path / "validation" / "audio.wav",
+        tmp_path / "multi-scale-gated-prediction.json",
+        device="cpu",
+    )
+    assert prediction["schema"] == "rb3charts-structure-predictions"
+
+
 def test_structure_offset_head_can_freeze_initialized_selector(tmp_path):
     index = _write_feature_index_fixture(tmp_path)
     initialized = tmp_path / "initialized.pt"

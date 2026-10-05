@@ -16,6 +16,7 @@ def build_structure_model(
 ):
     import torch
     import torch.nn as nn
+    import torch.nn.functional as functional
 
     class StructureModel(nn.Module):
         def __init__(self):
@@ -48,6 +49,7 @@ def build_structure_model(
                 "multi-scale",
                 "multi-scale-local",
                 "multi-scale-offset",
+                "multi-scale-gated",
             ):
                 self.input_projection = nn.Conv1d(
                     input_features,
@@ -101,6 +103,31 @@ def build_structure_model(
                         nn.Conv1d(hidden_features, 1, kernel_size=1),
                         nn.Tanh(),
                     )
+                if architecture == "multi-scale-gated":
+                    self.local_attack = nn.Conv1d(
+                        hidden_features,
+                        1,
+                        kernel_size=1,
+                    )
+                    self.gate_fusion = nn.Sequential(
+                        nn.Conv1d(
+                            hidden_features * 3,
+                            hidden_features,
+                            kernel_size=1,
+                        ),
+                        nn.ReLU(),
+                    )
+                    self.attack_gate = nn.Conv1d(
+                        hidden_features,
+                        1,
+                        kernel_size=1,
+                    )
+                    self.gate_smoothing = nn.AvgPool1d(
+                        kernel_size=17,
+                        stride=1,
+                        padding=8,
+                        count_include_pad=False,
+                    )
             else:
                 raise ValueError(f"Unsupported structure architecture: {architecture}")
             self.attack = nn.Conv1d(hidden_features, 1, kernel_size=1)
@@ -117,13 +144,15 @@ def build_structure_model(
                 "multi-scale",
                 "multi-scale-local",
                 "multi-scale-offset",
+                "multi-scale-gated",
             ):
                 local_encoded = self.encoder(encoded)
+                pooled_context = [
+                    pool(local_encoded) for pool in self.context_pools
+                ]
                 encoded = self.activation(self.context_fusion(
                     torch.cat(
-                        [local_encoded] + [
-                            pool(local_encoded) for pool in self.context_pools
-                        ],
+                        [local_encoded] + pooled_context,
                         dim=1,
                     )
                 ))
@@ -145,6 +174,27 @@ def build_structure_model(
                 outputs["attack_offset"] = self.attack_offset(
                     torch.cat((local_encoded, encoded), dim=1)
                 ).squeeze(1)
+            if architecture == "multi-scale-gated":
+                local_log_probability = functional.logsigmoid(
+                    self.local_attack(local_encoded).squeeze(1)
+                )
+                gate_log_probability = functional.logsigmoid(
+                    self.gate_smoothing(self.attack_gate(
+                        self.gate_fusion(torch.cat(
+                            pooled_context,
+                            dim=1,
+                        ))
+                    )).squeeze(1)
+                )
+                log_probability = (
+                    local_log_probability + gate_log_probability
+                )
+                probability = torch.exp(log_probability).clamp_max(
+                    1 - 1e-6
+                )
+                outputs["attack"] = (
+                    log_probability - torch.log1p(-probability)
+                )
             return outputs
 
     return StructureModel()

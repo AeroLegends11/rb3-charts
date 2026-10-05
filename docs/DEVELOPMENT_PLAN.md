@@ -1022,6 +1022,17 @@ Status update (2026-09-22):
   untouched Persephone was not evaluated. The grid oracle remains evidence
   that beat timing can represent these charts, but not that the tested audio
   model can select the correct grid positions.
+- A factorized frame model next separated timing from chartability inside the
+  primary representation: a local encoder produced the only sharp attack
+  probability, while pooled 0.4/1.5/3.0-second context produced a separate
+  gate smoothed over roughly 197 ms. Multiplying those probabilities was
+  intended to let context suppress non-chartable local attacks without moving
+  their peaks. Seed-0 validation reached 0.7158 macro F1, 0.6261 recall,
+  19.90 ms macro median timing and 36.49 ms macro P95. It preserved useful
+  precision (0.8273 micro) and improved P95 relative to the selected model,
+  but missed both F1/recall and median-timing gates. Untouched Persephone was
+  not evaluated. The architecture is retained only as an auditable negative
+  result and is not used by generation.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,
