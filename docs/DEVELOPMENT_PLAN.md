@@ -855,3 +855,12 @@ Status update (2026-09-22):
   rejected, remain offline research artifacts and are not used by generation.
 - These are automated structure and post-generation comparison measurements.
   The new checkpoint has not received listening review or Xbox playtesting.
+- Verified the MIT-licensed FretNet continuous guitar transcription stack in an
+  isolated Python 3.12 environment and processed a real GuitarSet microphone
+  example into its six-channel HCQT and per-string targets. Added
+  `scripts/fretnet_pilot.py` to run exact deterministic optimizer steps, compare
+  fixed held-out-performer losses before and after training, save a local state
+  dictionary and record input/model/dependency provenance. A repeated one-step
+  smoke run produced identical initial, training and final losses. FretNet
+  remains an offline research candidate until a meaningful held-out pilot and
+  source-contour shadow comparison beat the existing evidence.

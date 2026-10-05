@@ -565,6 +565,9 @@ reported as `compile_failed`, while keeping the authoring files and review page.
 - `pipeline.py`: engine orchestration, independent of the GUI.
 - `assessment.py`, `reference.py`, `regression.py`: quality triage, replay
   regression snapshots/metrics and reference statistics.
+- `scripts/fretnet_pilot.py`: optional, offline FretNet training pilot on
+  rights-cleared GuitarSet audio. It is not a runtime dependency and does not
+  feed predictions into chart generation.
 - `tests/`: synthetic regression fixtures; no commercial audio required.
 - `reference/style-profile.json`: compact runtime statistics; full local reference
   reports and downloaded chart repositories are excluded from Git.
@@ -576,6 +579,23 @@ available for legitimate regeneration.
 `analyze-reference` writes only compact aggregate statistics to `--output`.
 Use `--full-output` for an optional per-song report with source paths, and keep
 that report local.
+
+The FretNet pilot requires an isolated environment containing the external
+MIT-licensed FretNet repository and its research dependencies. A deterministic
+held-out-performer run is:
+
+```powershell
+.\.research\fretnet-venv\Scripts\python.exe scripts\fretnet_pilot.py `
+  --dataset .research\guitarset `
+  --fretnet-repo .research\fretnet `
+  --output .research\fretnet-pilot `
+  --holdout 05 --steps 2500 --seed 0
+```
+
+The local report records the dataset fingerprint, FretNet revision, dependency
+versions, initial/final held-out losses and checkpoint name. Checkpoints and
+reports remain under `.research/`; training success alone does not authorize
+runtime integration.
 
 `validate-run` rechecks an existing draft's package MIDI against its saved
 charts and tempo map, verifies the package-input manifest when present, and
