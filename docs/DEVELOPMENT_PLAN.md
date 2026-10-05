@@ -980,6 +980,21 @@ Status update (2026-09-22):
   additional seeds and untouched-test evaluation were skipped. The optional
   feature remains available for auditable research checkpoints but is disabled
   by default and not used in generation.
+- A materially distinct joint timing representation added a bounded
+  four-frame residual-offset head to the multi-scale encoder. Supervision maps
+  every frame within about 46 ms of an authorized attack directly to the
+  continuous displacement required to reach that attack, rather than snapping,
+  blending scores, reranking fixed candidates, adding localization loss, or
+  exposing spectral flux. End-to-end joint training decisively regressed
+  validation macro F1/recall from 0.7597/0.7181 to 0.4919/0.4405 and macro
+  median timing from 14.93 to 28.20 ms. A guarded second trial initialized the
+  accepted seed-0 selector, froze every existing weight, and trained only the
+  offset head. It exactly preserved validation macro F1 0.759665, recall
+  0.718132, macro median 14.927 ms and macro P95 38.147 ms: learned rounded
+  offsets were behaviorally a no-op. The predeclared gate required non-regressed
+  F1/recall/P95 and a strict median-timing improvement, so untouched Persephone
+  was not evaluated. The offset architecture remains only to make the negative
+  result reproducible; it is rejected from runtime.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

@@ -44,7 +44,11 @@ def build_structure_model(
                     )
                     for dilation in (1, 2, 4, 8, 16, 32)
                 ])
-            elif architecture in ("multi-scale", "multi-scale-local"):
+            elif architecture in (
+                "multi-scale",
+                "multi-scale-local",
+                "multi-scale-offset",
+            ):
                 self.input_projection = nn.Conv1d(
                     input_features,
                     hidden_features,
@@ -86,6 +90,17 @@ def build_structure_model(
                         1,
                         kernel_size=1,
                     )
+                if architecture == "multi-scale-offset":
+                    self.attack_offset = nn.Sequential(
+                        nn.Conv1d(
+                            hidden_features * 2,
+                            hidden_features,
+                            kernel_size=1,
+                        ),
+                        nn.ReLU(),
+                        nn.Conv1d(hidden_features, 1, kernel_size=1),
+                        nn.Tanh(),
+                    )
             else:
                 raise ValueError(f"Unsupported structure architecture: {architecture}")
             self.attack = nn.Conv1d(hidden_features, 1, kernel_size=1)
@@ -98,7 +113,11 @@ def build_structure_model(
             if architecture == "dilated-tcn":
                 for layer in self.encoder:
                     encoded = self.activation(encoded + layer(encoded))
-            elif architecture in ("multi-scale", "multi-scale-local"):
+            elif architecture in (
+                "multi-scale",
+                "multi-scale-local",
+                "multi-scale-offset",
+            ):
                 local_encoded = self.encoder(encoded)
                 encoded = self.activation(self.context_fusion(
                     torch.cat(
@@ -110,7 +129,7 @@ def build_structure_model(
                 ))
             else:
                 encoded = self.encoder(encoded)
-            return {
+            outputs = {
                 "attack": (
                     self.attack(encoded)
                     + (
@@ -122,5 +141,10 @@ def build_structure_model(
                 "polyphony": self.polyphony(encoded).transpose(1, 2),
                 "sustain": self.sustain(encoded).transpose(1, 2),
             }
+            if architecture == "multi-scale-offset":
+                outputs["attack_offset"] = self.attack_offset(
+                    torch.cat((local_encoded, encoded), dim=1)
+                ).squeeze(1)
+            return outputs
 
     return StructureModel()

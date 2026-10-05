@@ -1373,6 +1373,45 @@ def _attack_peaks(scores, threshold=None):
     return peaks
 
 
+def _decode_attack_peaks(scores, threshold, offsets=None, offset_radius=4):
+    peaks = _attack_peaks(scores, threshold)
+    if offsets is None:
+        return peaks
+    shifted = np.clip(
+        peaks + np.rint(np.asarray(offsets)[peaks] * offset_radius).astype(int),
+        0,
+        len(scores) - 1,
+    )
+    best_by_frame = {}
+    for source, destination in zip(peaks, shifted):
+        previous = best_by_frame.get(int(destination))
+        if previous is None or scores[source] > scores[previous]:
+            best_by_frame[int(destination)] = int(source)
+    return np.asarray(sorted(best_by_frame), dtype=int)
+
+
+def _attack_offset_targets(attacks, radius=4):
+    import torch
+
+    targets = torch.zeros_like(attacks)
+    mask = torch.zeros_like(attacks, dtype=torch.bool)
+    shifts = [0] + [
+        shift
+        for distance in range(1, radius + 1)
+        for shift in (-distance, distance)
+    ]
+    for shift in shifts:
+        positives = torch.roll(attacks > 0.5, shifts=shift, dims=-1)
+        if shift < 0:
+            positives[..., shift:] = False
+        elif shift > 0:
+            positives[..., :shift] = False
+        select = positives & ~mask
+        targets[select] = -shift / radius
+        mask |= positives
+    return targets, mask
+
+
 def _periodic_peak_support(times, ranks):
     """Score candidates centered between two short, equally spaced peaks."""
     times = np.asarray(times, dtype=float)
@@ -1426,8 +1465,14 @@ def _peak_width_rank_percentiles(scores, peaks):
 def _onset_metrics(records, threshold, tolerance_frames):
     matched = predicted_total = actual_total = 0
     timing_errors_ms = []
-    for scores, actual_frames in records:
-        predicted_frames = _attack_peaks(scores, threshold).tolist()
+    for record in records:
+        scores, actual_frames = record[:2]
+        offsets = record[2] if len(record) > 2 else None
+        predicted_frames = _decode_attack_peaks(
+            scores,
+            threshold,
+            offsets,
+        ).tolist()
         unmatched_actual = set(range(len(actual_frames)))
         for predicted_frame in predicted_frames:
             candidates = [
@@ -1515,6 +1560,8 @@ def train_structure_baseline(
     evaluate_test=True,
     localization_weight=0.0,
     onset_feature=False,
+    initialize_model=None,
+    offset_only=False,
 ):
     """Train a deterministic first-pass attack/polyphony/sustain network."""
     import torch
@@ -1532,15 +1579,24 @@ def train_structure_baseline(
         raise TrainingDataError("Focal gamma cannot be negative")
     if localization_weight < 0:
         raise TrainingDataError("Localization weight cannot be negative")
+    if offset_only and architecture != "multi-scale-offset":
+        raise TrainingDataError(
+            "Offset-only training requires multi-scale-offset architecture"
+        )
+    if offset_only and initialize_model is None:
+        raise TrainingDataError(
+            "Offset-only training requires an initialization checkpoint"
+        )
     if architecture not in (
         "conv1d",
         "dilated-tcn",
         "multi-scale",
         "multi-scale-local",
+        "multi-scale-offset",
     ):
         raise TrainingDataError(
             "Structure architecture must be conv1d, dilated-tcn, multi-scale, "
-            "or multi-scale-local"
+            "multi-scale-local, or multi-scale-offset"
         )
     output = Path(output).resolve()
     if output.suffix.lower() != ".pt":
@@ -1566,7 +1622,42 @@ def train_structure_baseline(
         input_features=FEATURE_MELS * 2 + 2 + int(onset_feature),
         hidden_features=64,
     ).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
+    initialization_sha256 = None
+    if initialize_model is not None:
+        initialize_model = Path(initialize_model).resolve()
+        try:
+            initialized = torch.load(
+                initialize_model,
+                map_location="cpu",
+                weights_only=False,
+            )
+            missing, unexpected = model.load_state_dict(
+                initialized["model_state"],
+                strict=False,
+            )
+        except (OSError, KeyError, RuntimeError, ValueError) as exc:
+            raise TrainingDataError(
+                f"Cannot initialize structure model: {exc}"
+            ) from exc
+        allowed_missing = {
+            "attack_offset.0.weight",
+            "attack_offset.0.bias",
+            "attack_offset.2.weight",
+            "attack_offset.2.bias",
+        }
+        if set(missing) != allowed_missing or unexpected:
+            raise TrainingDataError(
+                "Initialization checkpoint is incompatible with the offset model"
+            )
+        initialization_sha256 = _hash_file(initialize_model)
+    if offset_only:
+        for name, parameter in model.named_parameters():
+            parameter.requires_grad = name.startswith("attack_offset.")
+    optimizer = torch.optim.AdamW(
+        [parameter for parameter in model.parameters() if parameter.requires_grad],
+        lr=1e-3,
+        weight_decay=1e-4,
+    )
     train_items = [item for item in items if item["split"] == "train"]
     validation_items = [item for item in items if item["split"] == "validation"]
     indexed_test_items = [
@@ -1649,6 +1740,14 @@ def train_structure_baseline(
                 outputs["attack"],
                 attacks,
             )
+            if "attack_offset" in outputs:
+                offset_targets, offset_mask = _attack_offset_targets(attacks)
+                offset_objective = functional.smooth_l1_loss(
+                    outputs["attack_offset"][offset_mask],
+                    offset_targets[offset_mask],
+                )
+            else:
+                offset_objective = outputs["attack"].sum() * 0
             attack_mask = attacks > 0.5
             if "polyphony" in targets and torch.any(attack_mask):
                 polyphony_loss = functional.cross_entropy(
@@ -1666,10 +1765,14 @@ def train_structure_baseline(
                 else outputs["sustain"].sum() * 0
             )
             loss = (
-                attack_objective
-                + localization_weight * localization_objective
-                + 0.5 * polyphony_loss
-                + 0.25 * sustain_loss
+                offset_objective
+                if offset_only else (
+                    attack_objective
+                    + localization_weight * localization_objective
+                    + 0.25 * offset_objective
+                    + 0.5 * polyphony_loss
+                    + 0.25 * sustain_loss
+                )
             )
             optimizer.zero_grad()
             loss.backward()
@@ -1688,14 +1791,19 @@ def train_structure_baseline(
             outputs = model(features)
             actual = attacks > 0.5
             scores = torch.sigmoid(outputs["attack"][0]).cpu().numpy()
+            offsets = (
+                outputs["attack_offset"][0].cpu().numpy()
+                if "attack_offset" in outputs else None
+            )
             actual_frames = torch.nonzero(actual[0], as_tuple=False).flatten().cpu().tolist()
-            onset_records.append((scores, actual_frames))
+            onset_records.append((scores, actual_frames, offsets))
             validation_records.append(
                 (
                     str(item["song_id"]),
                     str(item["dataset"]["id"]),
                     scores,
                     actual_frames,
+                    offsets,
                 )
             )
             if "polyphony" in targets and torch.any(actual):
@@ -1704,8 +1812,8 @@ def train_structure_baseline(
                 polyphony_total += int(torch.sum(actual).cpu())
     fixed_metrics = _onset_metrics(onset_records, 0.5, tolerance_frames)
     calibration_records = [
-        (scores, actual_frames)
-        for _, dataset_id, scores, actual_frames in validation_records
+        (scores, actual_frames, offsets)
+        for _, dataset_id, scores, actual_frames, offsets in validation_records
         if calibration_dataset is None or dataset_id == calibration_dataset
     ]
     if not calibration_records:
@@ -1719,11 +1827,11 @@ def train_structure_baseline(
         )
         per_song = [
             _onset_metrics(
-                [(scores, actual_frames)],
+                [(scores, actual_frames, offsets)],
                 threshold,
                 tolerance_frames,
             )
-            for scores, actual_frames in calibration_records
+            for scores, actual_frames, offsets in calibration_records
         ]
         candidate["macro_f1"] = float(np.mean([
             row["f1"] for row in per_song
@@ -1743,17 +1851,17 @@ def train_structure_baseline(
     )
     validation_by_song = {
         song_id: _onset_metrics(
-            [(scores, actual_frames)],
+            [(scores, actual_frames, offsets)],
             calibrated["threshold"],
             tolerance_frames,
         )
-        for song_id, _, scores, actual_frames in validation_records
+        for song_id, _, scores, actual_frames, offsets in validation_records
     }
     validation_by_dataset = {
         dataset_id: _onset_metrics(
             [
-                (scores, actual_frames)
-                for _, record_dataset, scores, actual_frames in validation_records
+                (scores, actual_frames, offsets)
+                for _, record_dataset, scores, actual_frames, offsets in validation_records
                 if record_dataset == dataset_id
             ],
             calibrated["threshold"],
@@ -1761,7 +1869,7 @@ def train_structure_baseline(
         )
         for dataset_id in sorted({
             dataset_id
-            for _, dataset_id, _, _ in validation_records
+            for _, dataset_id, _, _, _ in validation_records
         })
     }
     test_metrics = None
@@ -1776,14 +1884,19 @@ def train_structure_baseline(
                 outputs = model(features)
                 actual = attacks > 0.5
                 scores = torch.sigmoid(outputs["attack"][0]).cpu().numpy()
+                offsets = (
+                    outputs["attack_offset"][0].cpu().numpy()
+                    if "attack_offset" in outputs else None
+                )
                 actual_frames = torch.nonzero(actual[0], as_tuple=False).flatten().cpu().tolist()
-                test_records.append((scores, actual_frames))
+                test_records.append((scores, actual_frames, offsets))
                 test_named_records.append(
                     (
                         str(item["song_id"]),
                         str(item["dataset"]["id"]),
                         scores,
                         actual_frames,
+                        offsets,
                     )
                 )
                 if "polyphony" in targets and torch.any(actual):
@@ -1795,11 +1908,11 @@ def train_structure_baseline(
         test_metrics = _onset_metrics(test_records, calibrated["threshold"], tolerance_frames)
         test_by_song = {
             song_id: _onset_metrics(
-                [(scores, actual_frames)],
+                [(scores, actual_frames, offsets)],
                 calibrated["threshold"],
                 tolerance_frames,
             )
-            for song_id, _, scores, actual_frames in test_named_records
+            for song_id, _, scores, actual_frames, offsets in test_named_records
         }
         test_metrics["macro_f1"] = float(np.mean([
             row["f1"] for row in test_by_song.values()
@@ -1807,8 +1920,8 @@ def train_structure_baseline(
         test_metrics["by_dataset"] = {
             dataset_id: _onset_metrics(
                 [
-                    (scores, actual_frames)
-                    for _, record_dataset, scores, actual_frames in test_named_records
+                    (scores, actual_frames, offsets)
+                    for _, record_dataset, scores, actual_frames, offsets in test_named_records
                     if record_dataset == dataset_id
                 ],
                 calibrated["threshold"],
@@ -1816,7 +1929,7 @@ def train_structure_baseline(
             )
             for dataset_id in sorted({
                 dataset_id
-                for _, dataset_id, _, _ in test_named_records
+                for _, dataset_id, _, _, _ in test_named_records
             })
         }
         test_metrics["polyphony_accuracy"] = (
@@ -1829,6 +1942,7 @@ def train_structure_baseline(
             "dilated-tcn": 2,
             "multi-scale": 3,
             "multi-scale-local": 4,
+            "multi-scale-offset": 5,
         }[architecture],
         "architecture": architecture,
         "feature_version": FEATURE_VERSION,
@@ -1841,6 +1955,11 @@ def train_structure_baseline(
         "calibration_dataset": calibration_dataset,
         "localization_weight": localization_weight,
         "onset_feature": onset_feature,
+        "attack_offset_radius_frames": (
+            4 if architecture == "multi-scale-offset" else None
+        ),
+        "initialization_sha256": initialization_sha256,
+        "offset_only": offset_only,
         "training_items": len(train_items),
         "validation_items": len(validation_items),
         "test_items": len(indexed_test_items),
@@ -1909,6 +2028,9 @@ def train_structure_baseline(
             "architecture": architecture,
             "localization_weight": localization_weight,
             "onset_feature": onset_feature,
+            "attack_offset_radius_frames": (
+                4 if architecture == "multi-scale-offset" else None
+            ),
         },
         "training_report": report,
     }
@@ -1972,6 +2094,7 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
         "dilated-tcn",
         "multi-scale",
         "multi-scale-local",
+        "multi-scale-offset",
     ):
         raise TrainingDataError(
             f"Unsupported structure architecture: {architecture}"
@@ -1989,11 +2112,39 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
     with torch.no_grad():
         outputs = model(torch.from_numpy(features).unsqueeze(0).to(device))
         attack_scores = torch.sigmoid(outputs["attack"][0]).cpu().numpy()
+        attack_offsets = (
+            outputs["attack_offset"][0].cpu().numpy()
+            if "attack_offset" in outputs else None
+        )
         polyphony = torch.argmax(outputs["polyphony"][0], dim=-1).cpu().numpy()
         sustain = torch.argmax(outputs["sustain"][0], dim=-1).cpu().numpy()
     threshold = float(configuration.get("attack_threshold", 0.5))
-    candidate_peaks = _attack_peaks(attack_scores)
-    candidate_heights=attack_scores[candidate_peaks]
+    source_candidate_peaks = _attack_peaks(attack_scores)
+    candidate_peaks = _decode_attack_peaks(
+        attack_scores,
+        None,
+        attack_offsets,
+        int(configuration.get("attack_offset_radius_frames") or 4),
+    )
+    if len(candidate_peaks) != len(source_candidate_peaks):
+        source_candidate_peaks = np.asarray([
+            max(
+                _attack_peaks(attack_scores),
+                key=lambda source: (
+                    int(np.clip(
+                        source + round(
+                            float(attack_offsets[source])
+                            * int(configuration.get("attack_offset_radius_frames") or 4)
+                        ),
+                        0,
+                        len(attack_scores) - 1,
+                    )) == int(frame),
+                    attack_scores[source],
+                ),
+            )
+            for frame in candidate_peaks
+        ], dtype=int)
+    candidate_heights=attack_scores[source_candidate_peaks]
     rank_percentiles = _rank_percentiles(candidate_heights)
     rank_by_frame={
         int(frame):float(percentile)
@@ -2014,7 +2165,7 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
     }
     width_rank_percentiles = _peak_width_rank_percentiles(
         attack_scores,
-        candidate_peaks,
+        source_candidate_peaks,
     )
     width_reranked_scores = 0.9 * reranked_scores + 0.1 * width_rank_percentiles
     width_reranked_percentiles = _rank_percentiles(width_reranked_scores)
@@ -2092,13 +2243,14 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
 
     candidates = event_rows(
         candidate_peaks,
-        attack_scores[candidate_peaks],
+        candidate_heights,
         "structure-candidate",
     )
-    accepted = candidate_peaks[attack_scores[candidate_peaks] >= threshold]
+    accepted_mask = candidate_heights >= threshold
+    accepted = candidate_peaks[accepted_mask]
     events = event_rows(
         accepted,
-        attack_scores[accepted],
+        candidate_heights[accepted_mask],
         "structure",
     )
     result = {

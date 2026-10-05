@@ -12,6 +12,8 @@ from rb3charts.training import (
     FEATURE_SAMPLE_RATE,
     TrainingDataError,
     _attack_localization_loss,
+    _attack_offset_targets,
+    _decode_attack_peaks,
     _onset_metrics,
     _peak_width_rank_percentiles,
     _periodic_peak_support,
@@ -688,6 +690,78 @@ def test_structure_baseline_supports_local_attack_with_context(tmp_path):
         device="cpu",
     )
     assert prediction["schema"] == "rb3charts-structure-predictions"
+
+
+def test_attack_offset_targets_point_neighbor_frames_to_attack():
+    import torch
+
+    attacks = torch.tensor([[0.0, 0.0, 1.0, 0.0, 0.0]])
+    targets, mask = _attack_offset_targets(attacks, radius=2)
+
+    assert mask.tolist() == [[True, True, True, True, True]]
+    assert targets.tolist() == [[1.0, 0.5, 0.0, -0.5, -1.0]]
+
+
+def test_attack_offset_decoder_moves_context_peak_without_changing_selection():
+    scores = np.asarray([0.0, 0.1, 0.8, 0.1, 0.0], dtype=np.float32)
+    offsets = np.asarray([0.0, 0.0, -0.5, 0.0, 0.0], dtype=np.float32)
+
+    assert _decode_attack_peaks(scores, 0.5).tolist() == [2]
+    assert _decode_attack_peaks(scores, 0.5, offsets, 2).tolist() == [1]
+
+
+def test_structure_baseline_supports_joint_attack_offsets(tmp_path):
+    index = _write_feature_index_fixture(tmp_path)
+    output = tmp_path / "multi-scale-offset.pt"
+    report = train_structure_baseline(
+        index,
+        output,
+        epochs=1,
+        device="cpu",
+        seed=7,
+        architecture="multi-scale-offset",
+    )
+
+    assert report["architecture"] == "multi-scale-offset"
+    assert report["model_version"] == 5
+    assert report["attack_offset_radius_frames"] == 4
+    prediction = predict_structure(
+        output,
+        tmp_path / "validation" / "audio.wav",
+        tmp_path / "multi-scale-offset-prediction.json",
+        device="cpu",
+    )
+    assert prediction["schema"] == "rb3charts-structure-predictions"
+
+
+def test_structure_offset_head_can_freeze_initialized_selector(tmp_path):
+    index = _write_feature_index_fixture(tmp_path)
+    initialized = tmp_path / "initialized.pt"
+    train_structure_baseline(
+        index,
+        initialized,
+        epochs=1,
+        device="cpu",
+        seed=7,
+        architecture="multi-scale",
+        evaluate_test=False,
+    )
+    report = train_structure_baseline(
+        index,
+        tmp_path / "offset-only.pt",
+        epochs=1,
+        device="cpu",
+        seed=7,
+        architecture="multi-scale-offset",
+        evaluate_test=False,
+        initialize_model=initialized,
+        offset_only=True,
+    )
+
+    assert report["offset_only"] is True
+    assert report["initialization_sha256"] == hashlib.sha256(
+        initialized.read_bytes()
+    ).hexdigest()
 
 
 def test_attack_localization_loss_prefers_centered_peak():

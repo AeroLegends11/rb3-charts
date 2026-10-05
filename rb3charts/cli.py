@@ -240,6 +240,7 @@ def main():
             "dilated-tcn",
             "multi-scale",
             "multi-scale-local",
+            "multi-scale-offset",
         ],
         default="conv1d",
     )
@@ -258,6 +259,16 @@ def main():
         "--onset-feature",
         action="store_true",
         help="Append positive spectral flux as an explicit timing feature",
+    )
+    training.add_argument(
+        "--initialize-model",
+        type=Path,
+        help="Initialize compatible weights from an existing checkpoint",
+    )
+    training.add_argument(
+        "--offset-only",
+        action="store_true",
+        help="Freeze initialized selection weights and train only attack offsets",
     )
     prediction=sub.add_parser("predict-structure",help="Run lane-independent model evaluation without changing charts")
     prediction.add_argument("model",type=Path)
@@ -655,6 +666,8 @@ def main():
                 not args.skip_test,
                 args.localization_weight,
                 args.onset_feature,
+                args.initialize_model,
+                args.offset_only,
             )
         except TrainingDataError as exc:
             print(f"Structure baseline training failed: {exc}",file=sys.stderr)

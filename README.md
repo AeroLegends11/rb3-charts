@@ -326,6 +326,11 @@ approximately 0.4, 1.5 and 3.0 second context, while
 `--architecture multi-scale-local` adds a separate local attack head for
 controlled timing experiments. Both remain offline research architectures;
 validation and frozen-test timing gates still apply before runtime use.
+`--architecture multi-scale-offset` adds a bounded per-peak timing-offset head.
+It can be initialized from a compatible multi-scale checkpoint with
+`--initialize-model` and trained without changing attack selection by adding
+`--offset-only`. This is an auditable offline timing experiment, not a runtime
+correction; it must strictly improve validation timing before test evaluation.
 `--localization-weight` adds a nearby-negative ranking loss for experiments
 that require labeled attack frames to outrank their immediate neighbors. It is
 disabled by default and does not relax validation, seed-stability, or frozen
