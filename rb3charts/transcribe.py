@@ -111,6 +111,36 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
             groups[-1].append(event)
         else:
             groups.append([event])
+    fifth_groups=0
+    octave_groups=0
+    fifth_roots=set()
+    for group in groups:
+        has_fifth=False
+        has_octave=False
+        for left_index,left in enumerate(group):
+            for right in group[left_index+1:]:
+                interval=abs(int(left["pitch"])-int(right["pitch"]))
+                ratio=min(left["confidence"],right["confidence"])/max(
+                    left["confidence"],right["confidence"]
+                )
+                onset=min(
+                    float(left.get("model_onset_strength") or 0),
+                    float(right.get("model_onset_strength") or 0),
+                )
+                if ratio<.5 or onset<.5:
+                    continue
+                if interval in (5,7):
+                    has_fifth=True
+                    root=left if left["pitch"]<right["pitch"] else right
+                    fifth_roots.add(root["source_id"])
+                elif interval==12:
+                    has_octave=True
+        fifth_groups+=int(has_fifth)
+        octave_groups+=int(has_octave)
+    root_dominant=(
+        fifth_groups>=50
+        and fifth_groups/max(1,octave_groups)>=1.5
+    )
     selected=[]
     register_proposals=[]
     report={"candidates":len(rows),"onset_groups":len(groups),"ambiguous_groups":0,
@@ -118,6 +148,9 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
             "candidate_supported_registers":0,
             "rapid_duplicates_removed":0,
             "guided_onset_groups":0,
+            "fifth_groups":fifth_groups,
+            "octave_groups":octave_groups,
+            "fifth_root_bias":root_dominant,
             "raw_guide_samples":[]}
     for group in groups:
         start=min(event["start"] for event in group)
@@ -188,6 +221,16 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
                 chosen=min(group,key=lambda event:(abs(event["pitch"]-guide),-event["confidence"]))
             else:
                 chosen=max(group,key=lambda event:event["confidence"])
+                roots=[
+                    event for event in group
+                    if (
+                        root_dominant
+                        and event["source_id"] in fifth_roots
+                        and event["confidence"]>=chosen["confidence"]*.95
+                    )
+                ]
+                if roots:
+                    chosen=max(roots,key=lambda event:event["confidence"])
             chosen=dict(chosen)
             chosen["source_id"]="+".join(event["source_id"] for event in group)
             if guide is not None and chosen["pitch"]!=guide and (abs(chosen["pitch"]-guide)<=5 or abs(abs(chosen["pitch"]-guide)-12)<=1):

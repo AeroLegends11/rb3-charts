@@ -67,6 +67,13 @@ Window: 2026-10-02 22:03 through 2026-10-03 07:00 America/Chicago.
   of being limited to phrases with no predecessor. Four authorized songs show
   no metric regressions; Certain Death mean interval error improves
   1.2667→1.2000. Frozen Jonas and Hail are exact metric no-ops.
+- Band voice focus now prefers the lower root only in fifth/fourth-dominant
+  audio, only when pYIN has no stable guide, and only when the root retains at
+  least 95% of the strongest candidate confidence. The gate is inactive on the
+  four authorized checks plus Hail, Cliffs of Dover, Mr. Brightside, Joker and
+  the Thief, and Persephone. On frozen Jonas it improves attack F1
+  0.7012→0.7019, chord F1 0.2678→0.2957, exact lanes 0.1279→0.1341, and mean
+  interval error 2.0735→2.0662 while preserving movement and motif coverage.
 
 ### 2026-10-02 22:03 - Baseline reconciled
 

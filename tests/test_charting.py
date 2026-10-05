@@ -639,6 +639,30 @@ def test_band_guitar_lead_focus_preserves_strong_chord():
     assert report["groups_resolved"]==0
 
 
+def test_band_guitar_lead_focus_prefers_near_equal_root_in_fifth_dominant_audio():
+    times=np.arange(0,12,.01)
+    midi=np.full_like(times,np.nan)
+    voiced=np.zeros_like(times,dtype=bool)
+    events=[]
+    for index in range(50):
+        start=.2+index*.2
+        events.extend([
+            {"start":start,"end":start+.1,"pitch":48,"confidence":.57,
+             "model_onset_strength":.7,"source_id":f"root-{index}","source":"guitar"},
+            {"start":start,"end":start+.1,"pitch":55,"confidence":.59,
+             "model_onset_strength":.7,"source_id":f"fifth-{index}","source":"guitar"},
+        ])
+
+    result,report=_focus_band_guitar_candidates(
+        events,times,midi,voiced,.375
+    )
+
+    assert report["fifth_root_bias"]
+    assert report["fifth_groups"]==50
+    assert report["octave_groups"]==0
+    assert {event["pitch"] for event in result}=={48}
+
+
 def test_supported_register_run_preserves_root_containing_group():
     events=[
         {"start":1.0,"end":1.2,"pitch":51,"confidence":.70,

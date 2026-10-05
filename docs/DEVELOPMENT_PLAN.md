@@ -374,6 +374,13 @@ Status update (2026-09-20):
   Hail are unchanged. Expanded authorized evaluation also adds dense Things
   Change as a counterexample for future chord classifiers: count-calibrated and
   active-overlap rules were rejected because they selected the wrong attacks.
+- Band voice focus now uses the same source-only fifth-versus-octave dominance
+  evidence to prefer a near-equal lower root only when the monophonic pYIN guide
+  is unavailable. A 95%-confidence floor avoids the movement regression from
+  broader root selection. The gate is inactive on four authorized songs and
+  the eight-song commercial safety set; frozen Jonas improves chord F1
+  0.2678→0.2957 and exact lanes 0.1279→0.1341 with movement and motif coverage
+  unchanged.
 
 ## 4. Review and anomaly tools
 
