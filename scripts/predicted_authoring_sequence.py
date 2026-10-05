@@ -299,6 +299,7 @@ def run(
     context_features=False,
     pitch_contour_features=False,
     relative_pitch_only=False,
+    single_only_loss=False,
 ):
     import torch
     import torch.nn.functional as functional
@@ -350,14 +351,21 @@ def run(
             ).to(device)
             targets = torch.from_numpy(record["targets"][None, :]).to(device)
             logits = lane_model(features)
-            allowed = (
-                class_polyphony[targets].unsqueeze(-1)
-                == class_polyphony.reshape(1, 1, -1)
-            )
-            loss = functional.cross_entropy(
-                logits.masked_fill(~allowed, -1e9).reshape(-1, len(MASKS)),
-                targets.reshape(-1),
-            )
+            if single_only_loss:
+                single = class_polyphony[targets] == 1
+                loss = functional.cross_entropy(
+                    logits[single],
+                    targets[single],
+                )
+            else:
+                allowed = (
+                    class_polyphony[targets].unsqueeze(-1)
+                    == class_polyphony.reshape(1, 1, -1)
+                )
+                loss = functional.cross_entropy(
+                    logits.masked_fill(~allowed, -1e9).reshape(-1, len(MASKS)),
+                    targets.reshape(-1),
+                )
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -447,6 +455,7 @@ def run(
         "context_features": context_features,
         "pitch_contour_features": pitch_contour_features,
         "relative_pitch_only": relative_pitch_only,
+        "single_only_loss": single_only_loss,
         "guard_passed": guard_passed,
         "test_evaluated": bool(guard_passed and test_predicted),
         "feature_index_sha256": _hash_file(feature_index),
@@ -498,6 +507,7 @@ def main():
     parser.add_argument("--context-features", action="store_true")
     parser.add_argument("--pitch-contour-features", action="store_true")
     parser.add_argument("--relative-pitch-only", action="store_true")
+    parser.add_argument("--single-only-loss", action="store_true")
     parser.add_argument(
         "--device",
         choices=["auto", "cpu", "cuda"],
@@ -515,6 +525,7 @@ def main():
         context_features=args.context_features,
         pitch_contour_features=args.pitch_contour_features,
         relative_pitch_only=args.relative_pitch_only,
+        single_only_loss=args.single_only_loss,
     )
     print(json.dumps(report, indent=2))
 

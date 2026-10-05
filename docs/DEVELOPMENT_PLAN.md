@@ -1125,6 +1125,12 @@ Status update (2026-09-22):
   validation F1 to 0.1295 but regressed Persephone to 0.0970; keeping only
   transposition-relative contour reduced validation and returned Persephone to
   the prior 0.1187. Both variants are rejected.
+- Restricting training loss to the single-note masks that the staged decoder
+  can replace also failed. With the selected pitch-contour inputs, seed 2
+  validation joint exact F1 regressed from 0.1247 to 0.1078 and lane overlap
+  from 0.2453 to 0.2190. Frozen test evaluation was skipped; chord examples
+  remain useful sequence context even when their masks are preserved at
+  inference.
 - The two external acquisition issues still had no comments on 2026-10-05, and
   no timestamped Hail listening-feedback export was present locally. These are
   genuine external gates, not reasons to weaken automated acceptance criteria.
