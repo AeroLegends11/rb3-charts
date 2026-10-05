@@ -974,6 +974,12 @@ Status update (2026-09-22):
   guarded score blend restored Persephone timing only by collapsing F1 to
   0.2534. The context model is retained offline as a substantial attack-ranking
   result, but timing prevents runtime integration.
+- Adding positive spectral flux as an explicit framewise onset channel to the
+  multi-scale model reduced seed-0 validation macro F1 from 0.7597 to 0.7025
+  and worsened median timing from 14.93 to 23.22 ms. The regression is decisive;
+  additional seeds and untouched-test evaluation were skipped. The optional
+  feature remains available for auditable research checkpoints but is disabled
+  by default and not used in generation.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

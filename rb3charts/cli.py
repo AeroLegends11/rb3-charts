@@ -133,7 +133,7 @@ def main():
     comparison_trend.add_argument("--output",type=Path)
     release_gate=sub.add_parser(
         "assess-official-quality",
-        help="Assess the authorized corpus against the 80% near-official gate",
+        help="Assess the authorized corpus against the 80%% near-official gate",
     )
     release_gate.add_argument("index",type=Path)
     release_gate.add_argument("--output",type=Path)
@@ -253,6 +253,11 @@ def main():
         type=float,
         default=0.0,
         help="Weight a local attack-peak ranking objective",
+    )
+    training.add_argument(
+        "--onset-feature",
+        action="store_true",
+        help="Append positive spectral flux as an explicit timing feature",
     )
     prediction=sub.add_parser("predict-structure",help="Run lane-independent model evaluation without changing charts")
     prediction.add_argument("model",type=Path)
@@ -649,6 +654,7 @@ def main():
                 args.architecture,
                 not args.skip_test,
                 args.localization_weight,
+                args.onset_feature,
             )
         except TrainingDataError as exc:
             print(f"Structure baseline training failed: {exc}",file=sys.stderr)

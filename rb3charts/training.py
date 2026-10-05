@@ -1345,6 +1345,23 @@ def _load_feature_artifact(path):
     return arrays, metadata
 
 
+def _structure_input_features(arrays, onset_feature=False):
+    features = [
+        arrays["log_mel"],
+        arrays["mel_delta"],
+        arrays["beat_phase"],
+    ]
+    if onset_feature:
+        features.append(
+            np.mean(
+                np.maximum(arrays["mel_delta"], 0),
+                axis=1,
+                keepdims=True,
+            ).astype(np.float32)
+        )
+    return np.concatenate(features, axis=1)
+
+
 def _attack_peaks(scores, threshold=None):
     from scipy import signal
 
@@ -1497,6 +1514,7 @@ def train_structure_baseline(
     architecture="conv1d",
     evaluate_test=True,
     localization_weight=0.0,
+    onset_feature=False,
 ):
     """Train a deterministic first-pass attack/polyphony/sustain network."""
     import torch
@@ -1545,7 +1563,7 @@ def train_structure_baseline(
         torch.backends.cudnn.deterministic = True
     model = build_structure_model(
         architecture,
-        input_features=FEATURE_MELS * 2 + 2,
+        input_features=FEATURE_MELS * 2 + 2 + int(onset_feature),
         hidden_features=64,
     ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
@@ -1590,10 +1608,7 @@ def train_structure_baseline(
 
     def tensors(item):
         arrays, metadata = _load_feature_artifact(item["path"])
-        features = np.concatenate(
-            (arrays["log_mel"], arrays["mel_delta"], arrays["beat_phase"]),
-            axis=1,
-        )
+        features = _structure_input_features(arrays, onset_feature)
         return (
             torch.from_numpy(features).unsqueeze(0).to(device),
             torch.from_numpy(arrays["attack_target"]).unsqueeze(0).to(device),
@@ -1825,6 +1840,7 @@ def train_structure_baseline(
         "focal_gamma": focal_gamma if attack_loss == "focal" else None,
         "calibration_dataset": calibration_dataset,
         "localization_weight": localization_weight,
+        "onset_feature": onset_feature,
         "training_items": len(train_items),
         "validation_items": len(validation_items),
         "test_items": len(indexed_test_items),
@@ -1883,7 +1899,7 @@ def train_structure_baseline(
         "model": report["model"],
         "model_state": {key: value.detach().cpu() for key, value in model.state_dict().items()},
         "configuration": {
-            "input_features": FEATURE_MELS * 2 + 2,
+            "input_features": FEATURE_MELS * 2 + 2 + int(onset_feature),
             "hidden_features": 64,
             "sample_rate": FEATURE_SAMPLE_RATE,
             "hop_length": FEATURE_HOP_LENGTH,
@@ -1892,6 +1908,7 @@ def train_structure_baseline(
             "attack_threshold": calibrated["threshold"],
             "architecture": architecture,
             "localization_weight": localization_weight,
+            "onset_feature": onset_feature,
         },
         "training_report": report,
     }
@@ -1939,9 +1956,9 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
             raise TrainingDataError(f"Cannot read beat map for structure inference: {exc}") from exc
     audio = _extract_audio_features(audio_path, beat_times)
-    features = np.concatenate(
-        (audio["log_mel"], audio["mel_delta"], audio["beat_phase"]),
-        axis=1,
+    features = _structure_input_features(
+        audio,
+        bool(configuration.get("onset_feature", False)),
     )
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"

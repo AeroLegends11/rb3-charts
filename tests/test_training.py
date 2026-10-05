@@ -645,6 +645,29 @@ def test_structure_baseline_supports_multi_scale_context(tmp_path):
     assert prediction["schema"] == "rb3charts-structure-predictions"
 
 
+def test_structure_baseline_supports_explicit_onset_feature(tmp_path):
+    index = _write_feature_index_fixture(tmp_path)
+    output = tmp_path / "multi-scale-onset.pt"
+    report = train_structure_baseline(
+        index,
+        output,
+        epochs=1,
+        device="cpu",
+        seed=7,
+        architecture="multi-scale",
+        onset_feature=True,
+    )
+
+    assert report["onset_feature"] is True
+    prediction = predict_structure(
+        output,
+        tmp_path / "validation" / "audio.wav",
+        tmp_path / "multi-scale-onset-prediction.json",
+        device="cpu",
+    )
+    assert prediction["schema"] == "rb3charts-structure-predictions"
+
+
 def test_structure_baseline_supports_local_attack_with_context(tmp_path):
     index = _write_feature_index_fixture(tmp_path)
     output = tmp_path / "multi-scale-local.pt"
