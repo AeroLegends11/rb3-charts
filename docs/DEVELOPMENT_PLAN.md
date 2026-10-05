@@ -1046,6 +1046,16 @@ Status update (2026-09-22):
   generalizes without losing attack selection.
   Inverse-frequency count supervision was also tested and was effectively
   identical at 0.7167 F1; count imbalance was not the limiting factor.
+- A learnable transient pyramid added signed per-frequency center-surround
+  filters over approximately 35, 105 and 383 ms, initialized as temporal
+  contrast operators but optimized jointly with local and multi-scale context.
+  Unlike the rejected scalar spectral-flux channel, this retained 128-band
+  signed transient structure at every scale. Seed-0 validation nevertheless
+  regressed sharply to 0.5428 macro F1, 0.8481 micro recall, 34.83 ms median
+  timing and 46.44 ms P95. It strongly overpredicted attacks and failed every
+  selection/timing gate, so further seeds and untouched Persephone evaluation
+  were skipped. The result rejects this transient representation as trained;
+  it is not a runtime feature.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

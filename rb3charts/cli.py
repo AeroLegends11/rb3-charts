@@ -242,6 +242,7 @@ def main():
             "multi-scale-local",
             "multi-scale-offset",
             "multi-scale-gated",
+            "transient-pyramid",
         ],
         default="conv1d",
     )
