@@ -1025,6 +1025,15 @@ Status update (2026-09-22):
   F1, versus 0.1187 for multi-scale attacks. Both alternatives are rejected;
   the selected offline bridge remains multi-scale attacks plus seed-2 staged
   audio lanes.
+- Expanding lane inputs from one attack frame to 46/186 ms log-mel means and
+  spectral-delta maxima improved validation at all three seeds. The
+  validation-selected seed 2 raised joint exact F1 from 0.1064 to 0.1273,
+  matched exact lanes from 0.1510 to 0.1766 and overlap from 0.2265 to 0.2474.
+  It nevertheless regressed untouched Persephone joint exact F1 from 0.0947 to
+  0.0856 and overlap from 0.2199 to 0.1805. Seeds 0-1 did not beat seed 2 on
+  the frozen validation selection rule, so their different test behavior
+  cannot be used to choose a checkpoint. The richer-context variant is
+  rejected as domain overfit.
 - The two external acquisition issues still had no comments on 2026-10-05, and
   no timestamped Hail listening-feedback export was present locally. These are
   genuine external gates, not reasons to weaken automated acceptance criteria.

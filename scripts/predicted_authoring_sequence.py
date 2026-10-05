@@ -36,7 +36,54 @@ def _remove_duration_input(records):
         record["features"][:, 256 + 4] = 0.0
 
 
-def _predicted_record(item, arrays, outputs, threshold):
+def _context_audio_features(arrays, frames):
+    rows = []
+    for frame in frames:
+        summaries = []
+        for radius in (4, 16):
+            left = max(0, int(frame) - radius)
+            right = min(len(arrays["log_mel"]), int(frame) + radius + 1)
+            summaries.extend((
+                np.mean(arrays["log_mel"][left:right], axis=0),
+                np.max(arrays["mel_delta"][left:right], axis=0),
+            ))
+        rows.append(np.concatenate((
+            arrays["log_mel"][frame],
+            arrays["mel_delta"][frame],
+            *summaries,
+        )))
+    return np.asarray(rows, dtype=np.float32)
+
+
+def _augment_reference_audio(records, items):
+    paths = {
+        item["song_id"]: item["path"]
+        for item in items
+    }
+    for record in records:
+        arrays, _ = _load_feature_artifact(paths[record["song_id"]])
+        frames = np.clip(
+            np.rint(
+                np.asarray(record["times"])
+                * FEATURE_SAMPLE_RATE
+                / FEATURE_HOP_LENGTH
+            ).astype(int),
+            0,
+            len(arrays["log_mel"]) - 1,
+        )
+        record["features"] = np.concatenate((
+            _context_audio_features(arrays, frames),
+            record["symbolic_features"],
+        ), axis=1)
+
+
+def _predicted_record(
+    item,
+    arrays,
+    outputs,
+    threshold,
+    context_features=False,
+):
     import torch
 
     scores = torch.sigmoid(outputs["attack"][0]).cpu().numpy()
@@ -60,10 +107,14 @@ def _predicted_record(item, arrays, outputs, threshold):
         ])
         previous = seconds
     symbolic = np.asarray(symbolic, dtype=np.float32)
-    audio = np.concatenate((
-        arrays["log_mel"][peaks],
-        arrays["mel_delta"][peaks],
-    ), axis=1)
+    audio = (
+        _context_audio_features(arrays, peaks)
+        if context_features
+        else np.concatenate((
+            arrays["log_mel"][peaks],
+            arrays["mel_delta"][peaks],
+        ), axis=1)
+    )
     return {
         "song_id": item["song_id"],
         "split": item["split"],
@@ -170,6 +221,7 @@ def run(
     seed=2,
     epochs=20,
     device="auto",
+    context_features=False,
 ):
     import torch
     import torch.nn.functional as functional
@@ -184,6 +236,9 @@ def run(
         device = "cuda" if torch.cuda.is_available() else "cpu"
     records = _load_records(feature_index, authoring_index)
     _remove_duration_input(records)
+    _, items = _load_feature_index(feature_index)
+    if context_features:
+        _augment_reference_audio(records, items)
     train = [record for record in records if record["split"] == "train"]
     validation = [
         record for record in records if record["split"] == "validation"
@@ -225,7 +280,6 @@ def run(
         structure_checkpoint,
         device,
     )
-    _, items = _load_feature_index(feature_index)
     predicted = []
     structure_model.eval()
     with torch.no_grad():
@@ -246,6 +300,7 @@ def run(
                 arrays,
                 outputs,
                 float(structure_configuration["attack_threshold"]),
+                context_features=context_features,
             ))
     validation_predicted = [
         record for record in predicted if record["split"] == "validation"
@@ -302,6 +357,7 @@ def run(
         ),
         "seed": seed,
         "epochs": epochs,
+        "context_features": context_features,
         "guard_passed": guard_passed,
         "test_evaluated": bool(guard_passed and test_predicted),
         "feature_index_sha256": _hash_file(feature_index),
@@ -350,6 +406,7 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--seed", type=int, default=2)
     parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--context-features", action="store_true")
     parser.add_argument(
         "--device",
         choices=["auto", "cpu", "cuda"],
@@ -364,6 +421,7 @@ def main():
         seed=args.seed,
         epochs=args.epochs,
         device=args.device,
+        context_features=args.context_features,
     )
     print(json.dumps(report, indent=2))
 

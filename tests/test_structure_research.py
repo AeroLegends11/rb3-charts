@@ -184,6 +184,31 @@ def test_predicted_authoring_metrics_require_timing_and_lane_agreement():
     assert metrics["joint_exact_recall"] == 0.5
 
 
+def test_predicted_authoring_context_features_summarize_fixed_windows():
+    arrays = {
+        "log_mel": np.tile(
+            np.arange(10, dtype=np.float32)[:, None],
+            (1, 128),
+        ),
+        "mel_delta": np.tile(
+            np.arange(10, dtype=np.float32)[:, None],
+            (1, 128),
+        ),
+    }
+
+    features = predicted_authoring._context_audio_features(
+        arrays,
+        np.asarray([0, 5]),
+    )
+
+    assert features.shape == (2, 768)
+    assert features[0, 0] == 0
+    assert features[0, 256] == 2
+    assert features[0, 384] == 4
+    assert features[1, 512] == pytest.approx(4.5)
+    assert features[1, 640] == 9
+
+
 def test_self_trained_authoring_targets_only_matched_single_notes():
     reference = {
         "times": [1.0, 2.0, 3.0],
