@@ -52,6 +52,22 @@ Window: 2026-10-02 22:03 through 2026-10-03 07:00 America/Chicago.
   motif coverage at 0.3432. Automatic assessment still reports `Review closely`
   because 72 attacks required evidence propagation.
 
+### 2026-10-04 19:55 - Chord transfer expanded; continuous motifs retained
+
+- Added two unused rights-cleared GuitarMaster songs as independent evaluation
+  checks. Things Change is a dense counterexample: 993 generated versus 589
+  reference attacks, chord F1 0.2031, exact lanes 0.1421, and motif coverage
+  0.2336. Its 158/302 direct fifth realization shows that chord count alone
+  cannot identify the correct attacks.
+- Rejected active-overlap fifths, binary and confidence-ranked chord gates,
+  source-root revoicing, and chord-weighted structure models. Each improved a
+  narrow chord statistic but regressed movement, motif coverage, or untouched
+  test transfer; no runtime chord behavior from those experiments remains.
+- Phrase motif reuse now applies across an existing continuity anchor instead
+  of being limited to phrases with no predecessor. Four authorized songs show
+  no metric regressions; Certain Death mean interval error improves
+  1.2667→1.2000. Frozen Jonas and Hail are exact metric no-ops.
+
 ### 2026-10-02 22:03 - Baseline reconciled
 
 - Branch: `codex/authorized-chart-pilot`.

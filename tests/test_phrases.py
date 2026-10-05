@@ -516,6 +516,26 @@ def test_phrase_motif_reuses_transposed_shape_without_pitch_edits():
     assert report["phrases"][0]["motif_family"]==report["phrases"][1]["motif_family"]
 
 
+def test_phrase_motif_reuses_shape_across_chord_continuity_anchor():
+    notes=[
+        *[
+            Note(1+step*.25,1+step*.25+.11,(4,),.9,f"left-{step}",pitch)
+            for step,pitch in enumerate((60,62,64,65))
+        ],
+        Note(2,2.1,(0,2),.9,"barrier",60),
+        *[
+            Note(2.25+step*.25,2.25+step*.25+.11,(4,),.9,f"right-{step}",pitch)
+            for step,pitch in enumerate((67,69,71,72))
+        ],
+    ]
+
+    _,report=author_guitar_phrases(notes,grid())
+
+    assert report["phrases"][1]["continuity_source"]=="through_chord"
+    assert report["phrases"][1]["motif_family"] is not None
+    assert report["phrases"][1]["motif_reason"]!="not_matched"
+
+
 def test_window_motif_extends_weak_root_return_after_four_matched_notes():
     notes=[]
     for offset,prefix,pitches,confidences in (

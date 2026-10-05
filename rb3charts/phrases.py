@@ -766,7 +766,7 @@ def author_guitar_phrases(
         window_constrained = _has_contiguous_constraints(preferred)
         if not window_constrained:
             preferred = None
-        if motif_info is not None and previous is None:
+        if motif_info is not None:
             motif_reason = motif_info["reason"]
             canonical = family_lanes.get(motif_info["family_id"])
             if canonical is not None:

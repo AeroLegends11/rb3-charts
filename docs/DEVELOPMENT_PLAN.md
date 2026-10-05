@@ -367,6 +367,13 @@ Status update (2026-09-20):
   with exact lanes 0.1047→0.1279 and unchanged motif coverage. Propagated
   texture remains explicitly review-gated rather than receiving an automatic
   close-enough label.
+- Phrase-level motif projection now remains available across chord continuity
+  anchors rather than being silently skipped whenever a preceding single-note
+  anchor exists. The four-song authorized check has no metric regressions and
+  improves Certain Death mean interval error 1.2667→1.2000; frozen Jonas and
+  Hail are unchanged. Expanded authorized evaluation also adds dense Things
+  Change as a counterexample for future chord classifiers: count-calibrated and
+  active-overlap rules were rejected because they selected the wrong attacks.
 
 ## 4. Review and anomaly tools
 
