@@ -16,6 +16,7 @@ import structure_candidate_sequence as candidate_sequence
 import structure_cell_detector as cell_detector
 import structure_beat_grid as beat_grid
 import structure_beat_finetune as beat_finetune
+import structure_beat_occupancy as beat_occupancy
 import predicted_authoring_sequence as predicted_authoring
 import predicted_authoring_self_train as self_trained_authoring
 import audio_authoring_sequence as audio_authoring
@@ -277,6 +278,33 @@ def test_beat_finetune_samples_primary_model_at_grid_frames():
         1 / (1 + np.exp(-1)),
         1 / (1 + np.exp(-3)),
     ])
+
+
+def test_beat_occupancy_encodes_counts_and_subdivisions():
+    occupancy, errors = beat_occupancy._beat_targets(
+        [0.0, 0.6, 1.2],
+        [0.15, 0.3, 0.9],
+    )
+
+    assert np.flatnonzero(occupancy[0]).tolist() == [3, 6]
+    assert np.flatnonzero(occupancy[1]).tolist() == [6]
+    assert errors.tolist() == pytest.approx([0.0, 0.0, 0.0])
+
+
+def test_beat_occupancy_decoder_uses_predicted_count():
+    count_probabilities = np.asarray([
+        [0.0, 0.1, 0.9, 0.0, 0.0],
+    ])
+    subdivision_scores = np.zeros((1, 12), dtype=np.float32)
+    subdivision_scores[0, [3, 7]] = [0.8, 0.9]
+
+    predicted = beat_occupancy._decode_beats(
+        count_probabilities,
+        subdivision_scores,
+        np.asarray([0.0, 0.6]),
+    )
+
+    assert predicted == pytest.approx([0.15, 0.35])
 
 
 def test_predicted_authoring_metrics_require_timing_and_lane_agreement():

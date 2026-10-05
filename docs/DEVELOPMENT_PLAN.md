@@ -1033,6 +1033,17 @@ Status update (2026-09-22):
   but missed both F1/recall and median-timing gates. Untouched Persephone was
   not evaluated. The architecture is retained only as an auditable negative
   result and is not used by generation.
+- A hierarchical beat model directly predicted each beat's attack count
+  (zero through four) and ranked its 12 subdivisions, eliminating adjacent
+  grid overprediction by construction rather than peak suppression. Validation
+  macro precision/recall/F1 reached 0.7249/0.7300/0.7166 after validation-only
+  count calibration. For matched attacks, macro median timing was effectively
+  zero and P95 0.105 ms, confirming that the synchronized authorized charts are
+  overwhelmingly beat-grid authored. However, whole-song selection remained
+  below the 0.7597 F1 gate, especially on one Brad validation song, so frozen
+  Persephone was not evaluated. This is the strongest timing representation
+  tested in this work window but is rejected from runtime until beat occupancy
+  generalizes without losing attack selection.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,
