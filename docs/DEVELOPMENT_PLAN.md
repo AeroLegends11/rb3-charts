@@ -1044,6 +1044,8 @@ Status update (2026-09-22):
   Persephone was not evaluated. This is the strongest timing representation
   tested in this work window but is rejected from runtime until beat occupancy
   generalizes without losing attack selection.
+  Inverse-frequency count supervision was also tested and was effectively
+  identical at 0.7167 F1; count imbalance was not the limiting factor.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

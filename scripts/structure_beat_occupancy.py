@@ -324,6 +324,15 @@ def run(index_path, output, seed=0, epochs=20, device="auto"):
     ]
     test = [record for record in records if record["split"] == "test"]
     model = _build_model(train[0]["features"].shape[1]).to(device)
+    count_values = np.concatenate([
+        record["counts"] for record in train
+    ])
+    count_frequencies = np.bincount(count_values, minlength=5).astype(float)
+    count_weights = (
+        count_frequencies.sum()
+        / np.maximum(1.0, count_frequencies)
+    )
+    count_weights /= np.mean(count_weights[count_frequencies > 0])
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=1e-3,
@@ -346,6 +355,11 @@ def run(index_path, output, seed=0, epochs=20, device="auto"):
             count_loss = functional.cross_entropy(
                 outputs["count"].reshape(-1, 5),
                 counts.reshape(-1),
+                weight=torch.tensor(
+                    count_weights,
+                    dtype=torch.float32,
+                    device=device,
+                ),
             )
             subdivision_loss = functional.binary_cross_entropy_with_logits(
                 outputs["subdivision"],
@@ -401,6 +415,7 @@ def run(index_path, output, seed=0, epochs=20, device="auto"):
             "heads": ["beat-attack-count", "subdivision-ranking"],
         },
         "epoch_losses": epoch_losses,
+        "count_class_weights": count_weights.tolist(),
         "feature_index_sha256": _hash_file(index_path),
         "validation_baseline": baseline,
         "validation": validation_metrics,
