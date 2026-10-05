@@ -9,13 +9,22 @@ downloadable. Each pair needs explicit, auditable model-training rights for both
 the audio and the chart. Official charts and unlicensed commercial recordings
 remain evaluation-only.
 
-The current local manifest contains 28 validated pairs from 12 artists and four
-chart authors, totaling 12,335 Expert attacks. It combines the original Brad
-Sucks/Zep Hurme seed with 24 Fervi-authored GuitarMaster songs whose per-folder
-CC BY or CC BY-SA evidence applies to the bundled audio and chart. Songs that
-would leak the held-out Persephone artist/chart-author split, and a chart without
-explicit fretter attribution, are excluded. Audio, charts, permissions, hashes,
-and converted artifacts remain local under `.research/`.
+The current local manifest contains 36 validated pairs from 14 artists and six
+chart authors, totaling 19,411 Expert attacks. It combines the original Brad
+Sucks/Zep Hurme seed, 24 Fervi-authored GuitarMaster songs, four
+Carlos Viola Iborra/Sectoid songs, and four El Senator/Muldjord songs. The
+Sectoid MIT and Muldjord CC BY-SA 3.0 notices explicitly cover the songs,
+performances, and fret files. All eight added pairs passed a shipped-stem
+synchronization audit globally and over early/middle/late regions before
+admission. Songs that would leak the held-out Persephone artist/chart-author
+split, and a chart without explicit fretter attribution, are excluded. Audio,
+charts, permissions, hashes, synchronization reports, and converted artifacts
+remain local under `.research/`.
+
+The added creator groups were assigned before model evaluation: Sectoid remains
+train-only and Muldjord validation-only; Persephone remains the untouched test.
+Muldjord-derived model distribution requires a separate ShareAlike assessment.
+Local training eligibility does not by itself authorize publishing a checkpoint.
 
 ## Stages
 
@@ -114,7 +123,7 @@ eligibility or generation. When supplied, its report hash, paired-manifest hash,
 published release checksum, tolerance and per-split shared/best-source metrics
 are exposed under `paired_source_agreement`. Status is `available` only when
 lineage validates, `unavailable` when no report is supplied, and `invalid` for
-missing or mismatched lineage. The current 28 authorized chart pairs have zero
+missing or mismatched lineage. The current 36 authorized chart pairs have zero
 independent paired captures; GuitarSet and Guitar-TECHS results therefore appear
 only as external rights-cleared calibration with target coverage unavailable.
 

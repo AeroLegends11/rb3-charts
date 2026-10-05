@@ -947,6 +947,21 @@ Status update (2026-09-22):
   batch is rejected as a selected training recipe. The generator remains
   available for future augmentation research, but its output is not included
   in normal training or runtime generation.
+- Added eight independently credited Debian-pack pairs after verifying the
+  Sectoid MIT and Muldjord CC BY-SA 3.0 notices, all 16 source audio/chart
+  hashes, and shipped zero-offset synchronization against isolated guitar
+  stems. Global onset offsets were within 24 ms, early/middle/late offset
+  spread was at most 58 ms, and 92.1-96.9% of chart attacks had a detected
+  onset within 50 ms. The resulting local corpus has 36 pairs, 14 artists and
+  six chart-author groups. Sectoid was frozen train-only, Muldjord
+  validation-only, and Persephone remains untouched test. Muldjord checkpoint
+  distribution still requires a separate ShareAlike assessment.
+- Three matched weighted-BCE seeds rejected immediate use of the expanded
+  corpus. Common Brad validation macro F1 changed 0.5651 to 0.6573 at seed 0,
+  but 0.7147 to 0.5806 and 0.8346 to 0.5518 at seeds 1 and 2. Matched focal
+  runs were also mixed and substantially weaker, with expanded common-domain
+  macro F1 values of 0.2230, 0.1947 and 0.3783. No expanded-corpus checkpoint
+  earned frozen Persephone evaluation and nothing is wired into generation.
 - Structure prediction artifacts now record per-song attack-peak rank percentiles
   and score quantiles so offline fusion experiments do not assume cleared-data
   probabilities are calibrated on commercial stems. A 14-song shadow run still

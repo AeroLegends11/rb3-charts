@@ -64,14 +64,22 @@ personal, noncommercial authoring workspace. Do not redistribute bundled models
 or external tools without reviewing their licenses and supplying required notices.
 No user song audio is distributed by this project.
 
-The authorized five-lane pilot now contains 28 synchronized pairs, 12 artists,
-four chart authors, and 12,335 Expert attacks. Twenty-four training songs come
+The authorized five-lane pilot now contains 36 synchronized pairs, 14 artists,
+six chart authors, and 19,411 Expert attacks. Twenty-four training songs come
 from Fervi's GuitarMaster repository at commit
 `afc3f9520d5976bd526e2b48203faa974563337d`; each admitted folder bundles audio,
 Expert MIDI, attribution, and CC BY/CC BY-SA evidence. Five Zep Hurme songs were
 excluded to prevent split leakage into held-out Persephone, and one item without
 explicit fretter attribution was excluded. The manifest validator reverified
 all file and rights-evidence hashes before deterministic Stage B conversion.
+Four MIT-licensed Sectoid songs by Carlos Viola Iborra and four CC BY-SA 3.0
+Muldjord songs by El Senator were added from Debian source packages only after
+global and early/middle/late synchronization checks against their shipped
+guitar stems. Sectoid is train-only, Muldjord validation-only, and the existing
+Persephone test remains untouched. Publishing Muldjord-derived checkpoints
+requires a separate ShareAlike assessment even though local training is
+permitted.
+
 Independent Basic Pitch contours were extracted for all 24 new training songs.
 Naively adding 2,810 Fervi-aligned single-note events to the original 815-event
 symbolic baseline reduced held-out Persephone exact lanes from 0.2915 to 0.2794
