@@ -75,6 +75,27 @@ Window: 2026-10-02 22:03 through 2026-10-03 07:00 America/Chicago.
   0.7012→0.7019, chord F1 0.2678→0.2957, exact lanes 0.1279→0.1341, and mean
   interval error 2.0735→2.0662 while preserving movement and motif coverage.
 
+### 2026-10-04 21:15 - Repeated source-candidate voices retained
+
+- Frozen Jonas analysis found that only 4/90 covered official repeated
+  single-note windows have a selected source-pitch contour compatible with the
+  official lane contour. The accepted pre-focus candidates contain compatible
+  paths in 48/90 windows, locating the remaining failure primarily in voice
+  ownership rather than final fingering.
+- Added a source-only candidate preference for fifth-dominant Band material.
+  It requires the same transposition-independent four-attack shape in at least
+  three separated source windows and never selects below 80% of the strongest
+  local confidence.
+- On rights-cleared Things Change, exact lanes improve 0.1421→0.1447 and mean
+  interval error improves 1.8644→1.8559; attack, chord, movement, and motif
+  metrics are unchanged. Certain Death, Dirtbag, and There's Something Wrong
+  are exact no-ops.
+- The gate is inactive on Hail, Cliffs of Dover, Mr. Brightside, Joker and the
+  Thief, and Persephone. Jonas has no qualifying three-occurrence family and is
+  also an exact no-op. A two-occurrence variant improved motif coverage but
+  regressed attack, exact-lane, movement, and interval metrics, so it was
+  rejected.
+
 ### 2026-10-02 22:03 - Baseline reconciled
 
 - Branch: `codex/authorized-chart-pilot`.

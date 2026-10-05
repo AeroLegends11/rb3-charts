@@ -381,6 +381,23 @@ Status update (2026-09-20):
   the eight-song commercial safety set; frozen Jonas improves chord F1
   0.2678→0.2957 and exact lanes 0.1279→0.1341 with movement and motif coverage
   unchanged.
+- Fifth-dominant Band passages can now reuse a four-attack candidate contour
+  only when the same transposition-independent shape has at least three
+  separated source occurrences and each selected candidate remains within 80%
+  of the strongest local confidence. Rights-cleared Things Change improves
+  exact lanes 0.1421→0.1447 and mean interval error 1.8644→1.8559 with attack,
+  chord, movement, and motif metrics unchanged. The source gate is inactive on
+  Certain Death, Dirtbag, There's Something Wrong, Hail, Cliffs of Dover,
+  Mr. Brightside, Joker and the Thief, and Persephone. Jonas passes the
+  fifth-dominance gate but has no qualifying three-occurrence candidate family,
+  so its frozen metrics remain unchanged.
+- Frozen Jonas motif diagnosis confirms that final fingering is not the main
+  blocker: among 90 covered official repeated single-note windows, the selected
+  source-pitch contour agrees with the official lane contour only four times.
+  Accepted pre-focus candidates contain a contour-compatible path in 48 of the
+  90 windows, but most do not form a stable three-occurrence source family.
+  Future work should therefore improve transferable voice ownership rather
+  than relax lane or motif matching globally.
 
 ## 4. Review and anomaly tools
 

@@ -1,5 +1,6 @@
 """Audio transcription backends. Confidence values are heuristic, not probabilities."""
 from pathlib import Path
+from itertools import product
 import numpy as np
 from scipy import signal
 from .audio import read_mono
@@ -141,6 +142,14 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
         fifth_groups>=50
         and fifth_groups/max(1,octave_groups)>=1.5
     )
+    repeated_voice_dominant = (
+        fifth_groups >= 50
+        and fifth_groups / max(1, octave_groups) >= 1.3
+    )
+    repeated_preferences = (
+        _repeated_candidate_preferences(groups, beat_period or .45)
+        if repeated_voice_dominant else {}
+    )
     selected=[]
     register_proposals=[]
     report={"candidates":len(rows),"onset_groups":len(groups),"ambiguous_groups":0,
@@ -151,6 +160,7 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
             "fifth_groups":fifth_groups,
             "octave_groups":octave_groups,
             "fifth_root_bias":root_dominant,
+            "repeated_voice_gate":repeated_voice_dominant,
             "raw_guide_samples":[]}
     for group in groups:
         start=min(event["start"] for event in group)
@@ -221,6 +231,16 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
                 chosen=min(group,key=lambda event:(abs(event["pitch"]-guide),-event["confidence"]))
             else:
                 chosen=max(group,key=lambda event:event["confidence"])
+                preferred = repeated_preferences.get(
+                    tuple(event["source_id"] for event in group)
+                )
+                if preferred is not None:
+                    candidate = next(
+                        event for event in group
+                        if event["source_id"] == preferred
+                    )
+                    if candidate["confidence"] >= chosen["confidence"] * .8:
+                        chosen = candidate
                 roots=[
                     event for event in group
                     if (
@@ -336,7 +356,84 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
             continue
         result.append(event)
     report["retained"]=len(result)
+    report["repeated_candidate_preferences"] = len(repeated_preferences)
     return result,report
+
+
+def _repeated_candidate_preferences(groups, beat_period):
+    families = {}
+    for start in range(len(groups) - 3):
+        window = groups[start:start + 4]
+        gaps = [
+            right[0]["start"] - left[0]["start"]
+            for left, right in zip(window, window[1:])
+        ]
+        if any(gap <= .05 or gap > beat_period * 2 for gap in gaps):
+            continue
+        rhythm = tuple(
+            int(round(gap / max(.01, beat_period / 12)))
+            for gap in gaps
+        )
+        choices = [
+            sorted(group, key=lambda event: -event["confidence"])[:3]
+            for group in window
+        ]
+        for path in product(*choices):
+            pitches = [event["pitch"] for event in path]
+            if (
+                len(set(pitches)) < 3
+                or max(pitches) - min(pitches) < 3
+                or max(abs(right - left)
+                       for left, right in zip(pitches, pitches[1:])) > 12
+            ):
+                continue
+            shape = tuple(pitch - pitches[0] for pitch in pitches)
+            quality = float(np.mean([
+                event["confidence"] / max(
+                    candidate["confidence"] for candidate in group
+                )
+                for event, group in zip(path, window)
+            ]))
+            if quality < .82:
+                continue
+            families.setdefault((rhythm, shape), []).append(
+                (start, path, quality)
+            )
+    votes = {}
+    for occurrences in families.values():
+        starts = sorted({start for start, _, _ in occurrences})
+        separated_starts = []
+        for start in starts:
+            if not separated_starts or start >= separated_starts[-1] + 4:
+                separated_starts.append(start)
+        if len(separated_starts) < 3:
+            continue
+        separated = set(separated_starts)
+        support = len(separated_starts)
+        for start, path, quality in occurrences:
+            if start not in separated:
+                continue
+            for offset, event in enumerate(path):
+                key = tuple(
+                    candidate["source_id"]
+                    for candidate in groups[start + offset]
+                )
+                if len(key) < 2:
+                    continue
+                rows = votes.setdefault(key, {})
+                rows[event["source_id"]] = (
+                    rows.get(event["source_id"], 0.0)
+                    + support * quality
+                )
+    preferences = {}
+    for key, candidates in votes.items():
+        ranked = sorted(
+            candidates.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+        if len(ranked) == 1 or ranked[0][1] >= ranked[1][1] * 1.25:
+            preferences[key] = ranked[0][0]
+    return preferences
 
 
 def _resolve_supported_register_voice_groups(

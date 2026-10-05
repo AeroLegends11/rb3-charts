@@ -5,12 +5,61 @@ from rb3charts.model import Note,TempoMap
 from rb3charts.chart import reductions,map_pitched,clean,enforce_playability,analyze_patterns,refine_band_guitar,conform_expert_to_reference,stabilize_repeated_phrases
 from rb3charts.midi import authored_tick, write_midi,note_times
 from rb3charts.validate import validate
-from rb3charts.transcribe import analyze_band_guitar_voice,electronic_lead_events,electronic_bass_events,_refine_pitched_articulations,_focus_band_guitar_candidates,_filter_sequential_lead_outliers,_resolve_supported_register_voice_groups
+from rb3charts.transcribe import analyze_band_guitar_voice,electronic_lead_events,electronic_bass_events,_refine_pitched_articulations,_focus_band_guitar_candidates,_filter_sequential_lead_outliers,_resolve_supported_register_voice_groups,_repeated_candidate_preferences
 
 def test_tempo_map_roundtrip_drifting_and_pickups():
     tempo=TempoMap([0.7,1.2,1.69,2.17,2.8,3.4])
     for seconds in np.linspace(0,5,501):
         assert tempo.seconds_at(tempo.beat_at(seconds))==pytest.approx(seconds,abs=1e-10)
+
+
+def test_repeated_candidate_preferences_reuse_transposed_source_shape():
+    groups = []
+    shape = [0, 4, 2, 7]
+    distractors = [[5, 1, 8, 3], [3, 8, 1, 10], [9, 2, 6, 1]]
+    for occurrence, root in enumerate([48, 50, 53]):
+        for index, interval in enumerate(shape):
+            start = occurrence * 2 + index * .12
+            groups.append([
+                {
+                    "start": start,
+                    "pitch": root + interval,
+                    "confidence": .9,
+                    "source_id": f"motif-{occurrence}-{index}",
+                },
+                {
+                    "start": start,
+                    "pitch": root + distractors[occurrence][index],
+                    "confidence": .95,
+                    "source_id": f"distractor-{occurrence}-{index}",
+                },
+            ])
+
+    preferences = _repeated_candidate_preferences(groups, .48)
+
+    assert len(preferences) == 12
+    assert set(preferences.values()) == {
+        f"motif-{occurrence}-{index}"
+        for occurrence in range(3)
+        for index in range(4)
+    }
+
+
+def test_repeated_candidate_preferences_ignore_overlapping_windows():
+    groups = [[{
+        "start": index * .12,
+        "pitch": 48 + index,
+        "confidence": .9,
+        "source_id": f"candidate-{index}",
+    }, {
+        "start": index * .12,
+        "pitch": 60 + index,
+        "confidence": .95,
+        "source_id": f"distractor-{index}",
+    }] for index in range(11)]
+
+    assert _repeated_candidate_preferences(groups, .48) == {}
+
 
 def test_midi_serialization_preserves_drifting_onsets(tmp_path):
     tempo=TempoMap([0.3,0.8,1.29,1.77,2.4,3.0,3.4,4.1,4.7,5.2])
