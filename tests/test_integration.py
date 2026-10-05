@@ -501,6 +501,11 @@ def test_midi_comparison_preview_aligns_reference_to_generated_audio(
     assert "A · Project Expert" in abc_page
     assert "B · Project Hard" in abc_page
     assert "C · Official Expert" in abc_page
+    assert "D · Expert Overlay" in abc_page
+    assert "Timestamped feedback" in abc_page
+    assert "rb3charts-timestamped-review-feedback" in abc_page
+    assert '"alignment_offset": -1.1' in abc_page
+    assert "selectVersion('expert_overlay')" in abc_page
     assert "Highway speed" in abc_page and "Hyper 5" in abc_page
     assert "highway.onchange=()=>lookAhead=+highway.value" in abc_page
     assert "Playback speed" in abc_page

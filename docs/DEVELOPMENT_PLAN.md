@@ -437,6 +437,29 @@ training. Direct attack F1 was mixed: Certain Death 0.7160 to 0.7100, Dirtbag
 regressed three of four songs. Neither confidence pruning nor structure gating
 is accepted into generation.
 
+A phrase-context bidirectional-GRU pilot grouped raw guitar candidates within
+30 ms and learned attack selection plus bounded 80 ms timing correction using
+only the strict authorized train/validation split. A guarded three-seed
+ensemble improved validation attack F1 from 0.6882 to 0.7021 while preserving
+recall and weakest-window recall, but the frozen Persephone test changed F1
+from 0.60137 to 0.60068 and precision from 0.51891 to 0.51452. A Hail
+post-generation shadow also lost raw-event recall, from 0.7678 to 0.4322, and
+reduced the weakest four-second recall to zero. Direct selection is rejected.
+Applying only the ensemble timing head to the unchanged accepted event mask
+improved frozen Persephone median timing error from 28.55 to 26.49 ms, but
+validation timing worsened from 22.63 to 22.65 ms and validation F1 also
+declined because corrected attacks crossed the fixed matching boundary. Timing
+correction is therefore rejected from runtime as well.
+
+An offline phrase-level source-pitch path then tested evidence scores, bounded
+pitch-jump costs, octave penalties and one-second rest resets. Authorized
+validation lane-direction agreement changed from 0.5889 to 0.5852 micro
+(0.3967 to 0.3946 macro), so the candidate was rejected before frozen-test or
+Hail evaluation. These negative results reinforce that continuity alone cannot
+identify chart-worthy attacks or transferable guitar voice ownership; no
+selector, timing correction or voice path from these pilots is wired into
+normal generation.
+
 Band sustain failure is not a simple authoring-threshold problem. Replaying
 pre-authoring durations with sustain cutoffs from 65 to 350 ms produced
 effectively identical artist-disjoint results because source durations are
