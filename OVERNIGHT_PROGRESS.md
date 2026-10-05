@@ -95,6 +95,10 @@ Window: 2026-10-02 22:03 through 2026-10-03 07:00 America/Chicago.
   also an exact no-op. A two-occurrence variant improved motif coverage but
   regressed attack, exact-lane, movement, and interval metrics, so it was
   rejected.
+- Human-chart stage metrics now expose source-pitch contour agreement for
+  covered repeated windows. The persisted Jonas result is 4/90 (`0.0444`),
+  making the upstream voice-selection ceiling visible without relying on an
+  ad-hoc analysis script.
 
 ### 2026-10-02 22:03 - Baseline reconciled
 

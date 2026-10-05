@@ -448,6 +448,27 @@ def test_human_chart_comparison_reports_timing_style_and_motifs():
     assert report["motifs"]["coverage"] < 1
 
 
+def test_motif_comparison_reports_source_pitch_contour_ceiling():
+    reference = [
+        {"time": index * .25, "lanes": (index % 4,), "duration": .1}
+        for index in range(8)
+    ]
+    candidate = [
+        {
+            "time": row["time"],
+            "lanes": row["lanes"],
+            "duration": row["duration"],
+            "pitch": 60 + index % 4,
+        }
+        for index, row in enumerate(reference)
+    ]
+
+    motifs = compare_chart_attacks(reference, candidate)["motifs"]
+
+    assert motifs["source_pitch_covered_occurrences"] == 2
+    assert motifs["source_pitch_contour_agreement"] == 1
+
+
 def test_human_chart_comparison_exposes_local_attack_recall_collapse():
     reference = [
         {"time": time, "lanes": (0,), "duration": .1}
@@ -1019,6 +1040,7 @@ def test_snapshot_attacks_group_chord_lanes_and_apply_offset():
         "time":1.25,
         "lanes":(0,2),
         "duration":pytest.approx(.3),
+        "pitch":None,
     }]
 
 

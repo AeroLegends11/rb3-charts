@@ -399,6 +399,11 @@ Status update (2026-09-20):
   90 windows, but most do not form a stable three-occurrence source family.
   Future work should therefore improve transferable voice ownership rather
   than relax lane or motif matching globally.
+- Evaluation stage metrics now report source-pitch contour agreement for
+  covered repeated reference windows. This keeps the voice-selection ceiling
+  distinct from final lane-shape agreement: frozen Jonas reports 4/90
+  (`0.0444`) at the final authoring stage, while the reference chart remains
+  post-generation evaluation only.
 
 ## 4. Review and anomaly tools
 

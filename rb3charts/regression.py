@@ -1117,7 +1117,7 @@ def _motif_agreement(reference, matches, window=4):
         families[(gaps, shape)].append(phrase)
     repeated = [phrases for phrases in families.values() if len(phrases) >= 2]
     occurrences = [phrase for phrases in repeated for phrase in phrases]
-    covered = agreed = 0
+    covered = agreed = source_covered = source_contour_agreed = 0
     for phrase in occurrences:
         candidate = [matched_by_time.get(round(row["time"], 6)) for row in phrase]
         if any(row is None or len(row["lanes"]) != 1 for row in candidate):
@@ -1128,12 +1128,30 @@ def _motif_agreement(reference, matches, window=4):
         reference_lanes = tuple(row["lanes"][0] for row in phrase)
         reference_shape = tuple(lane - reference_lanes[0] for lane in reference_lanes)
         agreed += int(candidate_shape == reference_shape)
+        if all(row.get("pitch") is not None for row in candidate):
+            source_covered += 1
+            source_pitches = tuple(float(row["pitch"]) for row in candidate)
+            source_contour = tuple(
+                0 if right == left else int(np.sign(right - left))
+                for left, right in zip(source_pitches, source_pitches[1:])
+            )
+            reference_contour = tuple(
+                0 if right == left else int(np.sign(right - left))
+                for left, right in zip(reference_lanes, reference_lanes[1:])
+            )
+            source_contour_agreed += int(
+                source_contour == reference_contour
+            )
     return {
         "families": len(repeated),
         "reference_occurrences": len(occurrences),
         "covered_occurrences": covered,
         "coverage": round(covered / max(1, len(occurrences)), 4),
         "relative_lane_shape_agreement": round(agreed / max(1, covered), 4),
+        "source_pitch_covered_occurrences": source_covered,
+        "source_pitch_contour_agreement": round(
+            source_contour_agreed / max(1, source_covered), 4
+        ) if source_covered else None,
     }
 
 
@@ -1269,6 +1287,11 @@ def _snapshot_attacks(notes, offset=0.0):
                 float(note.get("end",note["start"]))-float(note["start"])
                 for note in rows
             ),
+            "pitch":(
+                float(rows[0]["pitch"])
+                if len(rows) == 1 and rows[0].get("pitch") is not None
+                else None
+            ),
         }
         for time,rows in sorted(grouped.items())
     ]
@@ -1292,6 +1315,7 @@ def _reference_stage_metrics(folder, reference, offset, tolerance):
             "stage":str(stage.get("stage","unknown")),
             "attack":metrics["attack"],
             "lane":metrics["lane"],
+            "motifs":metrics["motifs"],
             "density":metrics["density"],
             "worst_reference_recall":
                 metrics["attack_windows"]["worst_reference_recall"],
@@ -1633,6 +1657,16 @@ def compare_authorized_chart(
         "generated_midi_sha256": hash_file(generated_midi),
         "generated_audio_lead_seconds": lead,
         "difficulties": difficulties,
+        "stage_metrics": _reference_stage_metrics(
+            generated_folder,
+            _chart_attacks(_read_expert_gems(
+                reference_path,
+                item["chart_format"],
+                "expert",
+            )),
+            -lead,
+            .08,
+        ),
         "paired_source_agreement": validation["paired_source_agreement"],
         "difficulty_retention": {
             difficulty: {
