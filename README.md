@@ -303,8 +303,17 @@ reading features. Authoritative artifact split keys prevent either a musical
 progression or performer identity from crossing splits. Losses are applied only
 to targets declared by each artifact, allowing attack-only corpora without
 inventing sustain labels. Validation calibrates
-the attack threshold after applying the same local-peak suppression used by
-inference; the untouched test split uses that threshold without retuning.
+the attack threshold by macro song-level F1 after applying the same local-peak
+suppression used by inference; the untouched test split uses that threshold
+without retuning. `--attack-loss focal --focal-gamma 2` enables deterministic
+unweighted focal attack training while the existing weighted BCE remains the
+default for comparable baseline runs. `--calibration-dataset DATASET_ID`
+restricts global threshold selection to the intended validation domain without
+using test labels. Reports include per-song validation and test metrics so long
+recordings cannot hide regressions elsewhere in the split.
+`--architecture dilated-tcn` selects a versioned residual temporal model with
+about three seconds of receptive context; checkpoints record and restore the
+architecture explicitly.
 Checkpoints retain manifest and feature hashes, the feature configuration, seed,
 runtime versions, loss history, attack metrics, and polyphony accuracy. This
 baseline is an engineering measurement, not yet a chart-quality claim or runtime

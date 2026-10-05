@@ -214,6 +214,21 @@ def main():
     training.add_argument("--epochs",type=int,default=1)
     training.add_argument("--device",choices=["auto","cpu","cuda"],default="auto")
     training.add_argument("--seed",type=int,default=1337)
+    training.add_argument(
+        "--attack-loss",
+        choices=["weighted-bce","focal"],
+        default="weighted-bce",
+    )
+    training.add_argument("--focal-gamma",type=float,default=2.0)
+    training.add_argument(
+        "--calibration-dataset",
+        help="Select the global threshold on validation items from one dataset",
+    )
+    training.add_argument(
+        "--architecture",
+        choices=["conv1d","dilated-tcn"],
+        default="conv1d",
+    )
     prediction=sub.add_parser("predict-structure",help="Run lane-independent model evaluation without changing charts")
     prediction.add_argument("model",type=Path)
     prediction.add_argument("audio",type=Path)
@@ -582,7 +597,17 @@ def main():
     if args.command=="train-structure-baseline":
         from .training import TrainingDataError, train_structure_baseline
         try:
-            report=train_structure_baseline(args.index,args.output,args.epochs,args.device,args.seed)
+            report=train_structure_baseline(
+                args.index,
+                args.output,
+                args.epochs,
+                args.device,
+                args.seed,
+                args.attack_loss,
+                args.focal_gamma,
+                args.calibration_dataset,
+                args.architecture,
+            )
         except TrainingDataError as exc:
             print(f"Structure baseline training failed: {exc}",file=sys.stderr)
             return 1

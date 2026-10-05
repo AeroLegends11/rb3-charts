@@ -463,9 +463,17 @@ def test_structure_baseline_trains_and_writes_auditable_checkpoint(tmp_path):
     assert report["training_items"] == 1
     assert report["validation_items"] == 1
     assert report["test_items"] == 1
+    assert report["attack_loss"] == "weighted-bce"
+    assert report["architecture"] == "conv1d"
     assert len(report["epoch_losses"]) == 1
     assert 0 <= report["validation"]["attack_f1"] <= 1
+    assert 0 <= report["validation"]["macro_attack_f1"] <= 1
     assert 0 <= report["test"]["f1"] <= 1
+    assert set(report["validation"]["by_song"]) == {"validation-song"}
+    assert set(report["test"]["by_song"]) == {"test-song"}
+    assert set(report["validation"]["by_dataset"]) == {"guitarset"}
+    assert set(report["test"]["by_dataset"]) == {"guitarset"}
+    assert report["test"]["macro_f1"] == report["test"]["by_song"]["test-song"]["f1"]
     assert report["training_data"][0]["dataset_id"] == "guitarset"
     assert report["dataset_manifests"][0]["path"] == "manifest.json"
     checkpoint = torch.load(output, map_location="cpu", weights_only=False)
@@ -517,6 +525,45 @@ def test_structure_baseline_trains_and_writes_auditable_checkpoint(tmp_path):
     assert min(width_reranked) == pytest.approx(0.0)
     assert max(width_reranked) == pytest.approx(1.0)
     assert set(prediction["summary"]["candidate_score_quantiles"])=={"0.5","0.75","0.9","0.95"}
+
+
+def test_structure_baseline_supports_focal_attack_loss(tmp_path):
+    index = _write_feature_index_fixture(tmp_path)
+    report = train_structure_baseline(
+        index,
+        tmp_path / "focal.pt",
+        epochs=1,
+        device="cpu",
+        seed=7,
+        attack_loss="focal",
+        focal_gamma=2.0,
+        calibration_dataset="guitarset",
+    )
+    assert report["attack_loss"] == "focal"
+    assert report["focal_gamma"] == 2.0
+    assert report["calibration_dataset"] == "guitarset"
+    assert report["validation"]["threshold_selection"] == "macro-f1"
+
+
+def test_structure_baseline_supports_dilated_tcn(tmp_path):
+    index = _write_feature_index_fixture(tmp_path)
+    output = tmp_path / "tcn.pt"
+    report = train_structure_baseline(
+        index,
+        output,
+        epochs=1,
+        device="cpu",
+        seed=7,
+        architecture="dilated-tcn",
+    )
+    assert report["architecture"] == "dilated-tcn"
+    prediction = predict_structure(
+        output,
+        tmp_path / "validation" / "audio.wav",
+        tmp_path / "tcn-prediction.json",
+        device="cpu",
+    )
+    assert prediction["schema"] == "rb3charts-structure-predictions"
 
 
 def test_structure_ranking_evaluation_uses_fixed_top_k_and_one_to_one_matches(tmp_path):

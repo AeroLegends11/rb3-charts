@@ -889,6 +889,25 @@ Status update (2026-09-22):
   density ratios ranged from 0.029 to 0.729, including 0.376 on Jonas. Thresholded
   attack integration is therefore still rejected. No learned output is wired
   into normal generation.
+- An initial unweighted focal-loss result appeared to raise validation/test
+  attack F1 from 0.4588/0.5056 to 0.6872/0.7099, but those were micro-aggregates
+  across mixed transcription datasets and concealed the actual chart-domain
+  result. Reproduction with per-song reporting scored untouched Persephone at
+  only 0.1123 when the threshold was selected broadly. Selecting one global
+  threshold solely on the three authorized validation charts recovered
+  Persephone to 0.4268, still below the 0.4405 chart-only baseline, while
+  overpredicting the broad test split. The focal checkpoint is rejected.
+  The trainer retains focal loss as a reproducible experiment option, supports
+  validation-only dataset calibration, and now reports per-song, per-dataset,
+  micro and macro results to prevent aggregate masking. No learned output is
+  wired into normal generation.
+- A six-layer residual dilated temporal convolution expanded receptive context
+  from about 104 ms to about three seconds. Under the same focal loss, seed,
+  epochs and authorized-only threshold calibration, authorized validation
+  macro F1 fell from 0.6933 to 0.4741 and untouched Persephone F1 fell from
+  0.4268 to 0.2825. This TCN is rejected. Architecture identifiers remain in
+  the offline trainer and checkpoints so future temporal experiments are
+  auditable and prediction restores the exact trained architecture.
 - Structure prediction artifacts now record per-song attack-peak rank percentiles
   and score quantiles so offline fusion experiments do not assume cleared-data
   probabilities are calibrated on commercial stems. A 14-song shadow run still

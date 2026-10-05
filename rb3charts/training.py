@@ -1251,15 +1251,35 @@ def _onset_metrics(records, threshold, tolerance_frames):
     }
 
 
-def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1337):
+def train_structure_baseline(
+    index_path,
+    output,
+    epochs=1,
+    device="auto",
+    seed=1337,
+    attack_loss="weighted-bce",
+    focal_gamma=2.0,
+    calibration_dataset=None,
+    architecture="conv1d",
+):
     """Train a deterministic first-pass attack/polyphony/sustain network."""
     import torch
     import torch.nn.functional as functional
 
-    from .structure_model import build_structure_baseline
+    from .structure_model import build_structure_model
 
     if epochs < 1:
         raise TrainingDataError("Training epochs must be at least one")
+    if attack_loss not in ("weighted-bce", "focal"):
+        raise TrainingDataError(
+            "Attack loss must be weighted-bce or focal"
+        )
+    if focal_gamma < 0:
+        raise TrainingDataError("Focal gamma cannot be negative")
+    if architecture not in ("conv1d", "dilated-tcn"):
+        raise TrainingDataError(
+            "Structure architecture must be conv1d or dilated-tcn"
+        )
     output = Path(output).resolve()
     if output.suffix.lower() != ".pt":
         raise TrainingDataError("Structure model output must use the .pt suffix")
@@ -1279,7 +1299,8 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
     if hasattr(torch.backends, "cudnn"):
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
-    model = build_structure_baseline(
+    model = build_structure_model(
+        architecture,
         input_features=FEATURE_MELS * 2 + 2,
         hidden_features=64,
     ).to(device)
@@ -1340,11 +1361,28 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
         for item in train_items:
             features, attacks, polyphony, sustain, targets = tensors(item)
             outputs = model(features)
-            attack_loss = functional.binary_cross_entropy_with_logits(
-                outputs["attack"],
-                attacks,
-                pos_weight=torch.tensor(positive_weight, device=device),
-            )
+            if attack_loss == "focal":
+                attack_bce = functional.binary_cross_entropy_with_logits(
+                    outputs["attack"],
+                    attacks,
+                    reduction="none",
+                )
+                attack_probability = torch.sigmoid(outputs["attack"])
+                attack_probability_correct = torch.where(
+                    attacks > 0.5,
+                    attack_probability,
+                    1 - attack_probability,
+                )
+                attack_objective = (
+                    (1 - attack_probability_correct) ** focal_gamma
+                    * attack_bce
+                ).mean()
+            else:
+                attack_objective = functional.binary_cross_entropy_with_logits(
+                    outputs["attack"],
+                    attacks,
+                    pos_weight=torch.tensor(positive_weight, device=device),
+                )
             attack_mask = attacks > 0.5
             if "polyphony" in targets and torch.any(attack_mask):
                 polyphony_loss = functional.cross_entropy(
@@ -1361,7 +1399,7 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
                 if "sustain" in targets
                 else outputs["sustain"].sum() * 0
             )
-            loss = attack_loss + 0.5 * polyphony_loss + 0.25 * sustain_loss
+            loss = attack_objective + 0.5 * polyphony_loss + 0.25 * sustain_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -1370,6 +1408,7 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
 
     model.eval()
     onset_records = []
+    validation_records = []
     polyphony_correct = polyphony_total = 0
     tolerance_frames = max(1, round(0.05 * FEATURE_SAMPLE_RATE / FEATURE_HOP_LENGTH))
     with torch.no_grad():
@@ -1380,20 +1419,86 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
             scores = torch.sigmoid(outputs["attack"][0]).cpu().numpy()
             actual_frames = torch.nonzero(actual[0], as_tuple=False).flatten().cpu().tolist()
             onset_records.append((scores, actual_frames))
+            validation_records.append(
+                (
+                    str(item["song_id"]),
+                    str(item["dataset"]["id"]),
+                    scores,
+                    actual_frames,
+                )
+            )
             if "polyphony" in targets and torch.any(actual):
                 predicted_polyphony = torch.argmax(outputs["polyphony"], dim=-1)
                 polyphony_correct += int(torch.sum(predicted_polyphony[actual] == polyphony[actual]).cpu())
                 polyphony_total += int(torch.sum(actual).cpu())
     fixed_metrics = _onset_metrics(onset_records, 0.5, tolerance_frames)
-    candidates = [
-        _onset_metrics(onset_records, threshold, tolerance_frames)
-        for threshold in np.linspace(0.05, 0.95, 37)
+    calibration_records = [
+        (scores, actual_frames)
+        for _, dataset_id, scores, actual_frames in validation_records
+        if calibration_dataset is None or dataset_id == calibration_dataset
     ]
-    calibrated = max(candidates, key=lambda row: (row["f1"], row["precision"], row["threshold"]))
+    if not calibration_records:
+        raise TrainingDataError(
+            f"Validation split has no items for calibration dataset {calibration_dataset}"
+        )
+    candidates = []
+    for threshold in np.linspace(0.05, 0.95, 37):
+        candidate = _onset_metrics(
+            calibration_records, threshold, tolerance_frames
+        )
+        per_song = [
+            _onset_metrics(
+                [(scores, actual_frames)],
+                threshold,
+                tolerance_frames,
+            )
+            for scores, actual_frames in calibration_records
+        ]
+        candidate["macro_f1"] = float(np.mean([
+            row["f1"] for row in per_song
+        ]))
+        candidate["macro_precision"] = float(np.mean([
+            row["precision"] for row in per_song
+        ]))
+        candidates.append(candidate)
+    calibrated = max(
+        candidates,
+        key=lambda row: (
+            row["macro_f1"],
+            row["macro_precision"],
+            row["f1"],
+            row["threshold"],
+        ),
+    )
+    validation_by_song = {
+        song_id: _onset_metrics(
+            [(scores, actual_frames)],
+            calibrated["threshold"],
+            tolerance_frames,
+        )
+        for song_id, _, scores, actual_frames in validation_records
+    }
+    validation_by_dataset = {
+        dataset_id: _onset_metrics(
+            [
+                (scores, actual_frames)
+                for _, record_dataset, scores, actual_frames in validation_records
+                if record_dataset == dataset_id
+            ],
+            calibrated["threshold"],
+            tolerance_frames,
+        )
+        for dataset_id in sorted({
+            dataset_id
+            for _, dataset_id, _, _ in validation_records
+        })
+    }
     test_metrics = None
+    test_by_song = {}
     test_polyphony_correct = test_polyphony_total = 0
     if test_items:
         test_records = []
+        test_named_records = []
         with torch.no_grad():
             for item in test_items:
                 features, attacks, polyphony, _, targets = tensors(item)
@@ -1402,6 +1507,14 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
                 scores = torch.sigmoid(outputs["attack"][0]).cpu().numpy()
                 actual_frames = torch.nonzero(actual[0], as_tuple=False).flatten().cpu().tolist()
                 test_records.append((scores, actual_frames))
+                test_named_records.append(
+                    (
+                        str(item["song_id"]),
+                        str(item["dataset"]["id"]),
+                        scores,
+                        actual_frames,
+                    )
+                )
                 if "polyphony" in targets and torch.any(actual):
                     predicted_polyphony = torch.argmax(outputs["polyphony"], dim=-1)
                     test_polyphony_correct += int(
@@ -1409,17 +1522,47 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
                     )
                     test_polyphony_total += int(torch.sum(actual).cpu())
         test_metrics = _onset_metrics(test_records, calibrated["threshold"], tolerance_frames)
+        test_by_song = {
+            song_id: _onset_metrics(
+                [(scores, actual_frames)],
+                calibrated["threshold"],
+                tolerance_frames,
+            )
+            for song_id, _, scores, actual_frames in test_named_records
+        }
+        test_metrics["macro_f1"] = float(np.mean([
+            row["f1"] for row in test_by_song.values()
+        ]))
+        test_metrics["by_dataset"] = {
+            dataset_id: _onset_metrics(
+                [
+                    (scores, actual_frames)
+                    for _, record_dataset, scores, actual_frames in test_named_records
+                    if record_dataset == dataset_id
+                ],
+                calibrated["threshold"],
+                tolerance_frames,
+            )
+            for dataset_id in sorted({
+                dataset_id
+                for _, dataset_id, _, _ in test_named_records
+            })
+        }
         test_metrics["polyphony_accuracy"] = (
             test_polyphony_correct / max(1, test_polyphony_total)
         )
     report = {
-        "model": "structure-baseline-conv1d",
-        "model_version": 1,
+        "model": f"structure-{architecture}",
+        "model_version": 2 if architecture == "dilated-tcn" else 1,
+        "architecture": architecture,
         "feature_version": FEATURE_VERSION,
         "device_requested": requested_device,
         "device_used": device,
         "seed": seed,
         "epochs": epochs,
+        "attack_loss": attack_loss,
+        "focal_gamma": focal_gamma if attack_loss == "focal" else None,
+        "calibration_dataset": calibration_dataset,
         "training_items": len(train_items),
         "validation_items": len(validation_items),
         "test_items": len(test_items),
@@ -1427,13 +1570,17 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
         "epoch_losses": epoch_losses,
         "validation": {
             "attack_threshold": calibrated["threshold"],
+            "threshold_selection": "macro-f1",
             "attack_precision": calibrated["precision"],
             "attack_recall": calibrated["recall"],
             "attack_f1": calibrated["f1"],
+            "macro_attack_f1": calibrated["macro_f1"],
             "polyphony_accuracy": polyphony_correct / max(1, polyphony_total),
             "positive_attacks": calibrated["positive_attacks"],
             "onset_tolerance_ms": 50,
             "fixed_threshold_0_5": fixed_metrics,
+            "by_song": validation_by_song,
+            "by_dataset": validation_by_dataset,
         },
         "feature_index_sha256": _hash_file(index_path),
         "training_data": [provenance[key] for key in sorted(provenance)],
@@ -1443,6 +1590,7 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
         ],
     }
     if test_metrics is not None:
+        test_metrics["by_song"] = test_by_song
         report["test"] = test_metrics
     artifact_digest = sha256()
     for item in sorted(items, key=lambda row: (row["split"], row["song_id"])):
@@ -1473,6 +1621,7 @@ def train_structure_baseline(index_path, output, epochs=1, device="auto", seed=1
             "mel_bins": FEATURE_MELS,
             "delta_bins": FEATURE_MELS,
             "attack_threshold": calibrated["threshold"],
+            "architecture": architecture,
         },
         "training_report": report,
     }
@@ -1486,7 +1635,7 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
     """Run lane-independent structure inference without changing a chart."""
     import torch
 
-    from .structure_model import build_structure_baseline
+    from .structure_model import build_structure_model
 
     model_path = Path(model_path).resolve()
     audio_path = Path(audio_path).resolve()
@@ -1530,7 +1679,13 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
         raise TrainingDataError("Inference device must be auto, cpu, or cuda")
     if device == "cuda" and not torch.cuda.is_available():
         raise TrainingDataError("CUDA inference was requested but is unavailable")
-    model = build_structure_baseline(
+    architecture = str(configuration.get("architecture", "conv1d"))
+    if architecture not in ("conv1d", "dilated-tcn"):
+        raise TrainingDataError(
+            f"Unsupported structure architecture: {architecture}"
+        )
+    model = build_structure_model(
+        architecture,
         input_features=int(configuration.get("input_features", FEATURE_MELS * 2 + 2)),
         hidden_features=int(configuration.get("hidden_features", 64)),
     )
