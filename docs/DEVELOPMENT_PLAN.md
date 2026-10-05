@@ -382,15 +382,16 @@ Status update (2026-09-20):
   0.2678→0.2957 and exact lanes 0.1279→0.1341 with movement and motif coverage
   unchanged.
 - Fifth-dominant Band passages can now reuse a four-attack candidate contour
-  only when the same transposition-independent shape has at least three
-  separated source occurrences and each selected candidate remains within 80%
-  of the strongest local confidence. Rights-cleared Things Change improves
-  exact lanes 0.1421→0.1447 and mean interval error 1.8644→1.8559 with attack,
-  chord, movement, and motif metrics unchanged. The source gate is inactive on
+  only when the same direction, span, and endpoint family has at least three
+  non-overlapping source occurrences and each selected candidate remains
+  within 80% of the strongest local confidence. Rights-cleared Things Change
+  improves attack F1 0.4893→0.4902, chord F1 0.2031→0.2050, exact lanes
+  0.1421→0.1550, movement 0.2864→0.2941, mean interval error
+  1.8644→1.8312, and motif coverage 0.2336→0.2617. The source gate is inactive on
   Certain Death, Dirtbag, There's Something Wrong, Hail, Cliffs of Dover,
   Mr. Brightside, Joker and the Thief, and Persephone. Jonas passes the
   fifth-dominance gate but has no qualifying three-occurrence candidate family,
-  so its frozen metrics remain unchanged.
+  so its generated MIDI and frozen metrics remain unchanged.
 - Frozen Jonas motif diagnosis confirms that final fingering is not the main
   blocker: among 90 covered official repeated single-note windows, the selected
   source-pitch contour agrees with the official lane contour only four times.

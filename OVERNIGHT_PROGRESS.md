@@ -83,13 +83,13 @@ Window: 2026-10-02 22:03 through 2026-10-03 07:00 America/Chicago.
   paths in 48/90 windows, locating the remaining failure primarily in voice
   ownership rather than final fingering.
 - Added a source-only candidate preference for fifth-dominant Band material.
-  It requires the same transposition-independent four-attack shape in at least
-  three separated source windows and never selects below 80% of the strongest
-  local confidence.
-- On rights-cleared Things Change, exact lanes improve 0.1421→0.1447 and mean
-  interval error improves 1.8644→1.8559; attack, chord, movement, and motif
-  metrics are unchanged. Certain Death, Dirtbag, and There's Something Wrong
-  are exact no-ops.
+  It requires the same four-attack direction, span, and endpoint family in at
+  least three non-overlapping source windows and never selects below 80% of the
+  strongest local confidence.
+- On rights-cleared Things Change, attack F1 improves 0.4893→0.4902, chord F1
+  0.2031→0.2050, exact lanes 0.1421→0.1550, movement 0.2864→0.2941, mean
+  interval error 1.8644→1.8312, and motif coverage 0.2336→0.2617. Certain
+  Death, Dirtbag, and There's Something Wrong are exact no-ops.
 - The gate is inactive on Hail, Cliffs of Dover, Mr. Brightside, Joker and the
   Thief, and Persephone. Jonas has no qualifying three-occurrence family and is
   also an exact no-op. A two-occurrence variant improved motif coverage but

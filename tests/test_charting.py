@@ -16,7 +16,7 @@ def test_tempo_map_roundtrip_drifting_and_pickups():
 def test_repeated_candidate_preferences_reuse_transposed_source_shape():
     groups = []
     shape = [0, 4, 2, 7]
-    distractors = [[5, 1, 8, 3], [3, 8, 1, 10], [9, 2, 6, 1]]
+    distractors = [[10, -1, 6, -4], [7, 2, -3, 12], [11, -2, -6, 5]]
     for occurrence, root in enumerate([48, 50, 53]):
         for index, interval in enumerate(shape):
             start = occurrence * 2 + index * .12

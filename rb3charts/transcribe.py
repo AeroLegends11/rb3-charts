@@ -387,7 +387,15 @@ def _repeated_candidate_preferences(groups, beat_period):
                        for left, right in zip(pitches, pitches[1:])) > 12
             ):
                 continue
-            shape = tuple(pitch - pitches[0] for pitch in pitches)
+            intervals = [
+                right - left
+                for left, right in zip(pitches, pitches[1:])
+            ]
+            shape = (
+                tuple(int(np.sign(interval)) for interval in intervals),
+                (max(pitches) - min(pitches) + 2) // 4,
+                (pitches[-1] - pitches[0] + 2) // 4,
+            )
             quality = float(np.mean([
                 event["confidence"] / max(
                     candidate["confidence"] for candidate in group
