@@ -411,9 +411,31 @@ The final quality target is now executable rather than aspirational.
 `assess-official-quality` requires an authorized comparison corpus with at
 least 20 songs and five artists; at least 80% of songs must independently pass
 near-official attack, chord, sustain, exact-lane, movement, weakest-window and
-repeated-motif thresholds. The current four-song measured baseline passes 0/4
-and is also below the required corpus coverage, so the project is not release
-ready. Commercial references remain frozen post-generation evaluation only.
+repeated-motif thresholds. Commercial references remain frozen post-generation
+evaluation only. The first coverage-complete scorecard measures 20
+rights-cleared songs from
+14 artists and passes 0/20. Coverage is no longer the release blocker. Across
+the corpus, threshold pass counts are 2/20 for attack F1, 2/20 for chord F1,
+0/19 for applicable sustain F1, 0/20 for exact lanes, 0/20 for movement,
+0/14 for applicable motif coverage and shape, and 1/20 for weakest-window
+recall. Median attack, exact-lane, movement and sustain F1 values are 0.415,
+0.104, 0.382 and 0.032 respectively. This baseline confirms that the remaining
+gap is model/authoring quality, not missing evaluation breadth; thresholds must
+not be relaxed to manufacture release readiness.
+
+The coverage-complete corpus also rejects two tempting attack-density fixes.
+Increasing the existing transcription confidence threshold monotonically
+reduced artist-disjoint macro attack F1, and a deterministic linear classifier
+over confidence, onset strength, attack strength, evidence score, level, RMS,
+polyphony, duration, beat alignment, repetition and local gaps changed held-out
+macro F1 from 0.3524 to 0.3482. Current event heuristics do not distinguish
+chart-worthy attacks. The validation-selected 0.70 full-mix structure model was
+then frozen and tested on four authorized songs excluded from its full-mix
+training. Direct attack F1 was mixed: Certain Death 0.7160 to 0.7100, Dirtbag
+0.4613 to 0.5630, There's Something Wrong 0.7570 to 0.8478, and Persephone
+0.4558 to 0.1584. Requiring agreement between existing and structure attacks
+regressed three of four songs. Neither confidence pruning nor structure gating
+is accepted into generation.
 
 After motif metrics are trustworthy, annotate the existing preview with low
 confidence, unexpected density/chords, and similar-event/dissimilar-chart regions.
