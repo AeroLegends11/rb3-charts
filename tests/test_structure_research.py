@@ -12,6 +12,7 @@ import structure_score_ensemble as ensemble
 import structure_timing_snap as timing_snap
 import structure_local_peak_rerank as local_peak_rerank
 import structure_candidate_classifier as candidate_classifier
+import structure_candidate_sequence as candidate_sequence
 import predicted_authoring_sequence as predicted_authoring
 import predicted_authoring_self_train as self_trained_authoring
 import audio_authoring_sequence as audio_authoring
@@ -157,6 +158,15 @@ def test_candidate_features_keep_fixed_peak_rows():
     assert features.shape == (2, 280)
     assert features[0, 4] == local[2]
     assert features[1, 13] == context[9]
+
+
+def test_candidate_sequence_model_preserves_sequence_length():
+    torch = pytest.importorskip("torch")
+    model = candidate_sequence._build_model(input_features=8)
+
+    logits = model(torch.zeros((2, 5, 8)))
+
+    assert logits.shape == (2, 5)
 
 
 def test_predicted_authoring_metrics_require_timing_and_lane_agreement():

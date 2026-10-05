@@ -991,6 +991,14 @@ Status update (2026-09-22):
   classifier is rejected, and further attack work needs better transferable
   candidate representations or additional independently authored supervision,
   not threshold or seed search.
+- A bidirectional candidate-sequence ranker then added candidate-to-candidate
+  rhythm gaps and whole-song context over the same fixed local peaks. Seed 0
+  reached only 0.5925 validation macro F1 with 26.54 ms median timing, versus
+  the multi-scale baseline's 0.7597 and 14.93 ms. This is a decisive rejection:
+  independent, reranked, and sequence-modeled fixed local candidates have all
+  failed the same gate. Further timing work must improve the primary learned
+  representation or supervision rather than add another selector over these
+  peaks.
 - Explicit attack-localization losses at weights 0.25 and 0.05 required each
   labeled frame to outrank negatives within about 46 ms. The stronger weight
   reduced seed-0 validation F1 from 0.7597 to 0.6631; the lighter weight changed
