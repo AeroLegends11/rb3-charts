@@ -447,6 +447,26 @@ bounded sustain F1 on four chart-author-held-out songs was 0.0000, 0.0187,
 0.5299 and 0.0000. The isolated There's Something Wrong gain is insufficient;
 learned sustain remains diagnostic-only and is not applied to charts.
 
+An exhaustive public-source search found no additional synchronized five-lane
+guitar/audio corpus with explicit commercial-use rights for both sides and
+named chart attribution. GitHub mirrors either duplicate the existing
+IntinteDAO/Fervi pack, omit chart or audio rights, use noncommercial licenses,
+or contain commercial songs. The next lawful route to chart-author diversity
+is opt-in commissioning or direct permission from additional charters for
+already CC-licensed audio; provenance requirements are not relaxed.
+
+The existing 28 pairs nevertheless support one strict charter-disjoint
+structure experiment: 24 Fervi GuitarMaster songs trained the model, the three
+Brad Sucks songs (MB1Nightmare/Greninjo and JRabes) formed validation, and
+Valerio Bozzolan's Persephone remained untouched test. The chart-only model
+reached validation F1 0.5916 but only 0.4405 on Persephone, with 0.2844
+precision and 0.9772 recall. Adding the same held-out songs to the broader
+GuitarSet/Guitar-TECHS/Slakh experiment reduced aggregate validation/test
+attack F1 to 0.4588/0.5056 versus the selected diverse baseline's
+0.8417/0.8511. Both checkpoints are rejected. The evidence now shows that
+single-charter full-mix supervision does not transfer safely even when artist,
+audio, and chart-author boundaries are enforced.
+
 After motif metrics are trustworthy, annotate the existing preview with low
 confidence, unexpected density/chords, and similar-event/dissimilar-chart regions.
 Add generated-versus-human comparisons with explicit time alignment and provenance.
