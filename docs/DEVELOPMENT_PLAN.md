@@ -437,6 +437,16 @@ training. Direct attack F1 was mixed: Certain Death 0.7160 to 0.7100, Dirtbag
 regressed three of four songs. Neither confidence pruning nor structure gating
 is accepted into generation.
 
+Band sustain failure is not a simple authoring-threshold problem. Replaying
+pre-authoring durations with sustain cutoffs from 65 to 350 ms produced
+effectively identical artist-disjoint results because source durations are
+mostly shorter than 65 ms or longer than 450 ms. Structure prediction artifacts
+now expose the sustain head's active-run duration and a next-attack-bounded
+duration for controlled evaluation. At the frozen 0.70 attack threshold,
+bounded sustain F1 on four chart-author-held-out songs was 0.0000, 0.0187,
+0.5299 and 0.0000. The isolated There's Something Wrong gain is insufficient;
+learned sustain remains diagnostic-only and is not applied to charts.
+
 After motif metrics are trustworthy, annotate the existing preview with low
 confidence, unexpected density/chords, and similar-event/dissimilar-chart regions.
 Add generated-versus-human comparisons with explicit time alignment and provenance.

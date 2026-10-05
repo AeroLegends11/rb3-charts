@@ -496,6 +496,14 @@ def test_structure_baseline_trains_and_writes_auditable_checkpoint(tmp_path):
         0 <= event["periodic_support"] <= 1
         for event in prediction["candidates"]
     )
+    assert all(
+        event["sustain_seconds"] >= 0
+        for event in prediction["candidates"]
+    )
+    assert all(
+        0 <= event["bounded_sustain_seconds"] <= event["sustain_seconds"]
+        for event in prediction["candidates"]
+    )
     width_ranks = [
         event["peak_width_rank_percentile"]
         for event in prediction["candidates"]

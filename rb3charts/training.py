@@ -1580,11 +1580,45 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
             width_reranked_percentiles,
         )
     }
+    frame_times = audio["frame_times"]
+
+    def sustain_seconds(frame):
+        if int(sustain[frame]) <= 0:
+            return 0.0
+        end = frame + 1
+        while end < len(sustain) and int(sustain[end]) > 0:
+            end += 1
+        if end < len(frame_times):
+            return max(0.0, float(frame_times[end] - frame_times[frame]))
+        if len(frame_times) > 1:
+            return max(
+                0.0,
+                float(
+                    frame_times[-1]
+                    - frame_times[frame]
+                    + frame_times[-1]
+                    - frame_times[-2]
+                ),
+            )
+        return 0.0
 
     def event_rows(peaks, heights, prefix):
         rows = []
         for index, frame in enumerate(peaks):
             voices = max(1, int(polyphony[frame]))
+            predicted_sustain = sustain_seconds(frame)
+            next_attack_gap = (
+                max(
+                    0.0,
+                    float(
+                        audio["frame_times"][peaks[index + 1]]
+                        - audio["frame_times"][frame]
+                        - 0.015
+                    ),
+                )
+                if index + 1 < len(peaks)
+                else predicted_sustain
+            )
             support, reranked_score, reranked_percentile = periodic_by_frame[int(frame)]
             width_rank, width_score, width_percentile = width_by_frame[int(frame)]
             rows.append({
@@ -1601,6 +1635,11 @@ def predict_structure(model_path, audio_path, output, beats_path=None, device="a
                 "polyphony": voices,
                 "is_chord": voices > 1,
                 "active_voices": int(sustain[frame]),
+                "sustain_seconds": predicted_sustain,
+                "bounded_sustain_seconds": min(
+                    predicted_sustain,
+                    next_attack_gap,
+                ),
             })
         return rows
 

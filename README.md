@@ -316,8 +316,9 @@ attack candidates. It does not alter a transcription or generated chart.
 Supplying a generation run's `analysis/tempo.json` reproduces beat-phase
 conditioning; without it the model uses audio features alone. Candidate rows
 also expose raw, symmetric-periodicity, peak-width, and combined rank
-percentiles. These are offline evidence and are not runtime attack-recovery
-instructions.
+percentiles, plus the sustain head's raw active-run duration and a version
+bounded by the next predicted attack. These are offline evidence and are not
+runtime attack-recovery or articulation instructions.
 
 `evaluate-structure-ranking` makes the offline gate reproducible: it selects a
 fixed top-K candidate set by a named rank field and performs one-to-one attack
