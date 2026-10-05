@@ -407,6 +407,14 @@ Status update (2026-09-20):
 
 ## 4. Review and anomaly tools
 
+The final quality target is now executable rather than aspirational.
+`assess-official-quality` requires an authorized comparison corpus with at
+least 20 songs and five artists; at least 80% of songs must independently pass
+near-official attack, chord, sustain, exact-lane, movement, weakest-window and
+repeated-motif thresholds. The current four-song measured baseline passes 0/4
+and is also below the required corpus coverage, so the project is not release
+ready. Commercial references remain frozen post-generation evaluation only.
+
 After motif metrics are trustworthy, annotate the existing preview with low
 confidence, unexpected density/chords, and similar-event/dissimilar-chart regions.
 Add generated-versus-human comparisons with explicit time alignment and provenance.

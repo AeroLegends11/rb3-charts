@@ -112,6 +112,7 @@ uses the removed `pkg_resources` compatibility module.
 .\.venv\Scripts\python.exe -m rb3charts.cli pin-source-agreement 'C:\Path\To\manifest.json' 'C:\Path\To\alternate-audio' 'C:\Path\To\paired-manifest.json' --primary-suffix _mic.wav --alternate-suffix _mix.wav
 .\.venv\Scripts\python.exe -m rb3charts.cli evaluate-source-agreement 'C:\Path\To\paired-dataset-manifest.json' --output 'C:\Path\To\agreement.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli predict-tabcnn 'C:\Path\To\TabCNN.pt' 'C:\Path\To\guitar.wav' 'C:\Path\To\tabcnn.json' --attacks 'C:\Path\To\structure-predictions.json'
+.\.venv\Scripts\python.exe -m rb3charts.cli assess-official-quality 'C:\Path\To\comparison-index.json'
 .\.venv\Scripts\python.exe -m rb3charts.cli demo --compile
 .\.venv\Scripts\python.exe -m pytest -q
 ```
@@ -133,6 +134,13 @@ lane steps and all overlapping proposals agree.
 Each root must contain at most one run for a given artist/title; ambiguous
 duplicate song keys and missing artist/title metadata are rejected instead of
 selecting or matching a run implicitly.
+
+`assess-official-quality` turns an authorized comparison index into the release
+scorecard. Release requires at least 20 songs from five artists and at least 80%
+of songs must independently clear attack, chord, sustain, lane, movement,
+weakest-window and repeated-motif thresholds. Missing metrics fail rather than
+silently passing. The scorecard is evaluation-only: human chart notes never
+enter generation or runtime feature selection.
 Expanded multi-instrument, reduction-density, structure, and pattern reports use
 benchmark schema 2; guitar remains the default instrument. Without `--output`,
 guitar writes `output/replay-benchmark.json` and other instruments write

@@ -14,6 +14,7 @@ from rb3charts.regression import (
     audit_playability_evidence,
     benchmark_all_replays,
     benchmark_replays,
+    assess_official_quality_release,
     build_comparison_index,
     compare_chart_attacks,
     compare_comparison_indexes,
@@ -762,6 +763,72 @@ def test_comparison_index_sanitizes_reports_and_keeps_missing_runs(tmp_path):
     assert "Pipe \\| Song Second line" in markdown
     assert "run%20one/analysis/human-chart-comparison.md" in markdown
     assert "Reference-note rows" in markdown
+
+
+def _release_index_entry(index, passed=True):
+    high = .9 if passed else .5
+    return {
+        "identity": {
+            "song_id": f"song-{index}",
+            "title": f"Song {index}",
+            "artist": f"Artist {index % 5}",
+        },
+        "comparison_status": "available",
+        "summary": {
+            "attack": {"f1": high},
+            "chord": {"reference": 20, "f1": high},
+            "sustain": {"reference": 20, "f1": high},
+            "lane": {
+                "exact_agreement": high,
+                "movement_direction_agreement": high,
+                "mean_interval_error": 0.2,
+            },
+            "motif": {
+                "reference_occurrences": 20,
+                "coverage": high,
+                "relative_lane_shape_agreement": high,
+            },
+            "weakest_window": {"recall": high},
+        },
+    }
+
+
+def test_official_quality_release_requires_eighty_percent_and_broad_coverage(
+    tmp_path,
+):
+    index_path = tmp_path / "comparison-index.json"
+    index_path.write_text(json.dumps({
+        "comparison_schema": "rb3charts-authorized-chart-comparison",
+        "entries": [
+            _release_index_entry(index, passed=index < 16)
+            for index in range(20)
+        ],
+    }), encoding="utf-8")
+
+    report = assess_official_quality_release(index_path)
+
+    assert report["songs_passed"] == 16
+    assert report["pass_rate"] == .8
+    assert report["coverage_ready"] is True
+    assert report["release_ready"] is True
+    assert (tmp_path / "official-quality-release.md").is_file()
+
+
+def test_official_quality_release_rejects_insufficient_corpus(tmp_path):
+    index_path = tmp_path / "comparison-index.json"
+    index_path.write_text(json.dumps({
+        "comparison_schema": "rb3charts-authorized-chart-comparison",
+        "entries": [
+            _release_index_entry(index)
+            for index in range(19)
+        ],
+    }), encoding="utf-8")
+
+    report = assess_official_quality_release(index_path)
+
+    assert report["pass_rate"] == 1
+    assert report["coverage_ready"] is False
+    assert report["release_ready"] is False
 
 
 def test_comparison_index_rejects_duplicate_song_identities(tmp_path):

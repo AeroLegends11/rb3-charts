@@ -126,6 +126,15 @@ def main():
     comparison_trend.add_argument("baseline",type=Path)
     comparison_trend.add_argument("candidate",type=Path)
     comparison_trend.add_argument("--output",type=Path)
+    release_gate=sub.add_parser(
+        "assess-official-quality",
+        help="Assess the authorized corpus against the 80% near-official gate",
+    )
+    release_gate.add_argument("index",type=Path)
+    release_gate.add_argument("--output",type=Path)
+    release_gate.add_argument("--target-pass-rate",type=float,default=.8)
+    release_gate.add_argument("--minimum-songs",type=int,default=20)
+    release_gate.add_argument("--minimum-artists",type=int,default=5)
     evidence_audit=sub.add_parser(
         "audit-playability-evidence",
         help="Join playability removals to post-generation source evidence",
@@ -470,6 +479,27 @@ def main():
             "baseline_only":report["coverage"]["baseline_only"],
             "candidate_only":report["coverage"]["candidate_only"],
             "attack_f1":report["macro"]["attack_f1"],
+        },indent=2))
+        return 0
+    if args.command=="assess-official-quality":
+        from .regression import assess_official_quality_release
+        try:
+            report=assess_official_quality_release(
+                args.index,
+                args.output,
+                target_pass_rate=args.target_pass_rate,
+                minimum_songs=args.minimum_songs,
+                minimum_artists=args.minimum_artists,
+            )
+        except (FileNotFoundError,KeyError,TypeError,ValueError) as exc:
+            print(f"Official-quality assessment failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps({
+            "release_ready":report["release_ready"],
+            "songs_passed":report["songs_passed"],
+            "songs_evaluated":report["songs_evaluated"],
+            "pass_rate":report["pass_rate"],
+            "coverage_ready":report["coverage_ready"],
         },indent=2))
         return 0
     if args.command=="convert-guitarset":

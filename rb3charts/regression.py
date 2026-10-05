@@ -1744,6 +1744,140 @@ def _comparison_index_summary(report):
     }
 
 
+OFFICIAL_QUALITY_THRESHOLDS = {
+    "attack_f1": .8,
+    "chord_f1": .65,
+    "sustain_f1": .65,
+    "exact_lane_agreement": .55,
+    "movement_direction_agreement": .75,
+    "motif_coverage": .7,
+    "motif_shape_agreement": .65,
+    "weakest_window_recall": .65,
+}
+
+
+def assess_official_quality_release(
+    comparison_index,
+    output=None,
+    target_pass_rate=.8,
+    minimum_songs=20,
+    minimum_artists=5,
+):
+    """Assess whether an authorized corpus meets the near-official release bar."""
+    comparison_index = Path(comparison_index).resolve()
+    index = json.loads(comparison_index.read_text(encoding="utf-8"))
+    if index.get("comparison_schema") != "rb3charts-authorized-chart-comparison":
+        raise ValueError(
+            "Official-quality release assessment requires authorized comparisons"
+        )
+    available = [
+        entry for entry in index.get("entries", [])
+        if entry.get("comparison_status") == "available"
+        and entry.get("summary") is not None
+    ]
+    songs = []
+    for entry in available:
+        summary = entry["summary"]
+        checks = {
+            "attack_f1": summary["attack"].get("f1"),
+            "exact_lane_agreement":
+                summary["lane"].get("exact_agreement"),
+            "movement_direction_agreement":
+                summary["lane"].get("movement_direction_agreement"),
+            "weakest_window_recall": (
+                summary["weakest_window"].get("recall")
+                if summary.get("weakest_window") else None
+            ),
+        }
+        if summary["chord"].get("reference", 0) >= 12:
+            checks["chord_f1"] = summary["chord"].get("f1")
+        if summary["sustain"].get("reference", 0) >= 12:
+            checks["sustain_f1"] = summary["sustain"].get("f1")
+        if summary["motif"].get("reference_occurrences", 0) >= 12:
+            checks["motif_coverage"] = summary["motif"].get("coverage")
+            checks["motif_shape_agreement"] = summary["motif"].get(
+                "relative_lane_shape_agreement"
+            )
+        failed = [
+            name for name, value in checks.items()
+            if value is None or value < OFFICIAL_QUALITY_THRESHOLDS[name]
+        ]
+        songs.append({
+            "song_id": entry["identity"]["song_id"],
+            "artist": entry["identity"]["artist"],
+            "title": entry["identity"]["title"],
+            "passed": not failed,
+            "failed_checks": failed,
+            "checks": checks,
+        })
+    artists = {
+        str(song["artist"]).strip().casefold()
+        for song in songs
+        if str(song["artist"]).strip()
+    }
+    passed = sum(song["passed"] for song in songs)
+    pass_rate = passed / max(1, len(songs))
+    coverage_ready = (
+        len(songs) >= int(minimum_songs)
+        and len(artists) >= int(minimum_artists)
+    )
+    release_ready = coverage_ready and pass_rate >= float(target_pass_rate)
+    report = {
+        "schema": "rb3charts-official-quality-release",
+        "schema_version": 1,
+        "scope": (
+            "post-generation authorized evaluation only; human chart notes "
+            "were not generation inputs"
+        ),
+        "thresholds": OFFICIAL_QUALITY_THRESHOLDS,
+        "target_pass_rate": float(target_pass_rate),
+        "minimum_songs": int(minimum_songs),
+        "minimum_artists": int(minimum_artists),
+        "songs_evaluated": len(songs),
+        "artists_evaluated": len(artists),
+        "songs_passed": passed,
+        "pass_rate": round(pass_rate, 4),
+        "coverage_ready": coverage_ready,
+        "release_ready": release_ready,
+        "songs": songs,
+    }
+    output = (
+        Path(output).resolve()
+        if output is not None
+        else comparison_index.with_name("official-quality-release.json")
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    lines = [
+        "# Official-quality release gate",
+        "",
+        f"- Release ready: **{'yes' if release_ready else 'no'}**",
+        f"- Passing songs: **{passed}/{len(songs)} ({pass_rate:.1%})**",
+        f"- Artists represented: **{len(artists)}**",
+        (
+            f"- Required coverage: **{minimum_songs} songs / "
+            f"{minimum_artists} artists**"
+        ),
+        "",
+        "| Artist — Song | Result | Failed checks |",
+        "|---|---|---|",
+    ]
+    for song in songs:
+        failed = ", ".join(song["failed_checks"]) or "—"
+        label = _markdown_cell(
+            f"{song['artist']} — {song['title']}"
+        )
+        lines.append(
+            f"| {label} | "
+            f"{'PASS' if song['passed'] else 'FAIL'} | {failed} |"
+        )
+    output.with_suffix(".md").write_text(
+        "\n".join(lines) + "\n",
+        encoding="utf-8",
+    )
+    return report
+
+
 def _markdown_cell(value):
     text=" ".join(str(value).split())
     for source,replacement in (
