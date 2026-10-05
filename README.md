@@ -326,6 +326,10 @@ approximately 0.4, 1.5 and 3.0 second context, while
 `--architecture multi-scale-local` adds a separate local attack head for
 controlled timing experiments. Both remain offline research architectures;
 validation and frozen-test timing gates still apply before runtime use.
+`--localization-weight` adds a nearby-negative ranking loss for experiments
+that require labeled attack frames to outrank their immediate neighbors. It is
+disabled by default and does not relax validation, seed-stability, or frozen
+test gates.
 `--skip-test` omits test evaluation during candidate selection while retaining
 the indexed test count in the report; rerun the selected deterministic
 configuration without that flag only after it wins on validation.

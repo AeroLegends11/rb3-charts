@@ -974,6 +974,26 @@ Status update (2026-09-22):
   guarded score blend restored Persephone timing only by collapsing F1 to
   0.2534. The context model is retained offline as a substantial attack-ranking
   result, but timing prevents runtime integration.
+- Explicit attack-localization losses at weights 0.25 and 0.05 required each
+  labeled frame to outrank negatives within about 46 ms. The stronger weight
+  reduced seed-0 validation F1 from 0.7597 to 0.6631; the lighter weight changed
+  the three seed results to 0.7370/0.7004/0.7096 and did not robustly improve the
+  selection gate. Neither variant earned another frozen-test evaluation.
+- A rhythm-only bidirectional symbolic authoring model regressed authorized
+  exact lanes, overlap, chords and movement, confirming that rhythm/polyphony
+  alone cannot infer five-lane voice ownership. Adding local log-mel and
+  spectral-change features improved validation single-note exactness from
+  0.2162 to 0.2856 at the selected seed. A staged decoder applied learned masks
+  only to single notes and retained the fixed polyphony-aware chord mask:
+  validation exact lanes improved 0.1837 to 0.2152 and overlap 0.2567 to
+  0.2882; frozen Persephone improved exact lanes 0.2280 to 0.2329 and overlap
+  0.2448 to 0.2497 with chord accuracy unchanged. This remains offline because
+  it uses oracle authorized attack/polyphony conditioning and the transferable
+  gain is small; runtime must first supply equally reliable independent
+  conditioning.
+- The two external acquisition issues still had no comments on 2026-10-05, and
+  no timestamped Hail listening-feedback export was present locally. These are
+  genuine external gates, not reasons to weaken automated acceptance criteria.
 - Structure prediction artifacts now record per-song attack-peak rank percentiles
   and score quantiles so offline fusion experiments do not assume cleared-data
   probabilities are calibrated on commercial stems. A 14-song shadow run still

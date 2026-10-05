@@ -10,6 +10,8 @@ sys.path.insert(0, str(SCRIPTS))
 
 import structure_score_ensemble as ensemble
 import structure_timing_snap as timing_snap
+import audio_authoring_sequence as audio_authoring
+import symbolic_authoring_sequence as symbolic_authoring
 
 
 def test_timing_snap_uses_local_maximum_and_deduplicates():
@@ -59,3 +61,40 @@ def test_score_ensemble_blends_scores_before_peak_selection():
 
     assert local["macro_f1"] == 1
     assert context["macro_f1"] == 0
+
+
+def test_staged_authoring_changes_single_notes_but_preserves_chords():
+    record = {
+        "symbolic_features": np.asarray([
+            [0, 0, 0, 0.2, 0, 0],
+            [0, 0, 0, 0.4, 0, 0],
+        ], dtype=np.float32),
+        "features": np.asarray([
+            [0, 0, 0, 0.2, 0, 0],
+            [0, 0, 0, 0.4, 0, 0],
+        ], dtype=np.float32),
+    }
+
+    staged = audio_authoring._staged_predictions(
+        [record],
+        [[1 << 4, (1 << 0) | (1 << 4)]],
+    )[0]
+
+    assert staged[0] == 1 << 4
+    assert staged[1] == (1 << 1) | (1 << 3)
+
+
+def test_authoring_metrics_separate_single_and_chord_accuracy():
+    record = {
+        "song_id": "fixture",
+        "masks": [1 << 2, (1 << 1) | (1 << 3)],
+        "times": [0.0, 0.5],
+    }
+
+    metrics = symbolic_authoring._metrics(
+        [record],
+        [[1 << 2, (1 << 0) | (1 << 4)]],
+    )
+
+    assert metrics["macro_single_exact"] == 1
+    assert metrics["macro_chord_exact"] == 0

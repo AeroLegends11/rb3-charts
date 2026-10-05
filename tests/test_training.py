@@ -11,6 +11,7 @@ from rb3charts.training import (
     FEATURE_MELS,
     FEATURE_SAMPLE_RATE,
     TrainingDataError,
+    _attack_localization_loss,
     _onset_metrics,
     _peak_width_rank_percentiles,
     _periodic_peak_support,
@@ -664,6 +665,19 @@ def test_structure_baseline_supports_local_attack_with_context(tmp_path):
         device="cpu",
     )
     assert prediction["schema"] == "rb3charts-structure-predictions"
+
+
+def test_attack_localization_loss_prefers_centered_peak():
+    import torch
+
+    attacks = torch.tensor([[0.0, 0.0, 1.0, 0.0, 0.0]])
+    centered = torch.tensor([[0.0, 0.0, 2.0, 0.0, 0.0]])
+    shifted = torch.tensor([[0.0, 2.0, 0.0, 0.0, 0.0]])
+
+    assert (
+        _attack_localization_loss(centered, attacks)
+        < _attack_localization_loss(shifted, attacks)
+    )
 
 
 def test_structure_ranking_evaluation_uses_fixed_top_k_and_one_to_one_matches(tmp_path):

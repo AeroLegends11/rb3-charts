@@ -248,6 +248,12 @@ def main():
         action="store_true",
         help="Train and select on validation without evaluating test items",
     )
+    training.add_argument(
+        "--localization-weight",
+        type=float,
+        default=0.0,
+        help="Weight a local attack-peak ranking objective",
+    )
     prediction=sub.add_parser("predict-structure",help="Run lane-independent model evaluation without changing charts")
     prediction.add_argument("model",type=Path)
     prediction.add_argument("audio",type=Path)
@@ -642,6 +648,7 @@ def main():
                 args.calibration_dataset,
                 args.architecture,
                 not args.skip_test,
+                args.localization_weight,
             )
         except TrainingDataError as exc:
             print(f"Structure baseline training failed: {exc}",file=sys.stderr)

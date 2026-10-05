@@ -1451,6 +1451,40 @@ def _onset_metrics(records, threshold, tolerance_frames):
     }
 
 
+def _attack_localization_loss(logits, attacks, radius=4, margin=0.25):
+    """Penalize positive attack frames that do not exceed nearby negatives."""
+    import torch
+    import torch.nn.functional as functional
+
+    losses = []
+    positive = attacks > 0.5
+    for shift in range(1, radius + 1):
+        for direction in (-1, 1):
+            neighbor_logits = torch.roll(
+                logits,
+                shifts=direction * shift,
+                dims=-1,
+            )
+            neighbor_attacks = torch.roll(
+                attacks,
+                shifts=direction * shift,
+                dims=-1,
+            )
+            valid = positive & (neighbor_attacks <= 0.5)
+            if direction < 0:
+                valid[..., -shift:] = False
+            else:
+                valid[..., :shift] = False
+            if torch.any(valid):
+                losses.append(functional.softplus(
+                    margin - (logits[valid] - neighbor_logits[valid])
+                ).mean())
+    return (
+        torch.stack(losses).mean()
+        if losses else logits.sum() * 0
+    )
+
+
 def train_structure_baseline(
     index_path,
     output,
@@ -1462,6 +1496,7 @@ def train_structure_baseline(
     calibration_dataset=None,
     architecture="conv1d",
     evaluate_test=True,
+    localization_weight=0.0,
 ):
     """Train a deterministic first-pass attack/polyphony/sustain network."""
     import torch
@@ -1477,6 +1512,8 @@ def train_structure_baseline(
         )
     if focal_gamma < 0:
         raise TrainingDataError("Focal gamma cannot be negative")
+    if localization_weight < 0:
+        raise TrainingDataError("Localization weight cannot be negative")
     if architecture not in (
         "conv1d",
         "dilated-tcn",
@@ -1593,6 +1630,10 @@ def train_structure_baseline(
                     attacks,
                     pos_weight=torch.tensor(positive_weight, device=device),
                 )
+            localization_objective = _attack_localization_loss(
+                outputs["attack"],
+                attacks,
+            )
             attack_mask = attacks > 0.5
             if "polyphony" in targets and torch.any(attack_mask):
                 polyphony_loss = functional.cross_entropy(
@@ -1609,7 +1650,12 @@ def train_structure_baseline(
                 if "sustain" in targets
                 else outputs["sustain"].sum() * 0
             )
-            loss = attack_objective + 0.5 * polyphony_loss + 0.25 * sustain_loss
+            loss = (
+                attack_objective
+                + localization_weight * localization_objective
+                + 0.5 * polyphony_loss
+                + 0.25 * sustain_loss
+            )
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -1778,6 +1824,7 @@ def train_structure_baseline(
         "attack_loss": attack_loss,
         "focal_gamma": focal_gamma if attack_loss == "focal" else None,
         "calibration_dataset": calibration_dataset,
+        "localization_weight": localization_weight,
         "training_items": len(train_items),
         "validation_items": len(validation_items),
         "test_items": len(indexed_test_items),
@@ -1844,6 +1891,7 @@ def train_structure_baseline(
             "delta_bins": FEATURE_MELS,
             "attack_threshold": calibrated["threshold"],
             "architecture": architecture,
+            "localization_weight": localization_weight,
         },
         "training_report": report,
     }
