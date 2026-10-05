@@ -288,6 +288,13 @@ into a ten-second multi-attack training phrase. The seed, sequence number,
 source hashes and augmentation parameters remain in the labels, which still
 expose only attack and single-note polyphony targets.
 
+`synthesize-procedural-guitar` creates deterministic additive-pluck audio with
+single notes, chords, sustains, beat positions, and aligned lane-independent
+labels without reading any source recording or annotation. Every artifact
+records its generator version, seed, sequence, style, tempo, and sample rate.
+All generated examples share a generator split key so this synthetic domain
+cannot leak across train, validation, and test partitions.
+
 `extract-structure-features` writes fixed-reference 128-bin log-mel audio,
 128 positive spectral-change bins, source-time frame positions, variable-tempo
 beat phase, and the aligned targets declared by each label artifact. The compressed
@@ -314,6 +321,9 @@ recordings cannot hide regressions elsewhere in the split.
 `--architecture dilated-tcn` selects a versioned residual temporal model with
 about three seconds of receptive context; checkpoints record and restore the
 architecture explicitly.
+`--skip-test` omits test evaluation during candidate selection while retaining
+the indexed test count in the report; rerun the selected deterministic
+configuration without that flag only after it wins on validation.
 Checkpoints retain manifest and feature hashes, the feature configuration, seed,
 runtime versions, loss history, attack metrics, and polyphony accuracy. This
 baseline is an engineering measurement, not yet a chart-quality claim or runtime

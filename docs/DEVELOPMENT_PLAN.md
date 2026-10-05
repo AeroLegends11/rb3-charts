@@ -908,6 +908,22 @@ Status update (2026-09-22):
   0.4268 to 0.2825. This TCN is rejected. Architecture identifiers remain in
   the offline trainer and checkpoints so future temporal experiments are
   auditable and prediction restores the exact trained architecture.
+- The exhaustive lawful-data search found no additional ready-made corpus at
+  meaningful scale with commercially usable rights for both synchronized audio
+  and five-lane charts. Added deterministic procedural guitar synthesis as a
+  train-only acquisition path: it renders additive plucks, repeated riffs,
+  chords and sustains with no source recording or annotation, records complete
+  generation provenance, and uses one generator split key to prevent synthetic
+  leakage into validation or test. This data remains an offline experiment and
+  is not evidence of human chart-author diversity.
+- A 24-phrase procedural pilot initially raised authorized validation macro
+  attack F1 from 0.6933 to 0.8640 at seed 0 and earned one frozen Persephone
+  evaluation, which improved from 0.4405 to 0.5407. Paired validation-only
+  repeats showed that the gain was not robust: procedural-minus-baseline macro
+  F1 was +0.1707, -0.2249, and -0.1400 for seeds 0, 1, and 2. The procedural
+  batch is rejected as a selected training recipe. The generator remains
+  available for future augmentation research, but its output is not included
+  in normal training or runtime generation.
 - Structure prediction artifacts now record per-song attack-peak rank percentiles
   and score quantiles so offline fusion experiments do not assume cleared-data
   probabilities are calibrated on commercial stems. A 14-song shadow run still

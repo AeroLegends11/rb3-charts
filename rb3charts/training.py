@@ -57,6 +57,15 @@ EGFXSET_PROVENANCE = {
     "commercial_use": "allowed",
     "attribution": "Hegel Pedroza, Gerardo Meza, and Iran R. Roman",
 }
+PROCEDURAL_GUITAR_PROVENANCE = {
+    "dataset_id": "rb3charts-procedural-guitar",
+    "dataset_version": "1",
+    "source_url": "local deterministic synthesis",
+    "audio_license": "Generated locally without source recordings",
+    "annotation_license": "Generated locally without source annotations",
+    "commercial_use": "allowed",
+    "attribution": "RB3 Charts deterministic procedural synthesis",
+}
 
 
 class TrainingDataError(ValueError):
@@ -507,6 +516,182 @@ def synthesize_egfxset_phrase(
         "notes": notes,
         "attacks": attacks,
         "beats": [],
+        "summary": _label_summary(notes, attacks),
+    }
+    save_json(output_labels, result)
+    return result
+
+
+def synthesize_procedural_guitar_phrase(
+    output_audio,
+    output_labels,
+    seed=1337,
+    sequence=0,
+    duration=12.0,
+):
+    """Render deterministic guitar-like phrases without external source material."""
+    import soundfile as sf
+
+    output_audio = Path(output_audio).resolve()
+    output_labels = Path(output_labels).resolve()
+    if output_audio.suffix.lower() != ".wav":
+        raise TrainingDataError(
+            "Procedural guitar audio output must use the .wav suffix"
+        )
+    if output_labels.suffix.lower() != ".json":
+        raise TrainingDataError(
+            "Procedural guitar labels output must use the .json suffix"
+        )
+    if sequence < 0:
+        raise TrainingDataError(
+            "Procedural guitar sequence must be non-negative"
+        )
+    if seed < 0:
+        raise TrainingDataError(
+            "Procedural guitar seed must be non-negative"
+        )
+    if not np.isfinite(duration) or duration < 4.0:
+        raise TrainingDataError(
+            "Procedural guitar duration must be at least four seconds"
+        )
+
+    sample_rate = FEATURE_SAMPLE_RATE
+    rendered = np.zeros(round(duration * sample_rate), dtype=np.float32)
+    random_seed = seed * 1000003 + sequence
+    noise_rng = np.random.default_rng(random_seed)
+    styles = ("mixed", "single-note-riff", "chordal")
+    style = styles[sequence % len(styles)]
+    tempo = (96, 120, 144, 168)[sequence % 4]
+    beat_seconds = 60.0 / tempo
+    interval_patterns = (
+        (0.5, 0.5, 0.25, 0.25, 0.5, 1.0),
+        (0.25, 0.25, 0.5, 0.75, 0.25, 0.5),
+        (1.0, 0.5, 0.5, 1.0),
+    )
+    scale = (40, 43, 45, 47, 50, 52, 55, 57)
+    contour = (0, 2, 3, 2, 5, 3, 2, 0)
+    notes = []
+    position = 0.5
+    attack_index = 0
+    pattern = interval_patterns[sequence % len(interval_patterns)]
+
+    while position < duration - 0.35:
+        root = scale[
+            (contour[attack_index % len(contour)] + sequence)
+            % len(scale)
+        ]
+        if style == "chordal" or (
+            style == "mixed" and attack_index % 4 == 0
+        ):
+            pitches = [root, root + 7]
+            if style == "chordal" and attack_index % 3 == 0:
+                pitches.append(root + 12)
+            note_duration = min(
+                beat_seconds * (1.4 if style == "chordal" else 0.9),
+                duration - position,
+            )
+        else:
+            pitches = [root]
+            note_duration = min(
+                max(0.12, beat_seconds * 0.55),
+                duration - position,
+            )
+
+        for voice, pitch in enumerate(pitches):
+            frames = max(1, round(note_duration * sample_rate))
+            time = np.arange(frames, dtype=np.float32) / sample_rate
+            frequency = 440.0 * (2.0 ** ((pitch - 69) / 12.0))
+            tone = np.zeros(frames, dtype=np.float32)
+            for harmonic in range(1, 6):
+                if frequency * harmonic >= sample_rate / 2:
+                    break
+                tone += (
+                    np.sin(2 * np.pi * frequency * harmonic * time)
+                    / harmonic
+                ).astype(np.float32)
+            envelope = (
+                (1.0 - np.exp(-90.0 * time))
+                * np.exp(-(3.0 + 0.35 * voice) * time)
+            ).astype(np.float32)
+            attack_frames = min(frames, round(0.018 * sample_rate))
+            pick = np.zeros(frames, dtype=np.float32)
+            if attack_frames:
+                pick[:attack_frames] = (
+                    noise_rng.standard_normal(attack_frames).astype(np.float32)
+                    * np.linspace(
+                        1.0,
+                        0.0,
+                        attack_frames,
+                        dtype=np.float32,
+                    )
+                )
+            clip = (tone * envelope * 0.12 + pick * 0.025) / len(pitches)
+            start_frame = round(position * sample_rate)
+            end_frame = min(len(rendered), start_frame + frames)
+            rendered[start_frame:end_frame] += clip[:end_frame - start_frame]
+            source_id = (
+                f"sequence-{sequence:03d}-attack-{attack_index:03d}-"
+                f"voice-{voice}"
+            )
+            notes.append({
+                "start": position,
+                "end": position + (end_frame - start_frame) / sample_rate,
+                "pitch": pitch,
+                "source_id": source_id,
+            })
+        interval = pattern[attack_index % len(pattern)]
+        position += interval * beat_seconds
+        attack_index += 1
+
+    attacks = _group_attacks(notes, 0.001)
+    peak = float(np.max(np.abs(rendered)))
+    if peak > 0.9:
+        rendered *= 0.9 / peak
+    output_audio.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(output_audio, rendered, sample_rate, subtype="PCM_16")
+    beats = [
+        {
+            "time": index * beat_seconds,
+            "position": index % 4 + 1,
+        }
+        for index in range(int(duration / beat_seconds) + 1)
+        if index * beat_seconds <= duration
+    ]
+    configuration = {
+        "generator": "additive-pluck-v1",
+        "seed": seed,
+        "sequence": sequence,
+        "duration": duration,
+        "style": style,
+        "tempo": tempo,
+        "sample_rate": sample_rate,
+    }
+    group_id = (
+        f"procedural-guitar:seed-{seed}:sequence-{sequence:03d}"
+    )
+    result = {
+        "schema": "rb3charts-structure-labels",
+        "schema_version": STRUCTURE_LABEL_VERSION,
+        "source_format": "rb3charts-procedural-guitar-v1",
+        "source_annotation": (
+            f"seed-{seed}-sequence-{sequence}-{style}"
+        ),
+        "source_annotation_sha256": sha256(
+            json.dumps(configuration, sort_keys=True).encode("utf-8")
+        ).hexdigest(),
+        "source_files": [],
+        "provenance": PROCEDURAL_GUITAR_PROVENANCE,
+        "group_id": group_id,
+        "split_keys": [
+            group_id,
+            "generator:rb3charts-procedural-guitar-v1",
+        ],
+        "duration": duration,
+        "targets": ["attack", "polyphony", "sustain"],
+        "generation": configuration,
+        "notes": notes,
+        "attacks": attacks,
+        "beats": beats,
         "summary": _label_summary(notes, attacks),
     }
     save_json(output_labels, result)
@@ -1261,6 +1446,7 @@ def train_structure_baseline(
     focal_gamma=2.0,
     calibration_dataset=None,
     architecture="conv1d",
+    evaluate_test=True,
 ):
     """Train a deterministic first-pass attack/polyphony/sustain network."""
     import torch
@@ -1307,7 +1493,10 @@ def train_structure_baseline(
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
     train_items = [item for item in items if item["split"] == "train"]
     validation_items = [item for item in items if item["split"] == "validation"]
-    test_items = [item for item in items if item["split"] == "test"]
+    indexed_test_items = [
+        item for item in items if item["split"] == "test"
+    ]
+    test_items = indexed_test_items if evaluate_test else []
     positives = 0.0
     frames = 0
     provenance = {}
@@ -1565,7 +1754,8 @@ def train_structure_baseline(
         "calibration_dataset": calibration_dataset,
         "training_items": len(train_items),
         "validation_items": len(validation_items),
-        "test_items": len(test_items),
+        "test_items": len(indexed_test_items),
+        "test_evaluated": evaluate_test and bool(indexed_test_items),
         "positive_weight": positive_weight,
         "epoch_losses": epoch_losses,
         "validation": {

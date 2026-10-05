@@ -25,6 +25,7 @@ from rb3charts.training import (
     pin_source_agreement_manifest,
     predict_structure,
     synthesize_egfxset_phrase,
+    synthesize_procedural_guitar_phrase,
     train_structure_baseline,
 )
 
@@ -178,6 +179,54 @@ def test_egfxset_phrase_synthesis_requires_source_diversity(tmp_path):
     with pytest.raises(TrainingDataError, match="at least four"):
         synthesize_egfxset_phrase(
             source.parent, tmp_path / "phrase.wav", tmp_path / "phrase.json"
+        )
+
+
+def test_procedural_guitar_synthesis_is_deterministic_and_fully_labeled(tmp_path):
+    first_audio = tmp_path / "first.wav"
+    first_labels = tmp_path / "first.json"
+    second_audio = tmp_path / "second.wav"
+    second_labels = tmp_path / "second.json"
+    first = synthesize_procedural_guitar_phrase(
+        first_audio,
+        first_labels,
+        seed=23,
+        sequence=0,
+        duration=4.0,
+    )
+    second = synthesize_procedural_guitar_phrase(
+        second_audio,
+        second_labels,
+        seed=23,
+        sequence=0,
+        duration=4.0,
+    )
+
+    assert first == second
+    assert first_audio.read_bytes() == second_audio.read_bytes()
+    assert first["targets"] == ["attack", "polyphony", "sustain"]
+    assert first["source_files"] == []
+    assert first["provenance"]["commercial_use"] == "allowed"
+    assert first["split_keys"][-1] == (
+        "generator:rb3charts-procedural-guitar-v1"
+    )
+    assert first["summary"]["chord_attacks"] > 0
+    assert first["beats"]
+    features = tmp_path / "features.npz"
+    metadata = extract_structure_features(
+        first_audio,
+        first_labels,
+        features,
+    )
+    assert metadata["targets"] == ["attack", "polyphony", "sustain"]
+
+
+def test_procedural_guitar_synthesis_rejects_negative_seed(tmp_path):
+    with pytest.raises(TrainingDataError, match="seed must be non-negative"):
+        synthesize_procedural_guitar_phrase(
+            tmp_path / "phrase.wav",
+            tmp_path / "phrase.json",
+            seed=-1,
         )
 
 
@@ -463,6 +512,7 @@ def test_structure_baseline_trains_and_writes_auditable_checkpoint(tmp_path):
     assert report["training_items"] == 1
     assert report["validation_items"] == 1
     assert report["test_items"] == 1
+    assert report["test_evaluated"] is True
     assert report["attack_loss"] == "weighted-bce"
     assert report["architecture"] == "conv1d"
     assert len(report["epoch_losses"]) == 1
@@ -538,11 +588,15 @@ def test_structure_baseline_supports_focal_attack_loss(tmp_path):
         attack_loss="focal",
         focal_gamma=2.0,
         calibration_dataset="guitarset",
+        evaluate_test=False,
     )
     assert report["attack_loss"] == "focal"
     assert report["focal_gamma"] == 2.0
     assert report["calibration_dataset"] == "guitarset"
     assert report["validation"]["threshold_selection"] == "macro-f1"
+    assert report["test_items"] == 1
+    assert report["test_evaluated"] is False
+    assert "test" not in report
 
 
 def test_structure_baseline_supports_dilated_tcn(tmp_path):

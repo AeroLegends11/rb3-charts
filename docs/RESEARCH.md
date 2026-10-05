@@ -90,6 +90,23 @@ an augmented TabCNN checkpoint. RWC Music Database 2.0 is CC BY-NC 4.0 and must
 remain isolated in a noncommercial research experiment rather than being mixed
 into a permissive checkpoint.
 
+An exhaustive follow-up search found no additional ready-made corpus at useful
+scale with commercially usable rights for both synchronized audio and five-lane
+charts. YARG's Unlicense examples contain charts but no paired audio; public
+rhythm-game mirrors either duplicate the existing Fervi material, omit song
+assets, reserve redistribution rights, or contain commercial recordings. The
+GOAT Dataset is the most promising clean-provenance academic lead, but access
+is restricted and its exact granted terms must be verified before use. Lakh
+MIDI is not acceptable: its compilation license does not establish rights to
+the underlying commercial-song transcriptions.
+
+The practical human-data path is direct permission or commissioning. Highest
+priority is identifying the original Keyboard Warrior/Chorus charter, asking
+Brad Sucks about additional CC-catalog charting, and recruiting different named
+charters for already-cleared ccMixter artists. Any acquired pair still requires
+explicit training and redistribution permission, synchronization verification,
+hash-pinned files, named authorship, and chart-author-disjoint splits.
+
 EGFxSet release 1.0 contains 8,970 five-second electric-guitar recordings under
 CC BY 4.0. The clean ZIP's published MD5 was verified before use. Its filename
 and remote-index inconsistencies require parsing only valid `string-fret.wav`

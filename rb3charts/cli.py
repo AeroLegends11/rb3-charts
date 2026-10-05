@@ -193,6 +193,15 @@ def main():
     egfx_phrase.add_argument("--seed",type=int,default=1337)
     egfx_phrase.add_argument("--sequence",type=int,default=0)
     egfx_phrase.add_argument("--duration",type=float,default=10.0)
+    procedural_phrase=sub.add_parser(
+        "synthesize-procedural-guitar",
+        help="Render rights-clean guitar-like audio and structure labels",
+    )
+    procedural_phrase.add_argument("audio",type=Path)
+    procedural_phrase.add_argument("labels",type=Path)
+    procedural_phrase.add_argument("--seed",type=int,default=1337)
+    procedural_phrase.add_argument("--sequence",type=int,default=0)
+    procedural_phrase.add_argument("--duration",type=float,default=12.0)
     slakh=sub.add_parser("convert-slakh",help="Convert one Slakh track to lane-independent structure labels")
     slakh.add_argument("track",type=Path)
     slakh.add_argument("output",type=Path)
@@ -228,6 +237,11 @@ def main():
         "--architecture",
         choices=["conv1d","dilated-tcn"],
         default="conv1d",
+    )
+    training.add_argument(
+        "--skip-test",
+        action="store_true",
+        help="Train and select on validation without evaluating test items",
     )
     prediction=sub.add_parser("predict-structure",help="Run lane-independent model evaluation without changing charts")
     prediction.add_argument("model",type=Path)
@@ -556,6 +570,21 @@ def main():
             return 1
         print(json.dumps(report["summary"],indent=2))
         return 0
+    if args.command=="synthesize-procedural-guitar":
+        from .training import TrainingDataError, synthesize_procedural_guitar_phrase
+        try:
+            report=synthesize_procedural_guitar_phrase(
+                args.audio,
+                args.labels,
+                args.seed,
+                args.sequence,
+                args.duration,
+            )
+        except TrainingDataError as exc:
+            print(f"Procedural guitar synthesis failed: {exc}",file=sys.stderr)
+            return 1
+        print(json.dumps(report["summary"],indent=2))
+        return 0
     if args.command=="convert-slakh":
         from .training import TrainingDataError, convert_slakh_track
         try:
@@ -607,6 +636,7 @@ def main():
                 args.focal_gamma,
                 args.calibration_dataset,
                 args.architecture,
+                not args.skip_test,
             )
         except TrainingDataError as exc:
             print(f"Structure baseline training failed: {exc}",file=sys.stderr)
