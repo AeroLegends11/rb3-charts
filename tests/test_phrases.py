@@ -83,13 +83,18 @@ def test_lane_run_quality_distinguishes_flat_contour_from_repeated_pitch():
         Note(2+i*.125,2+i*.125+.065,(1,),pitch=60)
         for i in range(8)
     ]
+    repeated_with_tail=[
+        Note(4+i*.125,4+i*.125+.065,(3,),pitch=pitch)
+        for i,pitch in enumerate((70,70,70,70,70,72,68))
+    ]
 
-    report=_lane_run_quality([collapsed,repeated])
+    report=_lane_run_quality([collapsed,repeated,repeated_with_tail])
 
     assert report["max_same_lane_run"]==8
     assert report["long_same_lane_runs"]==2
     assert report["collapsed_contour_runs"]==1
-    assert report["lane_counts"]=={0:0,1:8,2:8,3:0,4:0}
+    assert report["runs"][0]["pitch_changes"]==7
+    assert report["lane_counts"]=={0:0,1:8,2:8,3:7,4:0}
 
 
 def event(t,p,c,source):

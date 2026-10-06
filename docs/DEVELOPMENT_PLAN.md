@@ -353,13 +353,17 @@ Status update (2026-09-20):
   evaluation, not reference-fed selection.
 - Added an evidence-aware final-lane quality gate. Five-plus-note same-lane
   runs fail automatic assessment only when they contain at least three detected
-  pitches spanning four semitones; eight-plus-note repeated-pitch runs instead
-  request listening review because recoloring them would invent unsupported
-  motion. Current-code Hail has two repeated-pitch review runs and no collapsed
-  contour runs. Fifteen cached authorized replays exposed six collapsed-contour
-  runs across 31 long runs. A guarded local-fingering fallback activated zero
-  times on Hail and all 15 authorized runs, so it was rejected rather than
-  adding an unproven lane rewrite. Attacks, source IDs and timing were unchanged.
+  pitches spanning four semitones and at least three actual pitch-change
+  transitions; eight-plus-note repeated-pitch runs instead request listening
+  review because recoloring them would invent unsupported motion. The added
+  transition gate reclassified only one seven-note authorized run whose first
+  five attacks repeat pitch 70 before a two-note tail; Unbutton retains its
+  separate evidence-backed collapsed contour. Current-code Hail has two
+  repeated-pitch review runs and no collapsed contour runs. Fifteen cached
+  authorized replays originally exposed six collapsed-contour runs across 31
+  long runs. A guarded local-fingering fallback activated zero times on Hail and
+  all 15 authorized runs, so it was rejected rather than adding an unproven lane
+  rewrite. Attacks, source IDs and timing were unchanged.
 - Repeat-fingering normalization now rejects an individual offset plan when
   applying it would create a new evidence-backed collapsed contour at an
   occurrence boundary. Across 15 authorized and seven official-reference

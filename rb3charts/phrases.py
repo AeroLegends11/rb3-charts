@@ -121,6 +121,9 @@ def _lane_run_quality(phrases):
             pitches = [note.pitch for note in current]
             distinct = len(set(pitches))
             span = max(pitches) - min(pitches)
+            pitch_changes = sum(
+                left != right for left, right in zip(pitches, pitches[1:])
+            )
             runs.append({
                 "start": current[0].start,
                 "end": current[-1].start,
@@ -128,7 +131,10 @@ def _lane_run_quality(phrases):
                 "attacks": len(current),
                 "distinct_pitches": distinct,
                 "pitch_span": span,
-                "collapsed_contour": distinct >= 3 and span >= 4,
+                "pitch_changes": pitch_changes,
+                "collapsed_contour": (
+                    distinct >= 3 and span >= 4 and pitch_changes >= 3
+                ),
             })
 
         for note in rows:
