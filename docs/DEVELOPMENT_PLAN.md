@@ -1094,6 +1094,15 @@ Status update (2026-09-22):
   reached 0.5951 on Persephone. This is the strongest attack-selection family
   so far, but seed-sensitive frozen gains and unchanged frozen timing keep it
   offline pending broader author-disjoint evidence and end-to-end evaluation.
+- The seed-stable three-student mean was then carried through predicted-input
+  lane authoring. Applying learned single-note lanes only where the original
+  teacher independently supported the attack preserved deterministic baseline
+  masks on newly recovered attacks. All three lane seeds improved validation;
+  validation selected seed 2. On untouched Persephone, attack F1 improved from
+  0.6073 to 0.6274, joint timing-plus-exact-lane F1 from 0.1210 to 0.1279,
+  matched exact lanes from 0.1992 to 0.2039, and lane overlap from 0.2387 to
+  0.2473. This is the strongest lawful end-to-end offline result so far, but
+  remains below runtime quality and does not resolve frozen timing.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

@@ -18,6 +18,11 @@ from audio_authoring_sequence import (
     _predict,
     _staged_predictions,
 )
+from structure_distill_ensemble import _load_student
+from structure_multires_spectrogram import (
+    _audio_path,
+    _short_primary_features,
+)
 from structure_timing_snap import _hash_file, _load_model
 from symbolic_authoring_sequence import _baseline_masks, _lanes
 from rb3charts.model import save_json
@@ -34,6 +39,48 @@ def _remove_duration_input(records):
     for record in records:
         record["symbolic_features"][:, 4] = 0.0
         record["features"][:, 256 + 4] = 0.0
+
+
+def _blend_attack_scores(
+    teacher_scores,
+    student_scores,
+    student_weight,
+):
+    return (
+        (1 - student_weight) * np.asarray(teacher_scores)
+        + student_weight * np.mean(student_scores, axis=0)
+    )
+
+
+def _supported_staged_predictions(records, predicted):
+    staged = []
+    for record, candidate in zip(records, predicted):
+        baseline = _baseline_masks({
+            **record,
+            "features": record["symbolic_features"],
+        })
+        supported = record.get(
+            "learned_lane_allowed",
+            [True] * len(candidate),
+        )
+        staged.append([
+            candidate_mask
+            if (
+                allowed
+                and max(
+                    1,
+                    min(5, round(float(symbolic[3]) * 5)),
+                ) == 1
+            )
+            else baseline_mask
+            for candidate_mask, baseline_mask, symbolic, allowed in zip(
+                candidate,
+                baseline,
+                record["symbolic_features"],
+                supported,
+            )
+        ])
+    return staged
 
 
 def _context_audio_features(arrays, frames):
@@ -151,10 +198,16 @@ def _predicted_record(
     context_features=False,
     pitch_contour_features=False,
     relative_pitch_only=False,
+    attack_scores=None,
+    learned_lane_allowed=None,
 ):
     import torch
 
-    scores = torch.sigmoid(outputs["attack"][0]).cpu().numpy()
+    scores = (
+        np.asarray(attack_scores)
+        if attack_scores is not None
+        else torch.sigmoid(outputs["attack"][0]).cpu().numpy()
+    )
     peaks = _attack_peaks(scores, threshold)
     polyphony = torch.argmax(
         outputs["polyphony"][0],
@@ -196,6 +249,11 @@ def _predicted_record(
         "times": times.tolist(),
         "symbolic_features": symbolic,
         "features": np.concatenate((audio, symbolic, contour), axis=1),
+        "learned_lane_allowed": (
+            list(learned_lane_allowed)
+            if learned_lane_allowed is not None
+            else [True] * len(peaks)
+        ),
     }
 
 
@@ -300,6 +358,10 @@ def run(
     pitch_contour_features=False,
     relative_pitch_only=False,
     single_only_loss=False,
+    distilled_students=None,
+    distilled_weight=0.0,
+    attack_threshold=None,
+    teacher_supported_lanes=False,
 ):
     import torch
     import torch.nn.functional as functional
@@ -373,6 +435,15 @@ def run(
         structure_checkpoint,
         device,
     )
+    distilled_students = list(distilled_students or [])
+    student_models = [
+        _load_student(path, device)[0]
+        for path in distilled_students
+    ]
+    if distilled_weight and not student_models:
+        raise ValueError("distilled weight requires student checkpoints")
+    if not 0 <= distilled_weight <= 1:
+        raise ValueError("distilled weight must be between zero and one")
     predicted = []
     structure_model.eval()
     with torch.no_grad():
@@ -388,14 +459,63 @@ def run(
             outputs = structure_model(
                 torch.from_numpy(features).unsqueeze(0).to(device)
             )
+            selected_attack_scores = None
+            teacher_scores = torch.sigmoid(
+                outputs["attack"][0]
+            ).cpu().numpy()
+            if student_models:
+                short_features = _short_primary_features(
+                    _audio_path(item),
+                    arrays,
+                    short_delta=True,
+                )
+                short_tensor = torch.from_numpy(
+                    short_features
+                ).unsqueeze(0).to(device)
+                selected_attack_scores = _blend_attack_scores(
+                    teacher_scores,
+                    [
+                        torch.sigmoid(
+                            model(short_tensor)["attack"][0]
+                        ).cpu().numpy()
+                        for model in student_models
+                    ],
+                    distilled_weight,
+                )
+            selected_threshold = (
+                float(attack_threshold)
+                if attack_threshold is not None
+                else float(structure_configuration["attack_threshold"])
+            )
+            learned_lane_allowed = None
+            if teacher_supported_lanes:
+                selected_scores = (
+                    selected_attack_scores
+                    if selected_attack_scores is not None
+                    else teacher_scores
+                )
+                selected_peaks = _attack_peaks(
+                    selected_scores,
+                    selected_threshold,
+                )
+                teacher_peaks = _attack_peaks(
+                    teacher_scores,
+                    float(structure_configuration["attack_threshold"]),
+                )
+                learned_lane_allowed = [
+                    bool(np.any(np.abs(teacher_peaks - peak) <= 1))
+                    for peak in selected_peaks
+                ]
             predicted.append(_predicted_record(
                 item,
                 arrays,
                 outputs,
-                float(structure_configuration["attack_threshold"]),
+                selected_threshold,
                 context_features=context_features,
                 pitch_contour_features=pitch_contour_features,
                 relative_pitch_only=relative_pitch_only,
+                attack_scores=selected_attack_scores,
+                learned_lane_allowed=learned_lane_allowed,
             ))
     validation_predicted = [
         record for record in predicted if record["split"] == "validation"
@@ -421,10 +541,12 @@ def run(
         })
         for record in validation_predicted
     ]
-    validation_staged = _staged_predictions(
-        validation_predicted,
-        validation_learned,
+    stage = (
+        _supported_staged_predictions
+        if teacher_supported_lanes
+        else _staged_predictions
     )
+    validation_staged = stage(validation_predicted, validation_learned)
     baseline_metrics = _timing_lane_metrics(
         references,
         validation_predicted,
@@ -456,6 +578,17 @@ def run(
         "pitch_contour_features": pitch_contour_features,
         "relative_pitch_only": relative_pitch_only,
         "single_only_loss": single_only_loss,
+        "distilled_student_sha256": [
+            _hash_file(path)
+            for path in distilled_students
+        ],
+        "distilled_weight": distilled_weight,
+        "attack_threshold": (
+            float(attack_threshold)
+            if attack_threshold is not None
+            else float(structure_configuration["attack_threshold"])
+        ),
+        "teacher_supported_lanes": teacher_supported_lanes,
         "guard_passed": guard_passed,
         "test_evaluated": bool(guard_passed and test_predicted),
         "feature_index_sha256": _hash_file(feature_index),
@@ -489,7 +622,7 @@ def run(
             "staged_audio_candidate": _timing_lane_metrics(
                 references,
                 test_predicted,
-                _staged_predictions(test_predicted, test_learned),
+                stage(test_predicted, test_learned),
             ),
         }
     save_json(output, report)
@@ -509,6 +642,15 @@ def main():
     parser.add_argument("--relative-pitch-only", action="store_true")
     parser.add_argument("--single-only-loss", action="store_true")
     parser.add_argument(
+        "--distilled-student",
+        type=Path,
+        action="append",
+        default=[],
+    )
+    parser.add_argument("--distilled-weight", type=float, default=0.0)
+    parser.add_argument("--attack-threshold", type=float)
+    parser.add_argument("--teacher-supported-lanes", action="store_true")
+    parser.add_argument(
         "--device",
         choices=["auto", "cpu", "cuda"],
         default="auto",
@@ -526,6 +668,13 @@ def main():
         pitch_contour_features=args.pitch_contour_features,
         relative_pitch_only=args.relative_pitch_only,
         single_only_loss=args.single_only_loss,
+        distilled_students=[
+            path.resolve()
+            for path in args.distilled_student
+        ],
+        distilled_weight=args.distilled_weight,
+        attack_threshold=args.attack_threshold,
+        teacher_supported_lanes=args.teacher_supported_lanes,
     )
     print(json.dumps(report, indent=2))
 

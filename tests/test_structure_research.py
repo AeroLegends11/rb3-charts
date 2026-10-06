@@ -534,6 +534,40 @@ def test_predicted_authoring_pitch_contour_resets_after_rest():
     assert features[:, 3].tolist() == [0.0, 1.0, 0.0, 1.0]
 
 
+def test_predicted_authoring_blends_mean_student_attack_scores():
+    scores = predicted_authoring._blend_attack_scores(
+        teacher_scores=np.asarray([0.2, 0.8]),
+        student_scores=[
+            np.asarray([0.6, 0.4]),
+            np.asarray([0.8, 0.2]),
+        ],
+        student_weight=0.25,
+    )
+
+    assert scores == pytest.approx([0.325, 0.675])
+
+
+def test_predicted_authoring_preserves_baseline_on_unsupported_lane():
+    records = [{
+        "symbolic_features": np.asarray([
+            [0, 0, 0, 0.2, 0, 0],
+            [0, 0, 0, 0.2, 0, 0],
+        ], dtype=np.float32),
+        "features": np.asarray([
+            [0, 0, 0, 0.2, 0, 0],
+            [0, 0, 0, 0.2, 0, 0],
+        ], dtype=np.float32),
+        "learned_lane_allowed": [True, False],
+    }]
+
+    staged = predicted_authoring._supported_staged_predictions(
+        records,
+        [[1 << 4, 1 << 4]],
+    )
+
+    assert staged == [[1 << 4, 1 << 2]]
+
+
 def test_self_trained_authoring_targets_only_matched_single_notes():
     reference = {
         "times": [1.0, 2.0, 3.0],
