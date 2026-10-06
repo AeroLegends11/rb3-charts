@@ -108,6 +108,62 @@ def _constraint_cost(lanes, preferred):
     )
 
 
+def _lane_run_quality(phrases):
+    runs = []
+    lane_counts = {lane: 0 for lane in range(5)}
+    attacks = 0
+    for rows in phrases:
+        current = []
+
+        def finish():
+            if len(current) < 5:
+                return
+            pitches = [note.pitch for note in current]
+            distinct = len(set(pitches))
+            span = max(pitches) - min(pitches)
+            runs.append({
+                "start": current[0].start,
+                "end": current[-1].start,
+                "lane": current[0].lanes[0],
+                "attacks": len(current),
+                "distinct_pitches": distinct,
+                "pitch_span": span,
+                "collapsed_contour": distinct >= 3 and span >= 4,
+            })
+
+        for note in rows:
+            attacks += 1
+            lane_counts[note.lanes[0]] += 1
+            if current and note.lanes == current[-1].lanes:
+                current.append(note)
+            else:
+                finish()
+                current = [note]
+        finish()
+    long_runs = [run for run in runs if run["attacks"] >= 8]
+    collapsed = [run for run in runs if run["collapsed_contour"]]
+    return {
+        "single_note_attacks": attacks,
+        "lane_counts": lane_counts,
+        "dominant_lane_ratio": round(
+            max(lane_counts.values(), default=0) / max(1, attacks), 4
+        ),
+        "max_same_lane_run": max(
+            (run["attacks"] for run in runs), default=0
+        ),
+        "long_same_lane_runs": len(long_runs),
+        "collapsed_contour_runs": len(collapsed),
+        "runs": sorted(
+            runs,
+            key=lambda run: (
+                not run["collapsed_contour"],
+                -run["attacks"],
+                run["start"],
+            ),
+        )[:20],
+    }
+
+
 def _preserve_supported_lane_span(rows, lanes):
     incoming = [note.lanes[0] for note in rows]
     duration = rows[-1].start - rows[0].start
@@ -840,6 +896,7 @@ def author_guitar_phrases(
                 "reversed_pitch_changes": sum((b.pitch-a.pitch)*(b.lanes[0]-a.lanes[0]) < 0 for a,b in pairs)}
     chord_sections = _apply_band_chord_sections(result, tempo, chord_evidence)
     repeat_fingerings = _stabilize_repeat_fingerings(result, tempo)
+    lane_quality = _lane_run_quality(phrases)
     for phrase, rows in zip(phrase_report, phrases):
         phrase["final_lanes"] = [list(note.lanes) for note in rows]
     return result, {"method": "phrase-local fingering with whole-sequence ergonomic costs and bounded motif windows",
@@ -848,6 +905,7 @@ def author_guitar_phrases(
                     "pitch_anchor_changes": pitch_anchor_changes,
                     "pitch_anchor_contours_protected": pitch_anchor_contours_protected,
                     "supported_span_preservations": supported_span_preservations,
+                    "lane_quality": lane_quality,
                     "repeat_fingerings": repeat_fingerings,
                     "sustain_threshold_seconds": sustain_threshold,
                     "phrases": phrase_report, "short_tails_removed": tails,

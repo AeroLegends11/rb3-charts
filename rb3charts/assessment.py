@@ -227,6 +227,35 @@ def assess_chart(
                 f"{retention_reference['p10']:.0%}"
             )
         if name=="guitar":
+            lane_quality=(
+                (phrase_authoring or {}).get(name,{})
+                .get("lane_quality",{})
+            )
+            item["max_same_lane_run"]=int(
+                lane_quality.get("max_same_lane_run",0)
+            )
+            item["long_same_lane_runs"]=int(
+                lane_quality.get("long_same_lane_runs",0)
+            )
+            item["collapsed_contour_runs"]=int(
+                lane_quality.get("collapsed_contour_runs",0)
+            )
+            item["dominant_lane_ratio"]=float(
+                lane_quality.get("dominant_lane_ratio",0)
+            )
+            if item["collapsed_contour_runs"]:
+                severe.append(
+                    "guitar: "
+                    f"{item['collapsed_contour_runs']} long same-lane runs "
+                    "flatten distinct detected pitch contours"
+                )
+            elif item["long_same_lane_runs"]:
+                concerns.append(
+                    "guitar: "
+                    f"{item['long_same_lane_runs']} runs keep at least eight "
+                    "consecutive attacks on one lane; verify the repeated "
+                    "pitch rhythm by ear"
+                )
             chord_sections=(
                 (phrase_authoring or {}).get(name,{})
                 .get("chord_sections",{})

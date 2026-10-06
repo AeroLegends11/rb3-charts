@@ -218,6 +218,42 @@ def test_assessment_flags_propagated_source_chord_texture():
     )
 
 
+def test_assessment_rejects_collapsed_contour_runs():
+    charts=chart()
+    patterns={"guitar":{
+        "lane_counts":{lane:8 for lane in range(5)},
+        "recurring_pattern_families":4,
+        "contour_agreement_ratio":1,
+        "flattened_change_ratio":0,
+    }}
+    playability={"guitar":{
+        "before":40,
+        "removed":0,
+        "holds":0,
+        "peak_four_second_nps":4,
+    }}
+    phrase_authoring={"guitar":{
+        "lane_quality":{
+            "max_same_lane_run":9,
+            "long_same_lane_runs":1,
+            "collapsed_contour_runs":1,
+            "dominant_lane_ratio":.5,
+        },
+        "chord_sections":{},
+    }}
+
+    result=assess_chart(
+        charts,patterns,playability,"band",
+        phrase_authoring=phrase_authoring,
+    )
+
+    assert result["status"]=="needs_work"
+    assert any(
+        "flatten distinct detected pitch contours" in concern
+        for concern in result["severe"]
+    )
+
+
 def test_assessment_flags_hard_reduction_outside_reference_range(monkeypatch):
     charts=chart()
     patterns={"guitar":{

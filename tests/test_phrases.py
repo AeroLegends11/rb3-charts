@@ -1,6 +1,7 @@
 import numpy as np
 from rb3charts.model import Note, TempoMap
 from rb3charts.phrases import (
+    _lane_run_quality,
     _preserve_supported_lane_span,
     _stabilize_repeat_fingerings,
     _stabilize_repeated_pitch_lanes,
@@ -71,6 +72,24 @@ def test_sequence_fingering_can_handle_more_than_five_pitches_without_out_of_ran
     assert all(0<=n.lanes[0]<=4 for n in result)
     assert report["after"]["collapsed_pitch_changes"] < report["before"]["collapsed_pitch_changes"]
     assert reductions(result,"guitar",grid())["expert"] == result
+
+
+def test_lane_run_quality_distinguishes_flat_contour_from_repeated_pitch():
+    collapsed=[
+        Note(i*.125,i*.125+.065,(2,),pitch=pitch)
+        for i,pitch in enumerate((60,62,64,65,67,69,71,72))
+    ]
+    repeated=[
+        Note(2+i*.125,2+i*.125+.065,(1,),pitch=60)
+        for i in range(8)
+    ]
+
+    report=_lane_run_quality([collapsed,repeated])
+
+    assert report["max_same_lane_run"]==8
+    assert report["long_same_lane_runs"]==2
+    assert report["collapsed_contour_runs"]==1
+    assert report["lane_counts"]=={0:0,1:8,2:8,3:0,4:0}
 
 
 def event(t,p,c,source):

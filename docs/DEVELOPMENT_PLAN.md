@@ -327,6 +327,15 @@ Status update (2026-09-20):
   remains 0.3440, exact lanes improve 0.1744 to 0.1816 and interval error
   improves 1.7352 to 1.7336. These metrics are diagnostics and post-generation
   evaluation, not reference-fed selection.
+- Added an evidence-aware final-lane quality gate. Five-plus-note same-lane
+  runs fail automatic assessment only when they contain at least three detected
+  pitches spanning four semitones; eight-plus-note repeated-pitch runs instead
+  request listening review because recoloring them would invent unsupported
+  motion. Current-code Hail has two repeated-pitch review runs and no collapsed
+  contour runs. Fifteen cached authorized replays exposed six collapsed-contour
+  runs across 31 long runs. A guarded local-fingering fallback activated zero
+  times on Hail and all 15 authorized runs, so it was rejected rather than
+  adding an unproven lane rewrite. Attacks, source IDs and timing were unchanged.
 - Whole-song canonical family selection and calibration against broader listening
   examples remain in progress; this does not complete Milestone 3.
 - Added non-destructive Band-guitar voice-continuity diagnostics over overlapping
@@ -1376,3 +1385,31 @@ Status update (2026-09-22):
   --fretnet-shadow` therefore records a diagnostic proposal and stage snapshot
   only; verified attack, chord, lane, movement and motif chart metrics remain
   byte-for-byte equivalent to the baseline replay.
+- Completed a bounded six-clip EG-IPT articulation assessment without expanding
+  the 23.76 GB archive. Basic Pitch missed the pull-off clip, emitted an extra
+  high-octave event on hammer-on and split the slide into two pitches; spectral
+  flux also exposed multiple internal bend/slide peaks. The publisher's
+  GPL-3.0 classifier recognized the coarse muted, bend and legato categories,
+  but its dataset has one performer, its split varies pickup configuration and
+  its labels provide neither note counts nor onset times. This is useful
+  diagnostic evidence for missed legato and false re-attacks, not supervised
+  attack truth. Full-archive download, runtime integration and chart-quality
+  claims are rejected until an independent-performer or full-song transfer
+  check with authoritative onset labels is available.
+- Completed a bounded AG-PT-set onset audit over 12 hash-verified recordings,
+  three players and 440 publisher labels. Centered spectral flux placed 96.36%
+  of labels within 25 ms and 98.64% within 50 ms, confirming alignment. The
+  unchanged production guitar path reached precision/recall/F1
+  0.9151/0.9795/0.9462 at 25 ms and 0.9214/0.9864/0.9528 at 50 ms. Pick over
+  soundhole dominated extras (29 at 25 ms, 26 at 50 ms); palm mute accounted
+  for all six remaining 50 ms misses. Bends and hammer-ons are not labeled, so
+  the pilot remains isolated and does not justify runtime or corpus changes.
+- Built a local Onyx listening review for Sevish's 14-EDO electronic track
+  `Sleep Deprived Cooked Alive`, charted by Onyxite, after verifying all 13
+  source WAV content hashes. The pinned `song.yml` routing, +2.5 dB gain and
+  2.817-second pad were preserved. The routed guitar mix passed beginning,
+  middle and end synchronization checks at +46.44, +34.83 and +34.83 ms,
+  with 98.56% of 347 Expert attacks within 50 ms of an audio onset. This is an
+  electronic-instrument authoring example, not real-guitar transcription data;
+  it remains outside the 36-pair corpus pending human review and ShareAlike
+  admission analysis.
