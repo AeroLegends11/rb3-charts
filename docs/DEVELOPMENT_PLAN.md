@@ -97,6 +97,15 @@ Status update (2026-10-02):
   four-second Hard density rose only from 4.25 to 4.50 attacks/s; assessment
   status, Expert notes, timing, ancestry, and structural validation were
   unchanged. Hail Hard is a listening-review candidate, not an Expert rewrite.
+- A later 22-song sweep rejected a further reduction from 0.38 to 0.32 beats.
+  Official Hard attack F1 improved on all seven songs, but movement agreement
+  regressed on Hail and When You Were Young. Across 15 authorized held-out
+  charts, macro Hard F1 improved 0.3187->0.3269 and movement 0.3620->0.3669,
+  but exact lanes fell 0.1482->0.1454 and mean interval error worsened
+  1.6408->1.6865. The two low-retention failures were especially unsafe:
+  Unbutton movement fell 0.6667->0.5333 and Astronaut exact lanes fell
+  0.1071->0.0690. Adaptive use only on low-retention songs is therefore also
+  rejected; they require stronger selection evidence rather than more notes.
 - Corpus `benchmark-replays` comparisons now select guitar, bass, drums, or
   keys and aggregate Expert-to-Hard/Medium/Easy retention. Simultaneous drum
   attacks are reported independently from pitched-instrument chords. Two
