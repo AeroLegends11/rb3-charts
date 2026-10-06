@@ -743,6 +743,19 @@ def create_expert_hard_reference_preview(
         "rawY=yFor(noteTime,time);",
     )
     page=page.replace(
+        "lineAt(strike,'#fff',6);",
+        "const songNow=Math.max(0,time-payload.lead),"
+        "firstSecond=Math.ceil(songNow);"
+        "for(let second=firstSecond;second<=songNow+lookAhead;second++){"
+        "const y=yFor(second+payload.lead,time);"
+        "if(y>=horizon&&y<=strike){"
+        "lineAt(y,'rgba(149,170,197,.22)');"
+        "const guide=geom(y);ctx.fillStyle='#9fb0c5';"
+        "ctx.font='14px system-ui';ctx.textAlign='right';"
+        "ctx.fillText(second.toFixed(0)+'s',guide.left-10,y+5)}}"
+        "lineAt(strike,'#fff',6);",
+    )
+    page=page.replace(
         "reference=song+payload.alignment_offset;",
         "reference=song+effectiveAlignment();",
     )
