@@ -509,6 +509,12 @@ def test_midi_comparison_preview_aligns_reference_to_generated_audio(
     assert "Highway speed" in abc_page and "Hyper 5" in abc_page
     assert "highway.onchange=()=>lookAhead=+highway.value" in abc_page
     assert "Playback speed" in abc_page
+    assert "Reference earlier 50 ms" in abc_page
+    assert "Reference later 50 ms" in abc_page
+    assert "effectiveAlignment()" in abc_page
+    assert "n.t-(layer.reference?referenceAdjustment:0)" in abc_page
+    assert "reference:version==='official_expert'" in abc_page
+    assert "base_alignment_offset_seconds" in abc_page
     assert "selectVersion('generated_hard')" in abc_page
     assert '"t": 3.6' in abc_page
 

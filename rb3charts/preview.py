@@ -697,6 +697,55 @@ def create_expert_hard_reference_preview(
 <p id="summary" class="badge"></p><div class="legend"><span class="generated-key">Generated: filled notes / white outline</span><span class="reference-key">Reference overlay: cyan outline</span></div><p id="stats"></p>
 <section class="feedback"><h2>Timestamped feedback</h2><div class="controls"><label>Problem <select id="problem"><option>missing</option><option>extra</option><option>shifted</option><option>wrong voice</option><option>chord</option><option>sustain</option><option>lane</option><option>alignment</option></select></label><label>Reference aligned? <select id="aligned"><option>unsure</option><option>yes</option><option>no</option></select></label><button id="mark">Add at current time</button><button id="export">Export feedback JSON</button><button id="clear">Clear feedback</button></div><textarea id="comment" placeholder="What you hear; what generated does; what reference does"></textarea><ol id="feedback-list"></ol></section>
 <script>const payload=__DATA__,versions=payload.versions,beats=payload.beats,meter=payload.meter,buttons=['generated_expert','generated_hard','official_expert','expert_overlay'];let version='expert_overlay';const audio=document.getElementById('audio'),canvas=document.getElementById('chart'),ctx=canvas.getContext('2d'),highway=document.getElementById('highway'),feedbackKey='rb3charts-feedback:'+location.pathname;let feedback=JSON.parse(localStorage.getItem(feedbackKey)||'[]');let lookAhead=+highway.value;highway.onchange=()=>lookAhead=+highway.value;audio.src=payload.audio;function selectVersion(name){version=name;for(const key of buttons)document.getElementById(key).classList.toggle('active',key===name);document.getElementById('summary').textContent=name==='expert_overlay'?'D · simultaneous Expert overlay · generated '+versions.generated_expert.length+' / reference '+versions.official_expert.length+' attacks':(name==='generated_expert'?'A':name==='generated_hard'?'B':'C')+' · '+payload.labels[name]+' · '+versions[name].length+' attacks'}for(const key of buttons)document.getElementById(key).onclick=()=>selectVersion(key);document.getElementById('speed').onchange=e=>audio.playbackRate=+e.target.value;document.getElementById('back').onclick=()=>audio.currentTime=Math.max(0,audio.currentTime-5);document.getElementById('toggle').onclick=()=>audio.paused?audio.play():audio.pause();document.addEventListener('keydown',e=>{if(['SELECT','TEXTAREA'].includes(e.target.tagName))return;if(e.code==='Space'){e.preventDefault();audio.paused?audio.play():audio.pause()}if(e.key.toLowerCase()==='a')selectVersion('generated_expert');if(e.key.toLowerCase()==='b')selectVersion('generated_hard');if(e.key.toLowerCase()==='c')selectVersion('official_expert');if(e.key.toLowerCase()==='d')selectVersion('expert_overlay');if(e.code==='ArrowLeft')audio.currentTime=Math.max(0,audio.currentTime-5);if(e.code==='ArrowRight')audio.currentTime=Math.min(audio.duration||Infinity,audio.currentTime+5)});function renderFeedback(){const list=document.getElementById('feedback-list');list.replaceChildren();feedback.forEach((item,index)=>{const row=document.createElement('li');row.textContent=item.song_seconds.toFixed(3)+'s · '+item.problem+' · '+item.comment;const jump=document.createElement('button');jump.textContent='Jump';jump.onclick=()=>audio.currentTime=item.player_seconds;const remove=document.createElement('button');remove.textContent='Remove';remove.onclick=()=>{feedback.splice(index,1);saveFeedback()};row.append(' ',jump,' ',remove);list.append(row)})}function saveFeedback(){localStorage.setItem(feedbackKey,JSON.stringify(feedback));renderFeedback()}document.getElementById('mark').onclick=()=>{const player=audio.currentTime,song=Math.max(0,player-payload.lead);feedback.push({player_seconds:+player.toFixed(6),song_seconds:+song.toFixed(6),reference_seconds:+(song+payload.alignment_offset).toFixed(6),problem:document.getElementById('problem').value,reference_aligned:document.getElementById('aligned').value,comment:document.getElementById('comment').value.trim()});document.getElementById('comment').value='';saveFeedback()};document.getElementById('clear').onclick=()=>{if(confirm('Clear all saved feedback for this page?')){feedback=[];saveFeedback()}};document.getElementById('export').onclick=()=>{const result={schema:'rb3charts-timestamped-review-feedback',schema_version:1,scope:'post-generation listening feedback only; never generation input',alignment_offset_seconds:payload.alignment_offset,entries:feedback};const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)+'\\n'],{type:'application/json'}));link.download='hail-review-feedback.json';link.click();URL.revokeObjectURL(link.href)};const colors=['#65df7b','#ff5864','#f8d45d','#4c9dff','#ff973d'],W=1100,H=700,horizon=48,strike=590,topWidth=300,bottomWidth=820;function geom(y){const p=Math.max(0,Math.min(1,(y-horizon)/(strike-horizon))),width=topWidth+(bottomWidth-topWidth)*p;return {left:(W-width)/2,width}}function yFor(t,time){return strike-(t-time)/lookAhead*(strike-horizon)}function laneX(lane,y){const g=geom(y);return g.left+(lane+.5)*g.width/5}function lineAt(y,color,width=1){const g=geom(y);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(g.left,y);ctx.lineTo(g.left+g.width,y);ctx.stroke()}function draw(){const time=audio.currentTime,layers=version==='expert_overlay'?[{notes:versions.generated_expert,reference:false},{notes:versions.official_expert,reference:true}]:[{notes:versions[version],reference:false}];ctx.clearRect(0,0,W,H);const floor=ctx.createLinearGradient(0,horizon,0,strike);floor.addColorStop(0,'#111d31');floor.addColorStop(1,'#17283d');const bottom=geom(strike),top=geom(horizon);ctx.fillStyle=floor;ctx.beginPath();ctx.moveTo(top.left,horizon);ctx.lineTo(top.left+top.width,horizon);ctx.lineTo(bottom.left+bottom.width,strike);ctx.lineTo(bottom.left,strike);ctx.closePath();ctx.fill();for(let lane=0;lane<=5;lane++){ctx.strokeStyle='#52647d';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(top.left+lane*top.width/5,horizon);ctx.lineTo(bottom.left+lane*bottom.width/5,strike);ctx.stroke()}beats.forEach((beat,index)=>{const y=yFor(beat,time);if(y>=horizon&&y<=strike+20)lineAt(y,index%meter===0?'#95aac5':'#344760',index%meter===0?3:1)});lineAt(strike,'#fff',6);ctx.font='16px system-ui';ctx.textAlign='center';for(let lane=0;lane<5;lane++){const x=laneX(lane,strike);ctx.fillStyle=colors[lane];ctx.beginPath();ctx.arc(x,strike,22,0,Math.PI*2);ctx.fill();ctx.fillStyle='#dfe9f5';ctx.fillText(['Green','Red','Yellow','Blue','Orange'][lane],x,642)}ctx.textAlign='left';ctx.fillStyle='#b9c8db';ctx.fillText('NOTES HIT THIS LINE',bottom.left+8,strike+38);for(const layer of layers){for(const n of layer.notes){const rawY=yFor(n.t,time);if(rawY<horizon-30||rawY>strike+2)continue;const y=Math.min(strike,rawY);for(const lane of n.lanes){const x=laneX(lane,y),size=7+13*Math.max(0,Math.min(1,(y-horizon)/(strike-horizon)));ctx.globalAlpha=layer.reference?.85:.38+.62*n.confidence;ctx.fillStyle=layer.reference?'rgba(20,40,55,.15)':colors[lane];ctx.strokeStyle=layer.reference?'#62efff':'#f7fbff';ctx.lineWidth=layer.reference?5:2;ctx.beginPath();ctx.roundRect(x-size*1.35,y-size*.62,size*2.7,size*1.24,size*.55);ctx.fill();ctx.stroke()}}}ctx.globalAlpha=1;ctx.fillStyle='#b9c8db';ctx.font='16px system-ui';const song=Math.max(0,time-payload.lead),reference=song+payload.alignment_offset;ctx.fillText((version==='expert_overlay'?'D · Expert Overlay':version==='generated_expert'?'A · '+payload.labels[version]:version==='generated_hard'?'B · '+payload.labels[version]:'C · '+payload.labels[version])+' · player '+time.toFixed(2)+'s · song '+song.toFixed(2)+'s · reference '+reference.toFixed(2)+'s · A/B/C/D switch · Space plays',35,665);requestAnimationFrame(draw)}renderFeedback();selectVersion('expert_overlay');draw();</script></html>'''
+    page=page.replace(
+        '<button id="toggle">Play / Pause</button>',
+        '<button id="toggle">Play / Pause</button>'
+        '<button id="reference-earlier">Reference earlier 50 ms</button>'
+        '<button id="reference-later">Reference later 50 ms</button>'
+        '<button id="reference-reset">Reset reference</button>'
+        '<span id="reference-offset"></span>',
+    )
+    page=page.replace(
+        "audio.src=payload.audio;",
+        "audio.src=payload.audio;let referenceAdjustment=0;"
+        "function effectiveAlignment(){return payload.alignment_offset"
+        "+referenceAdjustment}"
+        "function updateReferenceOffset(){document.getElementById("
+        "'reference-offset').textContent='Reference offset '+"
+        "effectiveAlignment().toFixed(3)+' s'}"
+        "document.getElementById('reference-earlier').onclick=()=>{"
+        "referenceAdjustment+=.05;updateReferenceOffset()};"
+        "document.getElementById('reference-later').onclick=()=>{"
+        "referenceAdjustment-=.05;updateReferenceOffset()};"
+        "document.getElementById('reference-reset').onclick=()=>{"
+        "referenceAdjustment=0;updateReferenceOffset()};"
+        "updateReferenceOffset();",
+    )
+    page=page.replace(
+        "reference_seconds:+(song+payload.alignment_offset).toFixed(6),",
+        "reference_seconds:+(song+effectiveAlignment()).toFixed(6),"
+        "alignment_offset_seconds:+effectiveAlignment().toFixed(6),",
+    )
+    page=page.replace(
+        "alignment_offset_seconds:payload.alignment_offset,entries:feedback",
+        "alignment_offset_seconds:effectiveAlignment(),"
+        "base_alignment_offset_seconds:payload.alignment_offset,"
+        "reference_adjustment_seconds:referenceAdjustment,entries:feedback",
+    )
+    page=page.replace(
+        ":[{notes:versions[version],reference:false}]",
+        ":[{notes:versions[version],"
+        "reference:version==='official_expert'}]",
+    )
+    page=page.replace(
+        "const rawY=yFor(n.t,time);",
+        "const noteTime=n.t-(layer.reference?referenceAdjustment:0),"
+        "rawY=yFor(noteTime,time);",
+    )
+    page=page.replace(
+        "reference=song+payload.alignment_offset;",
+        "reference=song+effectiveAlignment();",
+    )
     output.write_text(
         page.replace("__TITLE__",title)
         .replace("__ARTIST__",artist)

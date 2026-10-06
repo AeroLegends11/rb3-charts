@@ -1184,6 +1184,16 @@ Status update (2026-09-22):
   Persephone exact lanes and joint F1 unchanged at 0.1926 and 0.1251 while
   slightly reducing overlap from 0.2341 to 0.2332. It is rejected, and the
   no-auxiliary corrected seed-2 lane model remains selected.
+- Human Hail review rejected the automatic -1.10 second reference alignment.
+  The first audible guitar attack near player 8.61 seconds corresponds to the
+  reference's first 4.068-second attack, establishing an initial offset near
+  -0.70 seconds. The A/B/C review now supports 50 ms human reference nudges and
+  exports the effective offset. At -0.70 seconds, the unchanged generated chart
+  reaches only 0.3702 attack F1 at 50 ms and 0.1520 at 25 ms; the worst
+  four-second reference window has 31 attacks and one generated candidate.
+  Previous -1.10-second Hail metrics are invalid for timing conclusions. This
+  confirms that the current Hail output is far from the requested quality and
+  that its missing/extra attacks must not be masked by automatic alignment.
 - A full-context 128-sample-hop experiment then doubled the parameter-free
   context pools to preserve the selected teacher's receptive field in seconds.
   The unchanged initialization reached 0.7477 validation F1 and 13.20 ms exact
