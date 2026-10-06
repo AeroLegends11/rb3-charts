@@ -1177,6 +1177,13 @@ Status update (2026-09-22):
   timing paths remain rejected. The timing-snap evaluator now keeps the held-out
   split sealed unless a nonzero radius preserves F1 and strictly improves
   validation timing.
+- A 0.05 auxiliary chart-lane movement loss improved corrected validation
+  exact lanes from 0.1754 to 0.1776, overlap from 0.2486 to 0.2522 and joint
+  exact-lane F1 from 0.1256 to 0.1272; weights 0.1 and 0.25 were weaker. The
+  validation-selected candidate earned one held-out evaluation but left
+  Persephone exact lanes and joint F1 unchanged at 0.1926 and 0.1251 while
+  slightly reducing overlap from 0.2341 to 0.2332. It is rejected, and the
+  no-auxiliary corrected seed-2 lane model remains selected.
 - A full-context 128-sample-hop experiment then doubled the parameter-free
   context pools to preserve the selected teacher's receptive field in seconds.
   The unchanged initialization reached 0.7477 validation F1 and 13.20 ms exact
