@@ -1265,6 +1265,13 @@ def compare_chart_attacks(reference, candidate, tolerance=0.08, hold_seconds=0.3
 def _resolve_midi(path):
     path=Path(path).resolve()
     if path.is_file():
+        run=path.parent.parent
+        if (
+            path.name.lower()=="notes.mid"
+            and path.parent.name.lower() in {"midi","import"}
+            and (run/"metadata"/"song.json").is_file()
+        ):
+            return path,run
         return path,None
     for relative in (Path("midi")/"notes.mid",Path("import")/"notes.mid"):
         candidate=path/relative

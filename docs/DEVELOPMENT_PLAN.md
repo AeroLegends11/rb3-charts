@@ -153,6 +153,13 @@ Status update (2026-10-02):
   attack F1 0.4750→0.5182 and matched 74 of 119 added attacks while exact lanes
   declined 0.1474→0.1330. This supports attack density/timing but not the current
   lane pattern; the result remains post-generation evaluation only.
+- Direct `midi\notes.mid` comparisons now recover `lead_seconds` from the
+  containing completed run just like run-folder comparisons. This removed a
+  silent 3.844-second Hail evaluation mismatch: the corrected 50 ms,
+  -0.70-second-offset Expert comparison is 623/1,150 matched attacks, precision
+  0.3848, recall 0.5417 and F1 0.4500. The earlier apparent 4–8 second collapse
+  was a comparison artifact; the current 20–24 second window matches 18/31
+  reference attacks. Reference notes remain post-generation evaluation only.
 - Human A/B/C review reframed that result: generated Hard may expose a cleaner
   attack-selection backbone for canonical Expert rather than merely an easier
   chart. On Hail, project Expert charts 1.3913 times the official Expert attack

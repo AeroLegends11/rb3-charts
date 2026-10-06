@@ -724,6 +724,34 @@ def test_reference_comparison_supports_cross_difficulty(monkeypatch,tmp_path):
     assert "Reference difficulty: **Expert Guitar**" in markdown
 
 
+def test_reference_comparison_recovers_run_lead_from_midi_file(monkeypatch,tmp_path):
+    generated=tmp_path/"run"
+    (generated/"midi").mkdir(parents=True)
+    (generated/"metadata").mkdir()
+    generated_midi=generated/"midi"/"notes.mid"
+    generated_midi.write_bytes(b"generated")
+    (generated/"metadata"/"song.json").write_text(
+        json.dumps({"lead_seconds":3.5}),
+        encoding="utf-8",
+    )
+    reference=tmp_path/"reference.mid"
+    reference.write_bytes(b"reference")
+
+    def read_gems(path, chart_format, difficulty):
+        start=4.5 if Path(path)==generated_midi else 1.0
+        return [{"start":start,"end":start+.1,"lane":0}]
+
+    monkeypatch.setattr("rb3charts.datasets._read_expert_gems",read_gems)
+    report=compare_reference_midi(
+        generated_midi,
+        reference,
+        offset=0,
+    )
+
+    assert report["provenance"]["generated_audio_lead_seconds"]==3.5
+    assert report["metrics"]["attack"]["matched"]==1
+
+
 def _write_index_run(root, name, song_id, schema=None, title="Song", artist="Artist"):
     run=root/name
     (run/"metadata").mkdir(parents=True)
