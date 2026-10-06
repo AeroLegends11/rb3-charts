@@ -684,18 +684,16 @@ def _match_attacks(reference, candidate, tolerance):
     return matches
 
 
-def estimate_attack_offset(reference, candidate, tolerance=0.08, limit=10.0):
-    """Estimate a global candidate-to-reference offset from attack onsets."""
+def _rank_attack_offsets(reference, candidate, tolerance=0.08, limit=10.0):
     if not reference or not candidate:
-        return 0.0
+        return []
     bins=defaultdict(int)
     for left in reference:
         for right in candidate:
             offset=left["time"]-right["time"]
             if abs(offset)<=limit:
                 bins[round(offset,2)]+=1
-    best_score=None
-    best_offset=0.0
+    ranked=[]
     for coarse,_ in sorted(
         bins.items(),key=lambda item:(-item[1],abs(item[0]),item[0])
     )[:40]:
@@ -706,10 +704,24 @@ def estimate_attack_offset(reference, candidate, tolerance=0.08, limit=10.0):
         matches=_match_attacks(reference,shifted,tolerance)
         error=sum(abs(delta) for _,_,delta in matches)
         score=(len(matches),-error,-abs(coarse),-coarse)
-        if best_score is None or score>best_score:
-            best_score=score
-            best_offset=coarse
-    return round(float(best_offset),6)
+        ranked.append({
+            "offset_seconds":round(float(coarse),6),
+            "matched_attacks":len(matches),
+            "mean_absolute_error_ms":round(
+                error/max(1,len(matches))*1000,3
+            ),
+            "_score":score,
+        })
+    ranked.sort(key=lambda row:row["_score"],reverse=True)
+    for row in ranked:
+        row.pop("_score")
+    return ranked
+
+
+def estimate_attack_offset(reference, candidate, tolerance=0.08, limit=10.0):
+    """Estimate a global candidate-to-reference offset from attack onsets."""
+    ranked=_rank_attack_offsets(reference,candidate,tolerance,limit)
+    return ranked[0]["offset_seconds"] if ranked else 0.0
 
 
 def _rank_percentiles(values):
@@ -1383,6 +1395,9 @@ def _reference_comparison_markdown(report):
         ),
         "",
     ]
+    warning=provenance.get("automatic_alignment_warning")
+    if warning:
+        lines.extend([f"> **Alignment warning:** {warning}",""])
     if report["stage_metrics"]:
         lines.extend([
             "## Stage attribution",
@@ -1550,13 +1565,18 @@ def compare_reference_midi(
         offset=-lead,
     )
     if offset is None:
-        offset=estimate_attack_offset(
+        alignment_candidates=_rank_attack_offsets(
             reference_attacks,candidate_attacks,tolerance
+        )
+        offset=(
+            alignment_candidates[0]["offset_seconds"]
+            if alignment_candidates else 0.0
         )
         alignment="automatic-onsets-only"
     else:
         offset=float(offset)
         alignment="manual"
+        alignment_candidates=[]
     aligned=[
         {**row,"time":round(row["time"]+offset,6)}
         for row in candidate_attacks
@@ -1583,6 +1603,12 @@ def compare_reference_midi(
             "generated_audio_lead_seconds":lead,
             "alignment":alignment,
             "alignment_offset_seconds":offset,
+            "automatic_alignment_candidates":alignment_candidates[:8],
+            "automatic_alignment_warning":(
+                "Onset-only alignment can lock to the wrong phase in repeated "
+                "rhythms; verify the offset against synchronized audio."
+                if alignment_candidates else None
+            ),
             "git":git_state(Path(__file__).resolve().parents[1]),
         },
         "metrics":metrics,

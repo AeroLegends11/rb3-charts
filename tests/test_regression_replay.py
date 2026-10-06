@@ -682,6 +682,7 @@ def test_reference_comparison_markdown_omits_local_paths_and_note_rows():
     assert "Reference MIDI: `reference.mid`" in markdown
     assert "Generated SHA-256" in markdown
     assert "reference note rows are not embedded" in markdown
+    assert "Alignment warning" not in markdown
     assert r"C:\private" not in markdown
     assert r"C:\excluded" not in markdown
 
@@ -722,6 +723,36 @@ def test_reference_comparison_supports_cross_difficulty(monkeypatch,tmp_path):
     markdown=(tmp_path/"comparison.md").read_text(encoding="utf-8")
     assert "Generated difficulty: **Hard Guitar**" in markdown
     assert "Reference difficulty: **Expert Guitar**" in markdown
+
+
+def test_reference_comparison_reports_automatic_alignment_candidates(
+    monkeypatch,tmp_path
+):
+    generated=tmp_path/"generated.mid"
+    reference=tmp_path/"reference.mid"
+    generated.write_bytes(b"generated")
+    reference.write_bytes(b"reference")
+
+    def read_gems(path, chart_format, difficulty):
+        shift=.37 if Path(path)==generated else 0
+        return [
+            {"start":time+shift,"end":time+shift+.1,"lane":0}
+            for time in (1,2,3,4)
+        ]
+
+    monkeypatch.setattr("rb3charts.datasets._read_expert_gems",read_gems)
+    output=tmp_path/"auto.json"
+    report=compare_reference_midi(generated,reference,output)
+
+    assert report["provenance"]["alignment"]=="automatic-onsets-only"
+    assert report["provenance"]["automatic_alignment_candidates"][0][
+        "offset_seconds"
+    ]==-.37
+    assert "wrong phase" in report["provenance"][
+        "automatic_alignment_warning"
+    ]
+    markdown=output.with_suffix(".md").read_text(encoding="utf-8")
+    assert "Alignment warning" in markdown
 
 
 def test_reference_comparison_recovers_run_lead_from_midi_file(monkeypatch,tmp_path):

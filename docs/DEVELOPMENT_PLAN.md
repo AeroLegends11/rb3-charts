@@ -160,6 +160,14 @@ Status update (2026-10-02):
   0.3848, recall 0.5417 and F1 0.4500. The earlier apparent 4–8 second collapse
   was a comparison artifact; the current 20–24 second window matches 18/31
   reference attacks. Reference notes remain post-generation evaluation only.
+- Automatic onset-only reference alignment now preserves its top eight offset
+  candidates and emits an explicit repeated-phase warning in JSON, Markdown and
+  CLI output. Hail's onset-only optimum was -1.10 seconds, while independent
+  guitar-stem support selected -0.735 seconds, within 35 ms of the manually
+  reviewed -0.70-second overlay; the -0.735-second comparison reached 682/1,150
+  matches and F1 0.4926. Naive stem-onset selection was rejected as an automatic
+  replacement: it chose the accepted manual phase on only one of seven
+  official-reference songs. Manual synchronized review remains authoritative.
 - Human A/B/C review reframed that result: generated Hard may expose a cleaner
   attack-selection backbone for canonical Expert rather than merely an easier
   chart. On Hail, project Expert charts 1.3913 times the official Expert attack

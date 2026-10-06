@@ -504,8 +504,11 @@ def main():
             print(f"MIDI comparison failed: {exc}",file=sys.stderr)
             return 1
         print(json.dumps({
+            "alignment":report["provenance"]["alignment"],
             "alignment_offset_seconds":
                 report["provenance"]["alignment_offset_seconds"],
+            "alignment_warning":
+                report["provenance"]["automatic_alignment_warning"],
             **report["metrics"]["attack"],
             "worst_reference_recall":
                 report["metrics"]["attack_windows"]
