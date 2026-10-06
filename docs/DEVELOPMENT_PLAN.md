@@ -351,6 +351,18 @@ Status update (2026-09-20):
   runs across 31 long runs. A guarded local-fingering fallback activated zero
   times on Hail and all 15 authorized runs, so it was rejected rather than
   adding an unproven lane rewrite. Attacks, source IDs and timing were unchanged.
+- Repeat-fingering normalization now rejects an individual offset plan when
+  applying it would create a new evidence-backed collapsed contour at an
+  occurrence boundary. Across 15 authorized and seven official-reference
+  cached replays, four plans were rejected: three authorized songs and
+  Mr. Brightside each lost one collapsed-contour failure. Authorized aggregate
+  collapsed pitch changes fell 340→335; official-reference changes fell
+  215→214; reversals, attacks, timing, chords and all difficulty counts were
+  unchanged. Held-out attack, exact-lane, movement and motif metrics were
+  unchanged; one unmatched-note mean interval error shifted 1.4222→1.4370.
+  Hail was unchanged. When You Were Young's remaining collapse predates phrase
+  authoring and includes a 32-semitone source-pitch outlier, so this guard
+  correctly does not invent a lane repair there.
 - Whole-song canonical family selection and calibration against broader listening
   examples remain in progress; this does not complete Milestone 3.
 - Added non-destructive Band-guitar voice-continuity diagnostics over overlapping

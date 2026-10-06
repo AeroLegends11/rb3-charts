@@ -209,6 +209,42 @@ def test_repeated_exact_riff_reuses_relative_fingering_offset():
     assert report["notes_changed"] == 4
 
 
+def test_repeat_fingering_rejects_new_boundary_contour_collapse(monkeypatch):
+    occurrences=[]
+    notes=[]
+    for occurrence,lanes in enumerate(((0,1),(0,1),(0,1),(1,2))):
+        phrase=[
+            Note(
+                occurrence*2+index*.125,
+                occurrence*2+index*.125+.065,
+                (lane,),
+                pitch=pitch,
+                source_id=f"{occurrence}-{index}",
+            )
+            for index,(pitch,lane) in enumerate(zip((56,61),lanes))
+        ]
+        occurrences.append((len(notes),phrase))
+        notes.extend(phrase)
+    tail=[
+        Note(6.25+i*.125,6.315+i*.125,(1,),pitch=pitch,source_id=f"tail-{i}")
+        for i,pitch in enumerate((61,54,61,56))
+    ]
+    notes.extend(tail)
+    monkeypatch.setattr(
+        "rb3charts.phrases._motif_groups",
+        lambda *_:(notes,[(None,None,occurrences)]),
+    )
+    before=[note.lanes for note in notes]
+
+    report=_stabilize_repeat_fingerings(
+        notes,grid(),quality_phrases=[notes]
+    )
+
+    assert [note.lanes for note in notes]==before
+    assert report["rejected_collapsed_contours"]==1
+    assert report["notes_changed"]==0
+
+
 def test_repeated_riff_requires_three_example_strict_majority():
     for lane_shapes in (
         ((0, 1, 2, 1), (0, 1, 2, 1), (1, 2, 2, 2)),

@@ -249,7 +249,7 @@ def _stabilize_repeated_pitch_lanes(rows, lanes):
     return stabilized, len(proposals) - len(protected), len(protected)
 
 
-def _stabilize_repeat_fingerings(notes, tempo):
+def _stabilize_repeat_fingerings(notes, tempo, quality_phrases=None):
     ordered, groups = _motif_groups(notes, tempo, "guitar")
     by_source = {note.source_id: note for note in ordered}
     changed = set()
@@ -347,18 +347,39 @@ def _stabilize_repeat_fingerings(notes, tempo):
         for assignments, count in offset_plans
         if all(len(proposed[source_id]) == 1 for source_id in assignments)
     ]
-    for assignments, _ in accepted_offsets:
+    rejected_collapsed_contours=0
+    applied_offsets=[]
+    for assignments, count in accepted_offsets:
+        before={
+            source_id:by_source[source_id].lanes
+            for source_id in assignments
+        }
+        collapsed_before=(
+            _lane_run_quality(quality_phrases)["collapsed_contour_runs"]
+            if quality_phrases is not None else 0
+        )
         for source_id, lane in assignments.items():
             by_source[source_id].lanes = (lane,)
-            changed.add(source_id)
+        collapsed_after=(
+            _lane_run_quality(quality_phrases)["collapsed_contour_runs"]
+            if quality_phrases is not None else collapsed_before
+        )
+        if collapsed_after>collapsed_before:
+            for source_id,lanes in before.items():
+                by_source[source_id].lanes=lanes
+            rejected_collapsed_contours+=1
+            continue
+        changed.update(assignments)
+        applied_offsets.append((assignments,count))
 
     return {
-        "families": len(accepted_offsets),
+        "families": len(applied_offsets),
         "occurrences": sum(
-            count for _, count in accepted_offsets
+            count for _, count in applied_offsets
         ),
-        "offset_families": len(accepted_offsets),
+        "offset_families": len(applied_offsets),
         "notes_changed": len(changed),
+        "rejected_collapsed_contours":rejected_collapsed_contours,
     }
 
 
@@ -895,7 +916,9 @@ def author_guitar_phrases(
         return {"collapsed_pitch_changes": sum(a.pitch != b.pitch and a.lanes == b.lanes for a,b in pairs),
                 "reversed_pitch_changes": sum((b.pitch-a.pitch)*(b.lanes[0]-a.lanes[0]) < 0 for a,b in pairs)}
     chord_sections = _apply_band_chord_sections(result, tempo, chord_evidence)
-    repeat_fingerings = _stabilize_repeat_fingerings(result, tempo)
+    repeat_fingerings = _stabilize_repeat_fingerings(
+        result,tempo,quality_phrases=phrases
+    )
     lane_quality = _lane_run_quality(phrases)
     for phrase, rows in zip(phrase_report, phrases):
         phrase["final_lanes"] = [list(note.lanes) for note in rows]
