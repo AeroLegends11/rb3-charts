@@ -78,9 +78,11 @@ def run(base_manifest, intake_path, sync_audit_path, output_root):
         for row in sync["pairs"]
     }
     if len(sync_by_hash) != 8 or not all(
-        row["automatic_sync_pass"] for row in sync_by_hash.values()
+        row["correctable_sync_pass"] for row in sync_by_hash.values()
     ):
-        raise ValueError("All eight pairs must pass synchronization audit")
+        raise ValueError(
+            "All eight pairs must pass corrected synchronization audit"
+        )
 
     items = []
     for item in base["items"]:
@@ -131,7 +133,9 @@ def run(base_manifest, intake_path, sync_audit_path, output_root):
                 "chart_format": "frets_on_fire_midi",
                 "synchronization": {
                     "method": "embedded_audio_offset",
-                    "audio_offset_seconds": 0.0,
+                    "audio_offset_seconds": audit[
+                        "recommended_audio_offset_seconds"
+                    ],
                     "verified": True,
                     "evidence": {
                         "audit_schema": sync["schema"],
@@ -144,7 +148,9 @@ def run(base_manifest, intake_path, sync_audit_path, output_root):
                             for row in audit["windows"]
                         ],
                         "attacks_within_50ms_of_onset": (
-                            audit["attack_onset_support"]["within_50ms"]
+                            audit["corrected_attack_onset_support"][
+                                "within_50ms"
+                            ]
                         ),
                     },
                 },

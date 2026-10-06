@@ -562,6 +562,7 @@ def run(
     lane_ensemble="majority",
     phrase_rank_decoder=False,
     calibrate_lane_transition=False,
+    evaluate_test=True,
 ):
     import torch
 
@@ -912,7 +913,9 @@ def run(
         ),
         "teacher_supported_lanes": teacher_supported_lanes,
         "guard_passed": guard_passed,
-        "test_evaluated": bool(guard_passed and test_predicted),
+        "test_evaluated": bool(
+            evaluate_test and guard_passed and test_predicted
+        ),
         "feature_index_sha256": _hash_file(feature_index),
         "authoring_index_sha256": _hash_file(authoring_index),
         "structure_checkpoint_sha256": _hash_file(structure_checkpoint),
@@ -940,7 +943,7 @@ def run(
         report["validation"]["transition_candidates"] = (
             transition_candidates
         )
-    if guard_passed and test_predicted:
+    if evaluate_test and guard_passed and test_predicted:
         if lane_ensemble == "logit":
             test_learned, test_confidences = _predict_logit_ensemble(
                 lane_models,
@@ -1043,6 +1046,7 @@ def main():
     parser.add_argument("--distilled-weight", type=float, default=0.0)
     parser.add_argument("--attack-threshold", type=float)
     parser.add_argument("--teacher-supported-lanes", action="store_true")
+    parser.add_argument("--skip-test", action="store_true")
     parser.add_argument(
         "--lane-seed",
         type=int,
@@ -1080,6 +1084,7 @@ def main():
         attack_threshold=args.attack_threshold,
         teacher_supported_lanes=args.teacher_supported_lanes,
         lane_seeds=args.lane_seed,
+        evaluate_test=not args.skip_test,
     )
     print(json.dumps(report, indent=2))
 

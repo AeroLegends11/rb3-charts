@@ -90,6 +90,33 @@ def _sync_flags(global_scan, windows, nearest):
     return criteria, near_one_to_one
 
 
+def _corrected_sync_flags(global_scan, windows, nearest):
+    offset = float(global_scan["best_offset_seconds"])
+    residuals = [
+        float(row["best_offset_seconds"]) - offset
+        for row in windows
+    ]
+    within_25 = float(np.mean(np.asarray(nearest) <= 0.025))
+    within_50 = float(np.mean(np.asarray(nearest) <= 0.05))
+    criteria = {
+        "recommended_offset_within_100ms": abs(offset) <= 0.1,
+        "all_window_residuals_within_60ms": all(
+            abs(residual) <= 0.06 for residual in residuals
+        ),
+        "window_residual_spread_within_80ms": (
+            max(residuals) - min(residuals) <= 0.08
+        ),
+        "at_least_40pct_corrected_attacks_near_onset": within_50 >= 0.4,
+    }
+    near_one_to_one = {
+        "all_window_residuals_within_50ms": all(
+            abs(residual) <= 0.05 for residual in residuals
+        ),
+        "at_least_40pct_corrected_attacks_within_25ms": within_25 >= 0.4,
+    }
+    return residuals, criteria, near_one_to_one
+
+
 def audit_pair(guitar_audio, chart):
     import librosa
     from scipy import signal
@@ -100,7 +127,7 @@ def audit_pair(guitar_audio, chart):
         y=y,
         sr=sr,
         hop_length=hop,
-        center=False,
+        center=True,
     )
     scale = float(np.percentile(envelope, 95))
     if scale > 0:
@@ -147,10 +174,24 @@ def audit_pair(guitar_audio, chart):
         float(np.min(np.abs(peak_times - time)))
         for time in attacks
     ]
-    criteria, near_one_to_one = _sync_flags(
+    corrected_attacks = np.asarray(attacks) + float(
+        global_scan["best_offset_seconds"]
+    )
+    corrected_nearest = [
+        float(np.min(np.abs(peak_times - time)))
+        for time in corrected_attacks
+    ]
+    criteria, _ = _sync_flags(
         global_scan,
         windows,
         nearest,
+    )
+    residuals, corrected_criteria, corrected_near_one_to_one = (
+        _corrected_sync_flags(
+            global_scan,
+            windows,
+            corrected_nearest,
+        )
     )
     return {
         "audio": str(guitar_audio),
@@ -174,11 +215,33 @@ def audit_pair(guitar_audio, chart):
                 3,
             ),
         },
+        "recommended_audio_offset_seconds": global_scan[
+            "best_offset_seconds"
+        ],
+        "corrected_window_residuals_seconds": [
+            round(float(residual), 6) for residual in residuals
+        ],
+        "corrected_attack_onset_support": {
+            "within_25ms": round(
+                float(np.mean(np.asarray(corrected_nearest) <= 0.025)),
+                6,
+            ),
+            "within_50ms": round(
+                float(np.mean(np.asarray(corrected_nearest) <= 0.05)),
+                6,
+            ),
+            "median_nearest_onset_ms": round(
+                float(np.median(corrected_nearest) * 1000),
+                3,
+            ),
+        },
         "criteria": criteria,
         "automatic_sync_pass": all(criteria.values()),
-        "near_one_to_one_timing_criteria": near_one_to_one,
+        "correctable_sync_criteria": corrected_criteria,
+        "correctable_sync_pass": all(corrected_criteria.values()),
+        "near_one_to_one_timing_criteria": corrected_near_one_to_one,
         "near_one_to_one_timing_pass": all(
-            near_one_to_one.values()
+            corrected_near_one_to_one.values()
         ),
     }
 
@@ -206,8 +269,8 @@ def run(intake_path, output):
         "schema": "rb3charts-chart-pair-sync-audit",
         "schema_version": 1,
         "method": (
-            "Uncentered Librosa onset envelope from the shipped isolated "
-            "guitar stem; "
+            "Center-compensated Librosa onset envelope from the shipped "
+            "isolated guitar stem; "
             "zero-offset chart attacks compared with a +/-500 ms scan globally "
             "and independently over duration thirds"
         ),
@@ -226,6 +289,9 @@ def run(intake_path, output):
             "pairs": len(pairs),
             "automatic_sync_pass": sum(
                 row["automatic_sync_pass"] for row in pairs
+            ),
+            "correctable_sync_pass": sum(
+                row["correctable_sync_pass"] for row in pairs
             ),
             "near_one_to_one_timing_pass": sum(
                 row["near_one_to_one_timing_pass"] for row in pairs
@@ -249,10 +315,14 @@ def main():
                 "pack": row["pack"],
                 "song": row["song"],
                 "automatic_sync_pass": row["automatic_sync_pass"],
+                "correctable_sync_pass": row["correctable_sync_pass"],
                 "near_one_to_one_timing_pass": (
                     row["near_one_to_one_timing_pass"]
                 ),
                 "global": row["global"],
+                "recommended_audio_offset_seconds": row[
+                    "recommended_audio_offset_seconds"
+                ],
                 "window_offsets": [
                     window["best_offset_seconds"]
                     for window in row["windows"]

@@ -14,12 +14,15 @@ chart authors, totaling 19,411 Expert attacks. It combines the original Brad
 Sucks/Zep Hurme seed, 24 Fervi-authored GuitarMaster songs, four
 Carlos Viola Iborra/Sectoid songs, and four El Senator/Muldjord songs. The
 Sectoid MIT and Muldjord CC BY-SA 3.0 notices explicitly cover the songs,
-performances, and fret files. All eight added pairs passed a shipped-stem
-synchronization audit globally and over early/middle/late regions before
-admission. Songs that would leak the held-out Persephone artist/chart-author
-split, and a chart without explicit fretter attribution, are excluded. Audio,
-charts, permissions, hashes, synchronization reports, and converted artifacts
-remain local under `.research/`.
+performances, and fret files. A corrected, center-compensated shipped-stem
+synchronization audit measured and applied per-song offsets from 23.22 to
+69.66 ms. All eight pass the corrected admission gate; seven pass the strict
+near-1:1 gate. Muldjord's Internal Degeneration retains a 58.05 ms middle-third
+residual and remains flagged for listening review. Songs that would leak the
+held-out Persephone artist/chart-author split, and a chart without explicit
+fretter attribution, are excluded. Audio, charts, permissions, hashes,
+synchronization reports, and converted artifacts remain local under
+`.research/`.
 
 The added creator groups were assigned before model evaluation: Sectoid remains
 train-only and Muldjord validation-only; Persephone remains the untouched test.
@@ -29,11 +32,13 @@ Local training eligibility does not by itself authorize publishing a checkpoint.
 For near-1:1 timing evaluation, the synchronization audit additionally requires
 global alignment within 25 ms, every early/middle/late regional offset within
 50 ms, and at least 40 percent of chart attacks within 25 ms of an isolated
-guitar onset. A subsequent diagnostic found that Persephone's declared
-zero-offset pair aligns best near -46 ms, so its existing sub-25-ms timing
-results are not a valid localization gate pending independently corrected
-synchronization provenance. Its artist- and author-disjoint assignment is
-unchanged, and coarse 50 ms attack-selection comparisons remain evaluation-only.
+guitar onset after applying the manifest offset. The original uncentered audit
+mistook half of its 2048-sample analysis window for a roughly -46 ms source
+offset. Center compensation confirms Persephone at zero global offset, with
+97.72% of chart attacks within 25 ms of an isolated-guitar onset and an 8.16 ms
+median nearest-onset distance. Its sub-25-ms results are therefore valid
+localization evidence; the selected model's former one-sided timing residual
+was a model/data-label issue, not a Persephone synchronization defect.
 
 ## Stages
 

@@ -949,11 +949,14 @@ Status update (2026-09-22):
   in normal training or runtime generation.
 - Added eight independently credited Debian-pack pairs after verifying the
   Sectoid MIT and Muldjord CC BY-SA 3.0 notices, all 16 source audio/chart
-  hashes, and shipped zero-offset synchronization against isolated guitar
-  stems. Global onset offsets were within 24 ms, early/middle/late offset
-  spread was at most 58 ms, and 92.1-96.9% of chart attacks had a detected
-  onset within 50 ms. The resulting local corpus has 36 pairs, 14 artists and
-  six chart-author groups. Sectoid was frozen train-only, Muldjord
+  hashes, and synchronization against isolated guitar stems. The initial audit
+  used an uncentered 2048-sample onset window and therefore biased every offset
+  by about -46 ms. A center-compensated reaudit measured actual per-song offsets
+  from +23.22 to +69.66 ms. Applying those offsets to authoring examples,
+  structure attacks and beat labels gives all eight a corrected admission pass
+  and seven a strict near-1:1 pass; Internal Degeneration retains a 58.05 ms
+  middle-third residual. The resulting local corpus has 36 pairs, 14 artists
+  and six chart-author groups. Sectoid remains train-only, Muldjord
   validation-only, and Persephone remains untouched test. Muldjord checkpoint
   distribution still requires a separate ShareAlike assessment.
 - Three matched weighted-BCE seeds rejected immediate use of the expanded
@@ -1133,25 +1136,26 @@ Status update (2026-09-22):
   within-phrase pitch-rank decoder reached only 0.1123. Seed 2 without these
   additions remains selected.
 - A signed-residual audit showed that the selected model's Persephone timing
-  errors are 98 percent positive with a +30.11 ms median, unlike validation
-  medians of -6.23 to +5.68 ms. An independent chart-to-isolated-guitar onset
-  audit then found Persephone's best global chart-to-audio offset at -46.44 ms,
-  with early/middle/late thirds at -58.05/-46.44/-46.44 ms and only 7.65 percent
-  of chart attacks within 25 ms of a zero-offset audio onset. The manifest still
-  declares a verified zero offset. Persephone therefore remains useful for
-  coarse 50 ms attack-selection comparisons, but its sub-25-ms timing score is
-  invalid as a model-localization gate until synchronization provenance is
-  corrected independently. The intake audit now reports a separate near-1:1
-  timing gate rather than treating any offset within 50 ms as exact enough.
-  Applying that independently measured global offset for diagnosis only changes
-  the selected blend's Persephone 50 ms attack F1 from 0.6151 to 0.6418 and
-  median absolute timing from 30.11 to 15.58 ms (P95 45.53 to 36.41 ms).
-  These corrected numbers do not select a model and do not replace the frozen
-  benchmark until the manifest and provenance are formally revised. Seven of
-  the eight newly admitted Sectoid/Muldjord songs pass the strict gate;
-  Muldjord's Internal Degeneration is flagged for a -81 ms middle-third anomaly
-  despite a -23 ms global offset and strong onset support, requiring targeted
-  listening review rather than automatic exclusion.
+  errors were 98 percent positive with a +30.11 ms median, unlike validation
+  medians of -6.23 to +5.68 ms. The first follow-up incorrectly attributed this
+  to a -46.44 ms pair offset: the synchronization audit used an uncentered
+  2048-sample onset window whose half-window delay is itself about 46 ms.
+  Center-compensated remeasurement confirms Persephone at zero global offset,
+  early/middle/late offsets of -11.61/0/0 ms, 97.72% onset support within
+  25 ms, and an 8.16 ms median nearest-onset distance. Persephone sub-25-ms
+  timing is valid; the one-sided residual is genuine model localization error.
+  The same correction exposed +23.22 to +69.66 ms offsets in the eight new
+  pairs. Their manifest offsets and derived labels are now corrected.
+- Retraining the fixed multi-scale seed-0 recipe on those corrected labels
+  slightly changed validation macro F1 from 0.7597 to 0.7566, while untouched
+  Persephone improved from 0.5616 to 0.6452 attack F1, 0.8013 to 0.9153 recall,
+  34.83 to 23.22 ms median timing and 46.44 to 34.83 ms P95. Seeds 1-2 remained
+  validation-inferior with test evaluation disabled. Rebuilt short-context
+  students improved validation F1/recall when blended but did not improve
+  median timing, so the corrected teacher remains selected. Carrying the fixed
+  seed-2 lane recipe end-to-end reached 0.6498 Persephone attack F1, 0.9218
+  recall, 11.61 ms matched timing and 0.1251 joint exact-lane F1. Corrected
+  validation again selected lane seed 2; seeds 0-1 remained sealed.
 - A full-context 128-sample-hop experiment then doubled the parameter-free
   context pools to preserve the selected teacher's receptive field in seconds.
   The unchanged initialization reached 0.7477 validation F1 and 13.20 ms exact

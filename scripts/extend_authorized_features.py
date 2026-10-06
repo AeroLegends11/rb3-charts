@@ -15,6 +15,9 @@ def _structure_labels(example, manifest, manifest_item, chart_path):
         row["attack_id"]: row
         for row in example["expert_targets"]
     }
+    offset = float(
+        manifest_item["synchronization"]["audio_offset_seconds"]
+    )
     notes = []
     attacks = []
     for attack in example["conditioning"]:
@@ -39,7 +42,7 @@ def _structure_labels(example, manifest, manifest_item, chart_path):
         })
     midi = pretty_midi.PrettyMIDI(str(chart_path))
     beats = [
-        {"time": float(time), "position": index % 4 + 1}
+        {"time": float(time) + offset, "position": index % 4 + 1}
         for index, time in enumerate(midi.get_beats())
     ]
     return {
