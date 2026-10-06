@@ -1076,6 +1076,13 @@ Status update (2026-09-22):
   tested joint models lose too much chartability precision. None passed the
   validation gate, untouched Persephone was not evaluated, and no feature is
   integrated into generation.
+- Distilling multi-scale chartability probabilities into the precise
+  short-window student improved its best seed-0 validation macro F1 to 0.7403
+  at teacher weight 0.5 while retaining 11.61 ms median timing. Weights
+  0.1/0.25/1.0 reached 0.7317/0.7372/0.7258; the strongest teacher weight also
+  worsened median timing to 13.27 ms. None preserved the multi-scale baseline's
+  0.7597 F1 while strictly improving timing, so untouched Persephone was not
+  evaluated and short-context distillation is rejected.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

@@ -19,6 +19,7 @@ import structure_beat_grid as beat_grid
 import structure_beat_finetune as beat_finetune
 import structure_beat_occupancy as beat_occupancy
 import structure_multires_spectrogram as multires_spectrogram
+import structure_short_distillation as short_distillation
 import predicted_authoring_sequence as predicted_authoring
 import predicted_authoring_self_train as self_trained_authoring
 import audio_authoring_sequence as audio_authoring
@@ -312,13 +313,14 @@ def test_beat_occupancy_decoder_uses_predicted_count():
 def test_multires_spectrogram_preserves_expected_frame_count(
     tmp_path,
 ):
+    samples = max(multires_spectrogram.FFT_SIZES)
     sf.write(
         tmp_path / "fixture.wav",
-        np.zeros(4096, dtype=np.float32),
+        np.zeros(samples, dtype=np.float32),
         multires_spectrogram.FEATURE_SAMPLE_RATE,
     )
     expected_frames = (
-        1 + 4096 // multires_spectrogram.FEATURE_HOP_LENGTH
+        1 + samples // multires_spectrogram.FEATURE_HOP_LENGTH
     )
     features = multires_spectrogram._multires_features(
         tmp_path / "fixture.wav",
@@ -413,6 +415,41 @@ def test_dual_branch_model_separates_short_and_long_features():
 
     assert outputs["attack"].shape == (2, 10)
     assert outputs["polyphony"].shape == (2, 10, 7)
+
+
+def test_short_distillation_uses_short_primary_representation(tmp_path):
+    samples = np.zeros(4096, dtype=np.float32)
+    sf.write(
+        tmp_path / "fixture.wav",
+        samples,
+        short_distillation.FEATURE_SAMPLE_RATE,
+    )
+    frames = 1 + len(samples) // short_distillation.FEATURE_HOP_LENGTH
+    arrays = {
+        "mel_delta": np.zeros((frames, 128), dtype=np.float32),
+        "beat_phase": np.zeros((frames, 2), dtype=np.float32),
+        "attack_target": np.zeros(frames, dtype=np.float32),
+    }
+
+    features = short_distillation._short_primary_features(
+        tmp_path / "fixture.wav",
+        arrays,
+        short_delta=True,
+    )
+
+    assert features.shape == (frames, 258)
+
+
+def test_multires_macro_metrics_handle_threshold_without_matches():
+    metrics = multires_spectrogram._macro_metrics(
+        [("fixture", np.asarray([0.0, 0.1, 0.0]), [1])],
+        threshold=0.9,
+        tolerance_frames=1,
+    )
+
+    assert metrics["macro_f1"] == 0
+    assert metrics["macro_median_timing_error_ms"] is None
+    assert metrics["macro_p95_timing_error_ms"] is None
 
 
 def test_predicted_authoring_metrics_require_timing_and_lane_agreement():

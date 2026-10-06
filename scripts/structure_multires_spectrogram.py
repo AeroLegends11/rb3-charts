@@ -339,6 +339,16 @@ def _macro_metrics(named_records, threshold, tolerance_frames):
         threshold,
         tolerance_frames,
     )
+    median_timing = [
+        row["median_timing_error_ms"]
+        for row in by_song.values()
+        if row["median_timing_error_ms"] is not None
+    ]
+    p95_timing = [
+        row["p95_timing_error_ms"]
+        for row in by_song.values()
+        if row["p95_timing_error_ms"] is not None
+    ]
     aggregate.update({
         "macro_precision": float(np.mean([
             row["precision"] for row in by_song.values()
@@ -349,16 +359,12 @@ def _macro_metrics(named_records, threshold, tolerance_frames):
         "macro_f1": float(np.mean([
             row["f1"] for row in by_song.values()
         ])),
-        "macro_median_timing_error_ms": float(np.mean([
-            row["median_timing_error_ms"]
-            for row in by_song.values()
-            if row["median_timing_error_ms"] is not None
-        ])),
-        "macro_p95_timing_error_ms": float(np.mean([
-            row["p95_timing_error_ms"]
-            for row in by_song.values()
-            if row["p95_timing_error_ms"] is not None
-        ])),
+        "macro_median_timing_error_ms": (
+            float(np.mean(median_timing)) if median_timing else None
+        ),
+        "macro_p95_timing_error_ms": (
+            float(np.mean(p95_timing)) if p95_timing else None
+        ),
         "by_song": by_song,
     })
     return aggregate
