@@ -985,6 +985,34 @@ def test_predicted_authoring_pitch_contour_resets_after_rest():
     assert features[:, 3].tolist() == [0.0, 1.0, 0.0, 1.0]
 
 
+def test_predicted_authoring_pitch_events_encode_relative_phrase_motion():
+    features = predicted_authoring._pitch_event_features(
+        [
+            {
+                "start": 0.98,
+                "pitch": 48,
+                "confidence": 0.8,
+                "accepted": True,
+            },
+            {
+                "start": 1.22,
+                "pitch": 60,
+                "confidence": 0.9,
+                "accepted": True,
+            },
+        ],
+        [1.0, 1.2, 2.5],
+    )
+
+    assert features.shape == (3, 6)
+    assert features[:, 0] == pytest.approx([0.25, 0.5, 0.5])
+    assert features[:, 1] == pytest.approx([0.8, 0.9, 0.0])
+    assert features[:, 2] == pytest.approx([-0.2, 0.2, -1.0])
+    assert features[:, 3] == pytest.approx([0.0, 0.5, 0.0])
+    assert features[:, 4] == pytest.approx([0.0, 1.0, 0.5])
+    assert features[:, 5] == pytest.approx([0.0, 0.0, 1.0])
+
+
 def test_predicted_authoring_blends_mean_student_attack_scores():
     scores = predicted_authoring._blend_attack_scores(
         teacher_scores=np.asarray([0.2, 0.8]),

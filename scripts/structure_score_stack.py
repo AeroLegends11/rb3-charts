@@ -42,11 +42,20 @@ def _rank_percentiles(values):
     return result
 
 
-def _stack_features(teacher, students, peaks, event_support=None):
+def _stack_features(
+    teacher,
+    students,
+    peaks,
+    event_support=None,
+    base_student_weight=0.2,
+):
     students = np.asarray(students)
     mean = students.mean(axis=0)
     variance = students.var(axis=0)
-    blend = 0.8 * teacher + 0.2 * mean
+    blend = (
+        (1 - base_student_weight) * teacher
+        + base_student_weight * mean
+    )
     if event_support is None:
         event_support = np.zeros_like(blend)
     prominences = signal.peak_prominences(blend, peaks)[0]
@@ -117,6 +126,7 @@ def run(
     seed=0,
     epochs=12,
     positive_weight_scale=1.0,
+    base_student_weight=0.2,
     device="auto",
 ):
     import torch
@@ -158,9 +168,12 @@ def run(
                 torch.sigmoid(student(short)["attack"][0]).cpu().numpy()
                 for student in students
             ]
-            blend = 0.8 * teacher_scores + 0.2 * np.mean(
-                student_scores,
-                axis=0,
+            blend = (
+                (1 - base_student_weight) * teacher_scores
+                + base_student_weight * np.mean(
+                    student_scores,
+                    axis=0,
+                )
             )
             peaks = _attack_peaks(blend)
             actual = np.flatnonzero(arrays["attack_target"] > 0)
@@ -178,6 +191,7 @@ def run(
                     student_scores,
                     peaks,
                     event_support,
+                    base_student_weight,
                 ),
                 "targets": _candidate_targets(
                     peaks,
@@ -307,6 +321,7 @@ def run(
         "seed": seed,
         "epochs": epochs,
         "positive_weight_scale": positive_weight_scale,
+        "base_student_weight": base_student_weight,
         "epoch_losses": losses,
         "train_candidates": len(train_targets),
         "train_positive_candidates": int(train_targets.sum()),
@@ -372,6 +387,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--epochs", type=int, default=12)
     parser.add_argument("--positive-weight-scale", type=float, default=1.0)
+    parser.add_argument("--base-student-weight", type=float, default=0.2)
     parser.add_argument(
         "--device",
         choices=["auto", "cpu", "cuda"],
@@ -388,6 +404,7 @@ def main():
         seed=args.seed,
         epochs=args.epochs,
         positive_weight_scale=args.positive_weight_scale,
+        base_student_weight=args.base_student_weight,
         device=args.device,
     )
     print(json.dumps(report, indent=2))

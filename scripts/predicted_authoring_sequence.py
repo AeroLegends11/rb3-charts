@@ -28,6 +28,7 @@ from structure_multires_spectrogram import (
     _audio_path,
     _short_primary_features,
 )
+from structure_pitch_event_ensemble import _load_or_extract_events
 from structure_timing_snap import _hash_file, _load_model
 from symbolic_authoring_sequence import _baseline_masks, _lanes
 from rb3charts.model import save_json
@@ -280,6 +281,90 @@ def _augment_reference_pitch(records, items, relative_only=False):
         ), axis=1)
 
 
+def _pitch_event_features(events, times):
+    times = np.asarray(times, dtype=np.float32)
+    accepted = [
+        event for event in events
+        if event.get("accepted", True)
+    ]
+    if not accepted:
+        return np.column_stack((
+            np.full(len(times), 0.5, dtype=np.float32),
+            np.zeros((len(times), 4), dtype=np.float32),
+            np.ones(len(times), dtype=np.float32),
+        ))
+    event_times = np.asarray(
+        [float(event["start"]) for event in accepted],
+        dtype=np.float32,
+    )
+    event_pitches = np.asarray(
+        [float(event["pitch"]) for event in accepted],
+        dtype=np.float32,
+    )
+    event_confidences = np.asarray(
+        [
+            float(event.get("confidence", 0.0))
+            for event in accepted
+        ],
+        dtype=np.float32,
+    )
+    nearest = np.abs(times[:, None] - event_times[None, :]).argmin(axis=1)
+    distances = event_times[nearest] - times
+    missing = np.abs(distances) > 0.1
+    pitches = np.clip((event_pitches[nearest] - 36.0) / 48.0, 0.0, 1.0)
+    pitches[missing] = 0.5
+    confidences = event_confidences[nearest]
+    confidences[missing] = 0.0
+    distance_features = np.clip(distances / 0.1, -1.0, 1.0)
+    pitch_deltas = np.zeros(len(times), dtype=np.float32)
+    phrase_ranks = np.full(len(times), 0.5, dtype=np.float32)
+    starts = [0]
+    for index in range(1, len(times)):
+        if float(times[index]) - float(times[index - 1]) >= 1.0:
+            starts.append(index)
+        elif not missing[index] and not missing[index - 1]:
+            pitch_deltas[index] = np.clip(
+                (event_pitches[nearest[index]]
+                 - event_pitches[nearest[index - 1]]) / 24.0,
+                -1.0,
+                1.0,
+            )
+    starts.append(len(times))
+    for left, right in zip(starts, starts[1:]):
+        present = np.flatnonzero(~missing[left:right]) + left
+        if len(present) > 1:
+            order = present[
+                np.argsort(
+                    event_pitches[nearest[present]],
+                    kind="stable",
+                )
+            ]
+            phrase_ranks[order] = np.linspace(
+                0.0,
+                1.0,
+                len(order),
+            )
+    return np.column_stack((
+        pitches,
+        confidences,
+        distance_features,
+        pitch_deltas,
+        phrase_ranks,
+        missing.astype(np.float32),
+    )).astype(np.float32)
+
+
+def _augment_pitch_events(records, events_by_song):
+    for record in records:
+        record["features"] = np.concatenate((
+            record["features"],
+            _pitch_event_features(
+                events_by_song[record["song_id"]],
+                record["times"],
+            ),
+        ), axis=1)
+
+
 def _predicted_record(
     item,
     arrays,
@@ -290,6 +375,7 @@ def _predicted_record(
     relative_pitch_only=False,
     attack_scores=None,
     learned_lane_allowed=None,
+    pitch_events=None,
 ):
     import torch
 
@@ -333,12 +419,20 @@ def _predicted_record(
     )
     if relative_pitch_only:
         contour = contour[:, 2:]
+    event_features = (
+        _pitch_event_features(pitch_events, times)
+        if pitch_events is not None
+        else np.empty((len(peaks), 0), dtype=np.float32)
+    )
     return {
         "song_id": item["song_id"],
         "split": item["split"],
         "times": times.tolist(),
         "symbolic_features": symbolic,
-        "features": np.concatenate((audio, symbolic, contour), axis=1),
+        "features": np.concatenate(
+            (audio, symbolic, contour, event_features),
+            axis=1,
+        ),
         "learned_lane_allowed": (
             list(learned_lane_allowed)
             if learned_lane_allowed is not None
@@ -562,6 +656,8 @@ def run(
     lane_ensemble="majority",
     phrase_rank_decoder=False,
     calibrate_lane_transition=False,
+    pitch_event_root=None,
+    pitch_event_cache=None,
     evaluate_test=True,
 ):
     import torch
@@ -578,6 +674,10 @@ def run(
         raise ValueError(
             "lane transition calibration requires exactly one lane seed"
         )
+    if (pitch_event_root is None) != (pitch_event_cache is None):
+        raise ValueError(
+            "pitch event root and cache must be provided together"
+        )
     torch.use_deterministic_algorithms(True)
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -592,6 +692,17 @@ def run(
             items,
             relative_only=relative_pitch_only,
         )
+    events_by_song = {}
+    if pitch_event_root is not None:
+        events_by_song = {
+            item["song_id"]: _load_or_extract_events(
+                item,
+                pitch_event_root,
+                pitch_event_cache,
+            )
+            for item in items
+        }
+        _augment_pitch_events(records, events_by_song)
     train = [record for record in records if record["split"] == "train"]
     validation = [
         record for record in records if record["split"] == "validation"
@@ -692,6 +803,7 @@ def run(
                 relative_pitch_only=relative_pitch_only,
                 attack_scores=selected_attack_scores,
                 learned_lane_allowed=learned_lane_allowed,
+                pitch_events=events_by_song.get(item["song_id"]),
             ))
     validation_predicted = [
         record for record in predicted if record["split"] == "validation"
@@ -912,6 +1024,7 @@ def run(
             else float(structure_configuration["attack_threshold"])
         ),
         "teacher_supported_lanes": teacher_supported_lanes,
+        "pitch_event_features": pitch_event_root is not None,
         "guard_passed": guard_passed,
         "test_evaluated": bool(
             evaluate_test and guard_passed and test_predicted
@@ -1046,6 +1159,8 @@ def main():
     parser.add_argument("--distilled-weight", type=float, default=0.0)
     parser.add_argument("--attack-threshold", type=float)
     parser.add_argument("--teacher-supported-lanes", action="store_true")
+    parser.add_argument("--pitch-event-root", type=Path)
+    parser.add_argument("--pitch-event-cache", type=Path)
     parser.add_argument("--skip-test", action="store_true")
     parser.add_argument(
         "--lane-seed",
@@ -1083,6 +1198,16 @@ def main():
         distilled_weight=args.distilled_weight,
         attack_threshold=args.attack_threshold,
         teacher_supported_lanes=args.teacher_supported_lanes,
+        pitch_event_root=(
+            args.pitch_event_root.resolve()
+            if args.pitch_event_root
+            else None
+        ),
+        pitch_event_cache=(
+            args.pitch_event_cache.resolve()
+            if args.pitch_event_cache
+            else None
+        ),
         lane_seeds=args.lane_seed,
         evaluate_test=not args.skip_test,
     )

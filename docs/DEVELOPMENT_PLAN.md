@@ -1156,6 +1156,19 @@ Status update (2026-09-22):
   seed-2 lane recipe end-to-end reached 0.6498 Persephone attack F1, 0.9218
   recall, 11.61 ms matched timing and 0.1251 joint exact-lane F1. Corrected
   validation again selected lane seed 2; seeds 0-1 remained sealed.
+- Rechecked the closest timing-sensitive rejected candidates after correcting
+  the Muldjord labels. A teacher-only compact peak ranker raised validation F1
+  only from 0.7566 to 0.7583 while lowering recall and leaving 14.93 ms timing
+  unchanged. Frozen Wav2Vec2 layer-12 context lowered F1 to 0.7584 and worsened
+  timing to 16.59 ms. Both gates stayed closed and Persephone remained sealed.
+- Added an offline, audio-only Basic Pitch lane feature using source pitch,
+  confidence, event distance, pitch motion and within-phrase rank. All three
+  validation-only recurrent lane seeds regressed below the selected 0.1256
+  joint exact-lane F1. A deterministic three-lane phrase-rank decoder improved
+  validation to 0.1320, legitimately opening one held-out evaluation, but
+  failed to transfer: Persephone exact lanes fell from 0.1926 to 0.1413 and
+  joint exact-lane F1 from 0.1251 to 0.0918. The feature family is rejected;
+  the corrected pitch-contour seed-2 recipe remains selected.
 - A full-context 128-sample-hop experiment then doubled the parameter-free
   context pools to preserve the selected teacher's receptive field in seconds.
   The unchanged initialization reached 0.7477 validation F1 and 13.20 ms exact
