@@ -24,6 +24,8 @@ import structure_distill_ensemble as distill_ensemble
 import structure_highres_timing as highres_timing
 import structure_distill_variance as distill_variance
 import structure_timing_bias_diagnostic as timing_bias
+import structure_hop128_finetune as hop128
+import structure_polyphony_refit as polyphony_refit
 import predicted_authoring_sequence as predicted_authoring
 import predicted_authoring_shadow as authoring_shadow
 import predicted_authoring_self_train as self_trained_authoring
@@ -252,6 +254,115 @@ def test_timing_bias_diagnostic_preserves_error_sign():
     assert metrics["matches"] == 2
     assert metrics["signed_mean_ms"] == pytest.approx(-5)
     assert metrics["median_absolute_ms"] == pytest.approx(15)
+
+
+def test_hop128_targets_use_exact_nearest_frame():
+    times = [
+        10.4 * hop128.HIGHRES_HOP_LENGTH / hop128.FEATURE_SAMPLE_RATE,
+        20.6 * hop128.HIGHRES_HOP_LENGTH / hop128.FEATURE_SAMPLE_RATE,
+    ]
+
+    frames = hop128._target_frames(times, frames=100)
+
+    assert frames.tolist() == [10, 21]
+
+
+def test_hop128_metrics_use_configured_time_resolution():
+    records = [{
+        "song_id": "fixture",
+        "scores": np.asarray([0.0, 0.9, 0.0]),
+        "reference": np.asarray([
+            1.5 * hop128.HIGHRES_HOP_LENGTH / hop128.FEATURE_SAMPLE_RATE,
+        ]),
+        "hop_length": hop128.HIGHRES_HOP_LENGTH,
+    }]
+
+    metrics = hop128._score_metrics(records, threshold=0.5)
+
+    assert metrics["macro_f1"] == 1
+    assert metrics["macro_median_timing_error_ms"] == pytest.approx(
+        0.5
+        * hop128.HIGHRES_HOP_LENGTH
+        / hop128.FEATURE_SAMPLE_RATE
+        * 1000
+    )
+
+
+def test_hop128_resolution_blend_interpolates_coarse_scores():
+    records = [{
+        "scores": np.asarray([0.0, 0.0, 0.0]),
+        "coarse_scores": np.asarray([0.0, 1.0]),
+    }]
+
+    blended = hop128._blend_resolution_records(
+        records,
+        highres_weight=0.5,
+    )
+
+    assert blended[0]["scores"].tolist() == [0.0, 0.25, 0.5]
+
+
+def test_timing_lane_metrics_report_polyphony_separately():
+    references = {
+        "fixture": {
+            "times": [1.0, 2.0],
+            "masks": [1, 3],
+        },
+    }
+    predicted = [{
+        "song_id": "fixture",
+        "times": [1.0, 2.0],
+    }]
+
+    metrics = predicted_authoring._timing_lane_metrics(
+        references,
+        predicted,
+        [[2, 5]],
+    )
+
+    assert metrics["matched_exact_lanes"] == 0
+    assert metrics["matched_exact_polyphony"] == 1
+
+
+def test_polyphony_refit_metrics_report_confusion():
+    import torch
+
+    class Fixed(torch.nn.Module):
+        def forward(self, features):
+            logits = torch.zeros((1, 2, 7))
+            logits[0, 0, 1] = 2
+            logits[0, 1, 2] = 2
+            return {"polyphony": logits}
+
+    metrics = polyphony_refit._polyphony_metrics(
+        Fixed(),
+        [{
+            "features": np.zeros((2, 3), dtype=np.float32),
+            "attack": np.ones(2, dtype=np.float32),
+            "polyphony": np.asarray([1, 3]),
+        }],
+        "cpu",
+    )
+
+    assert metrics["accuracy"] == 0.5
+    assert metrics["confusion"] == {"1->1": 1, "3->2": 1}
+
+
+def test_lane_viterbi_uses_transition_evidence():
+    unary = np.asarray([
+        [2.0, 1.9, 0.0, 0.0, 0.0],
+        [1.9, 2.0, 0.0, 0.0, 0.0],
+    ])
+    transition = np.full((5, 5), -10.0)
+    np.fill_diagonal(transition, 0.0)
+
+    lanes = audio_authoring._viterbi_single_lanes(
+        unary,
+        transition,
+        weight=1.0,
+    )
+
+    assert lanes == [0, 0]
 
 
 def test_score_ensemble_blends_scores_before_peak_selection():

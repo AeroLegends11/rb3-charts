@@ -19,6 +19,8 @@ from audio_authoring_sequence import (
     _predict,
     _predict_with_confidence,
     _predict_logit_ensemble,
+    _predict_viterbi,
+    _lane_transition_log_probabilities,
     _staged_predictions,
 )
 from structure_distill_ensemble import _load_student
@@ -362,7 +364,7 @@ def _timing_lane_metrics(references, predictions, masks, tolerance_ms=50):
             / FEATURE_HOP_LENGTH
         ).astype(int)
         unmatched = set(range(len(reference_frames)))
-        matched = exact = 0
+        matched = exact = polyphony_exact = 0
         jaccard = []
         errors = []
         for frame, mask in zip(predicted_frames, predicted_masks):
@@ -384,6 +386,9 @@ def _timing_lane_metrics(references, predictions, masks, tolerance_ms=50):
             exact += int(reference_mask == mask)
             reference_lanes = set(_lanes(reference_mask))
             predicted_lanes = set(_lanes(mask))
+            polyphony_exact += int(
+                len(reference_lanes) == len(predicted_lanes)
+            )
             jaccard.append(
                 len(reference_lanes & predicted_lanes)
                 / len(reference_lanes | predicted_lanes)
@@ -404,6 +409,9 @@ def _timing_lane_metrics(references, predictions, masks, tolerance_ms=50):
                 / max(1e-12, attack_precision + attack_recall)
             ),
             "matched_exact_lanes": exact / max(1, matched),
+            "matched_exact_polyphony": (
+                polyphony_exact / max(1, matched)
+            ),
             "matched_lane_jaccard": (
                 float(np.mean(jaccard)) if jaccard else 0.0
             ),
@@ -424,6 +432,7 @@ def _timing_lane_metrics(references, predictions, masks, tolerance_ms=50):
             "attack_recall",
             "attack_f1",
             "matched_exact_lanes",
+            "matched_exact_polyphony",
             "matched_lane_jaccard",
             "joint_exact_precision",
             "joint_exact_recall",
@@ -552,6 +561,7 @@ def run(
     calibrate_lane_confidence=False,
     lane_ensemble="majority",
     phrase_rank_decoder=False,
+    calibrate_lane_transition=False,
 ):
     import torch
 
@@ -563,6 +573,10 @@ def run(
         )
     if lane_ensemble not in ("majority", "logit"):
         raise ValueError("lane ensemble must be majority or logit")
+    if calibrate_lane_transition and len(lane_seeds or [seed]) != 1:
+        raise ValueError(
+            "lane transition calibration requires exactly one lane seed"
+        )
     torch.use_deterministic_algorithms(True)
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -814,6 +828,48 @@ def run(
         )
         confidence_threshold = selected_confidence["threshold"]
         staged_metrics = selected_confidence["metrics"]
+    transition_candidates = []
+    selected_transition_weight = None
+    if calibrate_lane_transition:
+        transition = _lane_transition_log_probabilities(train)
+        for weight in (0.05, 0.1, 0.25, 0.5, 1.0):
+            masks = _predict_viterbi(
+                lane_models[0],
+                validation_predicted,
+                mean,
+                scale,
+                device,
+                transition,
+                weight,
+            )
+            metrics = _timing_lane_metrics(
+                references,
+                validation_predicted,
+                stage(validation_predicted, masks),
+            )
+            transition_candidates.append({
+                "weight": weight,
+                "metrics": metrics,
+            })
+        selected_transition = max(
+            transition_candidates,
+            key=lambda row: (
+                row["metrics"]["joint_exact_f1"],
+                row["metrics"]["matched_exact_lanes"],
+                row["metrics"]["matched_lane_jaccard"],
+            ),
+        )
+        selected_transition_weight = selected_transition["weight"]
+        validation_learned = _predict_viterbi(
+            lane_models[0],
+            validation_predicted,
+            mean,
+            scale,
+            device,
+            transition,
+            selected_transition_weight,
+        )
+        staged_metrics = selected_transition["metrics"]
     guard_passed = (
         staged_metrics["joint_exact_f1"]
         > baseline_metrics["joint_exact_f1"]
@@ -842,6 +898,8 @@ def run(
         "lane_ensemble": lane_ensemble,
         "phrase_rank_decoder": phrase_rank_decoder,
         "selected_phrase_rank_span": selected_phrase_rank_span,
+        "calibrate_lane_transition": calibrate_lane_transition,
+        "lane_transition_weight": selected_transition_weight,
         "distilled_student_sha256": [
             _hash_file(path)
             for path in distilled_students
@@ -878,6 +936,10 @@ def run(
         report["validation"]["phrase_rank_candidates"] = (
             phrase_rank_candidates
         )
+    if transition_candidates:
+        report["validation"]["transition_candidates"] = (
+            transition_candidates
+        )
     if guard_passed and test_predicted:
         if lane_ensemble == "logit":
             test_learned, test_confidences = _predict_logit_ensemble(
@@ -911,6 +973,16 @@ def run(
             test_learned = _phrase_rank_predictions(
                 test_predicted,
                 *selected_phrase_rank_span,
+            )
+        if selected_transition_weight is not None:
+            test_learned = _predict_viterbi(
+                lane_models[0],
+                test_predicted,
+                mean,
+                scale,
+                device,
+                transition,
+                selected_transition_weight,
             )
         evaluated_test_records = test_predicted
         if confidence_threshold is not None:
@@ -961,6 +1033,7 @@ def main():
         default="majority",
     )
     parser.add_argument("--phrase-rank-decoder", action="store_true")
+    parser.add_argument("--calibrate-lane-transition", action="store_true")
     parser.add_argument(
         "--distilled-student",
         type=Path,
@@ -998,6 +1071,7 @@ def main():
         calibrate_lane_confidence=args.calibrate_lane_confidence,
         lane_ensemble=args.lane_ensemble,
         phrase_rank_decoder=args.phrase_rank_decoder,
+        calibrate_lane_transition=args.calibrate_lane_transition,
         distilled_students=[
             path.resolve()
             for path in args.distilled_student

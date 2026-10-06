@@ -1152,6 +1152,31 @@ Status update (2026-09-22):
   Muldjord's Internal Degeneration is flagged for a -81 ms middle-third anomaly
   despite a -23 ms global offset and strong onset support, requiring targeted
   listening review rather than automatic exclusion.
+- A full-context 128-sample-hop experiment then doubled the parameter-free
+  context pools to preserve the selected teacher's receptive field in seconds.
+  The unchanged initialization reached 0.7477 validation F1 and 13.20 ms exact
+  median timing. Attack-only fine-tuning collapsed to 0.5545 F1, and blending
+  high-resolution scores back into the selected coarse blend peaked at 0.7669
+  F1 while worsening timing from 10.87 to 12.20 ms. The representation is
+  rejected; simply doubling temporal resolution does not preserve the teacher's
+  learned attack localization.
+- Separating matched polyphony from exact color shows that the selected
+  end-to-end model has 0.6906 validation and 0.8014 Persephone polyphony
+  accuracy, versus only 0.1794/0.2039 exact lanes. Certain Death is an extreme
+  domain gap: 763 of 926 attacks are triple chords, while the original training
+  split contains only ten triple-chord attacks, and its matched polyphony
+  accuracy is 0.07. A fixed final-fit experiment froze every attack parameter
+  and refit only the polyphony head on all 35 non-test songs, exposing 959
+  triple-chord attacks. Persephone nevertheless remained unchanged: all 500
+  single notes were correct and all 114 dyads were still predicted as singles.
+  The refit is rejected. More class weighting or validation reuse cannot supply
+  the missing transferable chord evidence.
+- A first-order lane-transition decoder learned sub-second single-note color
+  transitions from authorized training phrases and calibrated its Viterbi weight
+  on validation. It raised validation joint exact F1 from 0.1323 to 0.1338, but
+  reduced Persephone joint exact F1 from 0.1279 to 0.1246 and matched exact
+  lanes from 0.2039 to 0.1986. It is rejected as another validation-specific
+  structural prior; the seed-2 framewise pitch-contour model remains selected.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

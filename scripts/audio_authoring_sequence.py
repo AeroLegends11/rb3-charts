@@ -210,6 +210,109 @@ def _predict_logit_ensemble(models, records, mean, scale, device):
     return predicted, confidences
 
 
+def _lane_transition_log_probabilities(records):
+    counts = np.ones((5, 5), dtype=np.float64)
+    for record in records:
+        previous_lane = None
+        previous_time = None
+        for target, time in zip(record["targets"], record["times"]):
+            lanes = [
+                lane
+                for lane in range(5)
+                if MASKS[int(target)] & (1 << lane)
+            ]
+            if len(lanes) != 1:
+                previous_lane = None
+                previous_time = None
+                continue
+            lane = lanes[0]
+            if (
+                previous_lane is not None
+                and float(time) - float(previous_time) < 1.0
+            ):
+                counts[previous_lane, lane] += 1
+            previous_lane = lane
+            previous_time = time
+    return np.log(counts / counts.sum(axis=1, keepdims=True))
+
+
+def _viterbi_single_lanes(unary, transition, weight):
+    unary = np.asarray(unary, dtype=float)
+    scores = unary[0].copy()
+    back = []
+    for row in unary[1:]:
+        choices = scores[:, None] + weight * transition
+        previous = np.argmax(choices, axis=0)
+        scores = row + choices[previous, np.arange(5)]
+        back.append(previous)
+    lanes = [int(np.argmax(scores))]
+    for previous in reversed(back):
+        lanes.append(int(previous[lanes[-1]]))
+    return list(reversed(lanes))
+
+
+def _predict_viterbi(
+    model,
+    records,
+    mean,
+    scale,
+    device,
+    transition,
+    weight,
+):
+    import torch
+
+    single_classes = [MASKS.index(1 << lane) for lane in range(5)]
+    predicted, _ = _predict_with_confidence(
+        model,
+        records,
+        mean,
+        scale,
+        device,
+    )
+    model.eval()
+    with torch.no_grad():
+        for record_index, record in enumerate(records):
+            features = torch.from_numpy(
+                ((record["features"] - mean) / scale)[None, :, :]
+            ).to(device)
+            logits = model(features)[0].cpu().numpy()
+            start = 0
+            while start < len(record["times"]):
+                symbolic = record["symbolic_features"][start]
+                if max(1, min(5, round(float(symbolic[3]) * 5))) != 1:
+                    start += 1
+                    continue
+                end = start + 1
+                while (
+                    end < len(record["times"])
+                    and max(
+                        1,
+                        min(
+                            5,
+                            round(float(
+                                record["symbolic_features"][end, 3]
+                            ) * 5),
+                        ),
+                    ) == 1
+                    and (
+                        float(record["times"][end])
+                        - float(record["times"][end - 1])
+                    ) < 1.0
+                ):
+                    end += 1
+                lanes = _viterbi_single_lanes(
+                    logits[start:end][:, single_classes],
+                    transition,
+                    weight,
+                )
+                predicted[record_index][start:end] = [
+                    1 << lane for lane in lanes
+                ]
+                start = end
+    return predicted
+
+
 def run(
     feature_index,
     authoring_index,
