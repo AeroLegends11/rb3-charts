@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import soundfile as sf
 
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -17,6 +18,7 @@ import structure_cell_detector as cell_detector
 import structure_beat_grid as beat_grid
 import structure_beat_finetune as beat_finetune
 import structure_beat_occupancy as beat_occupancy
+import structure_multires_spectrogram as multires_spectrogram
 import predicted_authoring_sequence as predicted_authoring
 import predicted_authoring_self_train as self_trained_authoring
 import audio_authoring_sequence as audio_authoring
@@ -305,6 +307,112 @@ def test_beat_occupancy_decoder_uses_predicted_count():
     )
 
     assert predicted == pytest.approx([0.15, 0.35])
+
+
+def test_multires_spectrogram_preserves_expected_frame_count(
+    tmp_path,
+):
+    sf.write(
+        tmp_path / "fixture.wav",
+        np.zeros(4096, dtype=np.float32),
+        multires_spectrogram.FEATURE_SAMPLE_RATE,
+    )
+    expected_frames = (
+        1 + 4096 // multires_spectrogram.FEATURE_HOP_LENGTH
+    )
+    features = multires_spectrogram._multires_features(
+        tmp_path / "fixture.wav",
+        np.zeros((expected_frames, 2), dtype=np.float32),
+        expected_frames,
+    )
+
+    assert features.shape == (
+        expected_frames,
+        len(multires_spectrogram.FFT_SIZES)
+        * multires_spectrogram.MELS_PER_SCALE
+        + 2,
+    )
+
+
+def test_short_spectrogram_augments_existing_representation(tmp_path):
+    samples = np.zeros(4096, dtype=np.float32)
+    sf.write(
+        tmp_path / "fixture.wav",
+        samples,
+        multires_spectrogram.FEATURE_SAMPLE_RATE,
+    )
+    frames = 1 + len(samples) // multires_spectrogram.FEATURE_HOP_LENGTH
+    arrays = {
+        "log_mel": np.zeros((frames, 128), dtype=np.float32),
+        "mel_delta": np.zeros((frames, 128), dtype=np.float32),
+        "beat_phase": np.zeros((frames, 2), dtype=np.float32),
+        "attack_target": np.zeros(frames, dtype=np.float32),
+    }
+
+    features = multires_spectrogram._short_augmented_features(
+        tmp_path / "fixture.wav",
+        arrays,
+    )
+
+    assert features.shape == (
+        frames,
+        128 + 128 + multires_spectrogram.SHORT_MELS + 2,
+    )
+
+
+def test_short_primary_replaces_long_window_log_mel(tmp_path):
+    samples = np.zeros(4096, dtype=np.float32)
+    sf.write(
+        tmp_path / "fixture.wav",
+        samples,
+        multires_spectrogram.FEATURE_SAMPLE_RATE,
+    )
+    frames = 1 + len(samples) // multires_spectrogram.FEATURE_HOP_LENGTH
+    arrays = {
+        "mel_delta": np.zeros((frames, 128), dtype=np.float32),
+        "beat_phase": np.zeros((frames, 2), dtype=np.float32),
+        "attack_target": np.zeros(frames, dtype=np.float32),
+    }
+
+    features = multires_spectrogram._short_primary_features(
+        tmp_path / "fixture.wav",
+        arrays,
+    )
+
+    assert features.shape == (frames, 258)
+
+
+def test_short_consistent_representation_derives_short_delta(tmp_path):
+    samples = np.zeros(4096, dtype=np.float32)
+    samples[2048:] = 0.5
+    sf.write(
+        tmp_path / "fixture.wav",
+        samples,
+        multires_spectrogram.FEATURE_SAMPLE_RATE,
+    )
+    frames = 1 + len(samples) // multires_spectrogram.FEATURE_HOP_LENGTH
+    arrays = {
+        "mel_delta": np.zeros((frames, 128), dtype=np.float32),
+        "beat_phase": np.zeros((frames, 2), dtype=np.float32),
+        "attack_target": np.zeros(frames, dtype=np.float32),
+    }
+
+    features = multires_spectrogram._short_primary_features(
+        tmp_path / "fixture.wav",
+        arrays,
+        short_delta=True,
+    )
+
+    assert np.max(features[:, 128:256]) > 0
+
+
+def test_dual_branch_model_separates_short_and_long_features():
+    torch = pytest.importorskip("torch")
+    model = multires_spectrogram._build_dual_branch()
+    outputs = model(torch.zeros((2, 10, 514)))
+
+    assert outputs["attack"].shape == (2, 10)
+    assert outputs["polyphony"].shape == (2, 10, 7)
 
 
 def test_predicted_authoring_metrics_require_timing_and_lane_agreement():

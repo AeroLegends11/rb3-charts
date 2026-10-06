@@ -1063,6 +1063,19 @@ Status update (2026-09-22):
   39.81 ms macro P95. Causality did not preserve the selected model's attack
   ranking and did not improve timing. Untouched Persephone was not evaluated;
   the architecture is rejected from runtime.
+- Multi-resolution source features then addressed the fixed 2048-sample
+  analysis window directly. Aligned 512/2048/8192 FFT mel representations
+  improved validation macro timing to 11.61 ms median and 29.85 ms P95, but
+  macro F1/recall fell to 0.6803/0.5908. Replacing only the primary log-mel
+  input with a 512-sample window raised F1 to 0.7274 and recall to 0.8003, but
+  timing was 14.93/41.46 ms. Deriving both log-mel and per-band positive
+  deltas from the short window produced 0.7277 F1 and 0.9004 recall with the
+  same timing. A separate short-local/long-context dual branch scored 0.6597
+  F1 and 21.56/41.46 ms. These results establish a real timing/selection
+  tradeoff: short and multi-resolution windows transfer useful timing, but the
+  tested joint models lose too much chartability precision. None passed the
+  validation gate, untouched Persephone was not evaluated, and no feature is
+  integrated into generation.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,
