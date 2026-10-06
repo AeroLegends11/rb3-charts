@@ -1,6 +1,7 @@
 """Evaluate lane authoring with predicted attacks and polyphony offline."""
 
 import argparse
+from collections import Counter
 import json
 import math
 import os
@@ -81,6 +82,30 @@ def _supported_staged_predictions(records, predicted):
             )
         ])
     return staged
+
+
+def _majority_predictions(records, prediction_sets):
+    majority = []
+    baselines = [
+        _baseline_masks({
+            **record,
+            "features": record["symbolic_features"],
+        })
+        for record in records
+    ]
+    for record_index, baseline in enumerate(baselines):
+        selected = []
+        for attack_index, baseline_mask in enumerate(baseline):
+            counts = Counter(
+                predictions[record_index][attack_index]
+                for predictions in prediction_sets
+            )
+            mask, votes = counts.most_common(1)[0]
+            selected.append(
+                mask if votes > len(prediction_sets) / 2 else baseline_mask
+            )
+        majority.append(selected)
+    return majority
 
 
 def _context_audio_features(arrays, frames):
@@ -362,17 +387,13 @@ def run(
     distilled_weight=0.0,
     attack_threshold=None,
     teacher_supported_lanes=False,
+    lane_seeds=None,
 ):
     import torch
     import torch.nn.functional as functional
 
     if relative_pitch_only and not pitch_contour_features:
         raise ValueError("relative pitch features require pitch contour features")
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
     torch.use_deterministic_algorithms(True)
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -395,42 +416,56 @@ def run(
     stacked = np.concatenate([record["features"] for record in train])
     mean = stacked.mean(axis=0)
     scale = np.maximum(stacked.std(axis=0), 1e-5)
-    lane_model = _build_model(stacked.shape[1]).to(device)
     class_polyphony = torch.tensor(
         [len(_lanes(mask)) for mask in MASKS],
         device=device,
     )
-    optimizer = torch.optim.AdamW(
-        lane_model.parameters(),
-        lr=5e-4,
-        weight_decay=1e-4,
-    )
-    for _ in range(epochs):
-        lane_model.train()
-        for record in train:
-            features = torch.from_numpy(
-                ((record["features"] - mean) / scale)[None, :, :]
-            ).to(device)
-            targets = torch.from_numpy(record["targets"][None, :]).to(device)
-            logits = lane_model(features)
-            if single_only_loss:
-                single = class_polyphony[targets] == 1
-                loss = functional.cross_entropy(
-                    logits[single],
-                    targets[single],
-                )
-            else:
-                allowed = (
-                    class_polyphony[targets].unsqueeze(-1)
-                    == class_polyphony.reshape(1, 1, -1)
-                )
-                loss = functional.cross_entropy(
-                    logits.masked_fill(~allowed, -1e9).reshape(-1, len(MASKS)),
-                    targets.reshape(-1),
-                )
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+    lane_seeds = list(lane_seeds or [seed])
+    lane_models = []
+    for lane_seed in lane_seeds:
+        random.seed(lane_seed)
+        np.random.seed(lane_seed)
+        torch.manual_seed(lane_seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(lane_seed)
+        lane_model = _build_model(stacked.shape[1]).to(device)
+        optimizer = torch.optim.AdamW(
+            lane_model.parameters(),
+            lr=5e-4,
+            weight_decay=1e-4,
+        )
+        for _ in range(epochs):
+            lane_model.train()
+            for record in train:
+                features = torch.from_numpy(
+                    ((record["features"] - mean) / scale)[None, :, :]
+                ).to(device)
+                targets = torch.from_numpy(
+                    record["targets"][None, :]
+                ).to(device)
+                logits = lane_model(features)
+                if single_only_loss:
+                    single = class_polyphony[targets] == 1
+                    loss = functional.cross_entropy(
+                        logits[single],
+                        targets[single],
+                    )
+                else:
+                    allowed = (
+                        class_polyphony[targets].unsqueeze(-1)
+                        == class_polyphony.reshape(1, 1, -1)
+                    )
+                    loss = functional.cross_entropy(
+                        logits.masked_fill(
+                            ~allowed,
+                            -1e9,
+                        ).reshape(-1, len(MASKS)),
+                        targets.reshape(-1),
+                    )
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+        lane_models.append(lane_model)
     structure_model, structure_configuration = _load_model(
         structure_checkpoint,
         device,
@@ -527,12 +562,18 @@ def run(
         record["song_id"]: record
         for record in validation + test
     }
-    validation_learned = _predict(
-        lane_model,
+    validation_learned = _majority_predictions(
         validation_predicted,
-        mean,
-        scale,
-        device,
+        [
+            _predict(
+                lane_model,
+                validation_predicted,
+                mean,
+                scale,
+                device,
+            )
+            for lane_model in lane_models
+        ],
     )
     validation_baseline_masks = [
         _baseline_masks({
@@ -573,6 +614,7 @@ def run(
             "and polyphony; chart lanes are targets only"
         ),
         "seed": seed,
+        "lane_seeds": lane_seeds,
         "epochs": epochs,
         "context_features": context_features,
         "pitch_contour_features": pitch_contour_features,
@@ -600,12 +642,18 @@ def run(
         },
     }
     if guard_passed and test_predicted:
-        test_learned = _predict(
-            lane_model,
+        test_learned = _majority_predictions(
             test_predicted,
-            mean,
-            scale,
-            device,
+            [
+                _predict(
+                    lane_model,
+                    test_predicted,
+                    mean,
+                    scale,
+                    device,
+                )
+                for lane_model in lane_models
+            ],
         )
         report["test"] = {
             "fixed_polyphony_baseline": _timing_lane_metrics(
@@ -651,6 +699,12 @@ def main():
     parser.add_argument("--attack-threshold", type=float)
     parser.add_argument("--teacher-supported-lanes", action="store_true")
     parser.add_argument(
+        "--lane-seed",
+        type=int,
+        action="append",
+        default=[],
+    )
+    parser.add_argument(
         "--device",
         choices=["auto", "cpu", "cuda"],
         default="auto",
@@ -675,6 +729,7 @@ def main():
         distilled_weight=args.distilled_weight,
         attack_threshold=args.attack_threshold,
         teacher_supported_lanes=args.teacher_supported_lanes,
+        lane_seeds=args.lane_seed,
     )
     print(json.dumps(report, indent=2))
 

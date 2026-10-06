@@ -1102,7 +1102,10 @@ Status update (2026-09-22):
   0.6073 to 0.6274, joint timing-plus-exact-lane F1 from 0.1210 to 0.1279,
   matched exact lanes from 0.1992 to 0.2039, and lane overlap from 0.2387 to
   0.2473. This is the strongest lawful end-to-end offline result so far, but
-  remains below runtime quality and does not resolve frozen timing.
+  remains below runtime quality and does not resolve frozen timing. A
+  deterministic majority vote across lane seeds 0-2 reduced validation joint
+  exact F1 from the selected seed's 0.1323 to 0.1271 and Persephone from 0.1279
+  to 0.1257, so seed 2 remains selected and the vote is rejected.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

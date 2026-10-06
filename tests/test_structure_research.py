@@ -568,6 +568,26 @@ def test_predicted_authoring_preserves_baseline_on_unsupported_lane():
     assert staged == [[1 << 4, 1 << 2]]
 
 
+def test_predicted_authoring_majority_uses_baseline_for_three_way_tie():
+    records = [{
+        "symbolic_features": np.asarray([
+            [0, 0, 0, 0.2, 0, 0],
+            [0, 0, 0, 0.2, 0, 0],
+        ], dtype=np.float32),
+    }]
+
+    majority = predicted_authoring._majority_predictions(
+        records,
+        [
+            [[1 << 0, 1 << 0]],
+            [[1 << 0, 1 << 1]],
+            [[1 << 4, 1 << 4]],
+        ],
+    )
+
+    assert majority == [[1 << 0, 1 << 2]]
+
+
 def test_self_trained_authoring_targets_only_matched_single_notes():
     reference = {
         "times": [1.0, 2.0, 3.0],
