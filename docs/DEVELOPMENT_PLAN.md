@@ -362,7 +362,17 @@ Status update (2026-09-20):
   unchanged; one unmatched-note mean interval error shifted 1.4222→1.4370.
   Hail was unchanged. When You Were Young's remaining collapse predates phrase
   authoring and includes a 32-semitone source-pitch outlier, so this guard
-  correctly does not invent a lane repair there.
+  correctly does not invent a lane repair there. Follow-up source inspection
+  found that the pitch-98 event has no local pYIN support, but removing it would
+  still leave a five-note top-lane run spanning pitches 66-75. The actual
+  collapse is introduced when the long-run supported-span pass restores the
+  globally correlated incoming pitch mapping across a 127-note phrase. Two
+  source-only safety variants were rejected: rolling back the whole phrase
+  removed the failure but reduced held-out movement-direction agreement
+  0.3587->0.3478, while rolling back only the collapsed window preserved
+  movement and interval error but reduced exact-lane agreement 0.1008->0.0982.
+  Attack F1 remained 0.5505. The existing `needs_work` diagnostic remains the
+  safe outcome until stronger source evidence can justify a lane change.
 - Whole-song canonical family selection and calibration against broader listening
   examples remain in progress; this does not complete Milestone 3.
 - Added non-destructive Band-guitar voice-continuity diagnostics over overlapping
