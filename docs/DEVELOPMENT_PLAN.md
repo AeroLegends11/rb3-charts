@@ -1169,6 +1169,14 @@ Status update (2026-09-22):
   failed to transfer: Persephone exact lanes fell from 0.1926 to 0.1413 and
   joint exact-lane F1 from 0.1251 to 0.0918. The feature family is rejected;
   the corrected pitch-contour seed-2 recipe remains selected.
+- Retrained the local-onset architecture and the frozen-selector residual
+  offset head on corrected labels. Nonzero local-snap radii worsened macro
+  median timing from 14.93 ms to at least 19.90 ms. The offset-only model
+  exactly preserved validation F1, aggregate and macro median timing, P95 and
+  every selected peak: rounded offsets remained a behavioral no-op. Both
+  timing paths remain rejected. The timing-snap evaluator now keeps the held-out
+  split sealed unless a nonzero radius preserves F1 and strictly improves
+  validation timing.
 - A full-context 128-sample-hop experiment then doubled the parameter-free
   context pools to preserve the selected teacher's receptive field in seconds.
   The unchanged initialization reached 0.7477 validation F1 and 13.20 ms exact

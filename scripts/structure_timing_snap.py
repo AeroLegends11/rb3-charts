@@ -133,7 +133,14 @@ def _summarize(records, radius, tolerance_frames):
     }
 
 
-def run(index_path, context_path, local_path, output, device="auto"):
+def run(
+    index_path,
+    context_path,
+    local_path,
+    output,
+    device="auto",
+    evaluate_test=True,
+):
     import torch
 
     if device == "auto":
@@ -199,6 +206,12 @@ def run(index_path, context_path, local_path, output, device="auto"):
             row["snap_radius_frames"],
         ),
     )
+    guard_passed = (
+        selected["snap_radius_frames"] > 0
+        and selected["macro_f1"] >= baseline["macro_f1"]
+        and selected["macro_median_timing_error_ms"]
+        < baseline["macro_median_timing_error_ms"]
+    )
     test = [record for record in records if record["split"] == "test"]
     report = {
         "schema": "rb3charts-structure-timing-snap",
@@ -214,13 +227,20 @@ def run(index_path, context_path, local_path, output, device="auto"):
         "validation_candidates": candidates,
         "validation_baseline": baseline,
         "validation_selected": selected,
-        "test_baseline": _summarize(test, 0, tolerance_frames),
-        "test_selected": _summarize(
+        "guard_passed": guard_passed,
+        "test_evaluated": bool(evaluate_test and guard_passed),
+    }
+    if evaluate_test and guard_passed:
+        report["test_baseline"] = _summarize(
+            test,
+            0,
+            tolerance_frames,
+        )
+        report["test_selected"] = _summarize(
             test,
             selected["snap_radius_frames"],
             tolerance_frames,
-        ),
-    }
+        )
     save_json(output, report)
     return report
 
@@ -232,6 +252,7 @@ def main():
     parser.add_argument("local_model", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    parser.add_argument("--skip-test", action="store_true")
     args = parser.parse_args()
     report = run(
         args.index.resolve(),
@@ -239,6 +260,7 @@ def main():
         args.local_model.resolve(),
         args.output.resolve(),
         args.device,
+        not args.skip_test,
     )
     print(json.dumps({
         key: {
@@ -254,6 +276,10 @@ def main():
             "test_baseline",
             "test_selected",
         )
+        if key in report
+    } | {
+        "guard_passed": report["guard_passed"],
+        "test_evaluated": report["test_evaluated"],
     }, indent=2))
 
 
