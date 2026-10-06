@@ -20,6 +20,7 @@ import structure_beat_finetune as beat_finetune
 import structure_beat_occupancy as beat_occupancy
 import structure_multires_spectrogram as multires_spectrogram
 import structure_short_distillation as short_distillation
+import structure_distill_ensemble as distill_ensemble
 import predicted_authoring_sequence as predicted_authoring
 import predicted_authoring_self_train as self_trained_authoring
 import audio_authoring_sequence as audio_authoring
@@ -450,6 +451,15 @@ def test_multires_macro_metrics_handle_threshold_without_matches():
     assert metrics["macro_f1"] == 0
     assert metrics["macro_median_timing_error_ms"] is None
     assert metrics["macro_p95_timing_error_ms"] is None
+
+
+def test_distill_ensemble_rejects_wrong_checkpoint_schema(tmp_path):
+    torch = pytest.importorskip("torch")
+    checkpoint = tmp_path / "wrong.pt"
+    torch.save({"schema": "wrong", "schema_version": 1}, checkpoint)
+
+    with pytest.raises(ValueError, match="Unsupported distilled checkpoint"):
+        distill_ensemble._load_student(checkpoint, "cpu")
 
 
 def test_predicted_authoring_metrics_require_timing_and_lane_agreement():

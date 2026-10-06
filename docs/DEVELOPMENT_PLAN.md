@@ -1083,6 +1083,17 @@ Status update (2026-09-22):
   worsened median timing to 13.27 ms. None preserved the multi-scale baseline's
   0.7597 F1 while strictly improving timing, so untouched Persephone was not
   evaluated and short-context distillation is rejected.
+- Blending the distilled short-window scores back into the multi-scale teacher
+  succeeds where the earlier unrelated local/context blend failed. At student
+  weight 0.15, seeds 0 and 2 passed the strict validation gate: seed 0 reached
+  0.7631 macro F1 and 9.95 ms median timing, while seed 2 reached 0.7731 and
+  13.27 ms; seed 1 narrowly missed the strict timing improvement. The
+  corresponding untouched Persephone F1 values improved from the teacher's
+  0.5616 to 0.6070 and 0.5781, with frozen timing unchanged at 34.83 ms. An
+  average of all three students passed validation at 0.7712 F1/12.44 ms and
+  reached 0.5951 on Persephone. This is the strongest attack-selection family
+  so far, but seed-sensitive frozen gains and unchanged frozen timing keep it
+  offline pending broader author-disjoint evidence and end-to-end evaluation.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,
