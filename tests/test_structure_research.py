@@ -23,6 +23,10 @@ import structure_short_distillation as short_distillation
 import structure_distill_ensemble as distill_ensemble
 import structure_highres_timing as highres_timing
 import structure_distill_variance as distill_variance
+import structure_density_calibration as density_calibration
+import structure_wav2vec_context as wav2vec_context
+import structure_pitch_event_ensemble as pitch_event_ensemble
+import structure_score_stack as score_stack
 import structure_timing_bias_diagnostic as timing_bias
 import structure_hop128_finetune as hop128
 import structure_polyphony_refit as polyphony_refit
@@ -363,6 +367,139 @@ def test_lane_viterbi_uses_transition_evidence():
     )
 
     assert lanes == [0, 0]
+
+
+def test_density_threshold_tracks_requested_peak_rate():
+    scores = np.asarray([
+        0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.7, 0.0,
+    ])
+    duration = (
+        len(scores)
+        * density_calibration.FEATURE_HOP_LENGTH
+        / density_calibration.FEATURE_SAMPLE_RATE
+    )
+
+    threshold = density_calibration._threshold_for_rate(
+        scores,
+        1 / duration,
+    )
+
+    assert threshold > 0.7
+    assert len(density_calibration._decode_attack_peaks(
+        scores,
+        threshold,
+    )) == 1
+
+
+def test_density_ridge_predicts_training_rate():
+    records = [
+        {
+            "scores": np.asarray([0.0, score, 0.0] * count),
+            "actual": np.arange(count),
+        }
+        for score, count in ((0.6, 2), (0.7, 3), (0.8, 4))
+    ]
+
+    model = density_calibration._fit_ridge(records, alpha=0.1)
+    predicted = density_calibration._predict_rate(
+        model,
+        records[1]["scores"],
+    )
+    expected = (
+        len(records[1]["actual"])
+        * density_calibration.FEATURE_SAMPLE_RATE
+        / (
+            len(records[1]["scores"])
+            * density_calibration.FEATURE_HOP_LENGTH
+        )
+    )
+
+    assert predicted == pytest.approx(expected, rel=0.15)
+
+
+def test_wav2vec_embedding_times_follow_stride():
+    times = wav2vec_context._embedding_times(16000, 3)
+
+    assert times[0] == pytest.approx(1.01246875)
+    assert np.diff(times).tolist() == pytest.approx([0.02, 0.02])
+
+
+def test_wav2vec_targets_use_nearest_embedding_frame():
+    times = np.asarray([0.01, 0.03, 0.05])
+    attack_frame = round(
+        0.032
+        * wav2vec_context.FEATURE_SAMPLE_RATE
+        / wav2vec_context.FEATURE_HOP_LENGTH
+    )
+
+    targets = wav2vec_context._embedding_targets(
+        times,
+        [attack_frame],
+    )
+
+    assert targets.tolist() == [0.0, 1.0, 0.0]
+
+
+def test_wav2vec_chartability_gate_preserves_flat_context_scores():
+    base = np.asarray([0.1, 0.8, 0.1])
+    context = np.asarray([0.4, 0.4, 0.4])
+
+    fused = wav2vec_context._chartability_gate_scores(
+        base,
+        context,
+        weight=1.0,
+    )
+
+    assert fused.tolist() == pytest.approx(base.tolist())
+
+
+def test_pitch_event_support_centers_on_refined_start():
+    support = pitch_event_ensemble._event_support(
+        20,
+        [{
+            "start": (
+                10
+                * pitch_event_ensemble.FEATURE_HOP_LENGTH
+                / pitch_event_ensemble.FEATURE_SAMPLE_RATE
+            ),
+            "confidence": 0.8,
+        }],
+    )
+
+    assert int(np.argmax(support)) == 10
+    assert support[10] == pytest.approx(0.8)
+    assert support[9] < support[10]
+
+
+def test_pitch_event_fusion_only_raises_supported_scores():
+    base = np.asarray([0.2, 0.2])
+    fused = pitch_event_ensemble._fuse_scores(
+        base,
+        np.asarray([0.0, 0.8]),
+        weight=1.0,
+    )
+
+    assert fused[0] == pytest.approx(base[0])
+    assert fused[1] > base[1]
+
+
+def test_score_stack_features_include_each_student():
+    teacher = np.asarray([0.1, 0.8, 0.1])
+    students = [
+        np.asarray([0.1, value, 0.1])
+        for value in (0.6, 0.7, 0.9)
+    ]
+
+    features = score_stack._stack_features(
+        teacher,
+        students,
+        np.asarray([1]),
+    )
+
+    assert features.shape == (1, 14)
+    assert features[0, :4].tolist() == pytest.approx(
+        [0.8, 0.6, 0.7, 0.9]
+    )
 
 
 def test_score_ensemble_blends_scores_before_peak_selection():

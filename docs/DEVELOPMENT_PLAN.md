@@ -1177,6 +1177,29 @@ Status update (2026-09-22):
   reduced Persephone joint exact F1 from 0.1279 to 0.1246 and matched exact
   lanes from 0.2039 to 0.1986. It is rejected as another validation-specific
   structural prior; the seed-2 framewise pitch-contour model remains selected.
+- A train-only ridge predictor then attempted to infer each song's attack rate
+  from the selected score distribution and peak counts. Its least aggressive
+  validation calibration raised precision but reduced recall, lowering macro F1
+  from 0.7712 to 0.7574. It failed before test evaluation and rules out global
+  density correction as a substitute for local chartability.
+- Frozen Wav2Vec2 raw-audio embeddings supplied a materially different
+  pretrained context representation. A layer-6 attack head introduced too many
+  peaks when blended directly; a smoothed log-odds gate reached only 0.7321
+  validation F1. The final contextual layer was closer at 0.7621 but still
+  regressed recall and timing. Both remained below the sealed-test gate; a
+  speech-pretrained representation does not transfer enough guitar
+  chartability to justify runtime weight or dependency changes.
+- Independent Basic Pitch events were extracted for all eight new
+  Sectoid/Muldjord songs and evaluated as positive attack evidence. They raised
+  recall on sparse Muldjord songs but flooded the Brad songs, reducing
+  validation F1 to 0.7095. A compact ranker over the selected teacher/student
+  peaks was more promising: score agreement, prominence and rank raised
+  validation F1 to 0.7757 while preserving timing, but missed the baseline
+  recall floor by 0.0019 across three deterministic seeds. Adding Basic Pitch
+  proximity raised F1/precision further to 0.7779/0.8200 but reduced recall to
+  0.7650. Recall-weighted fitting did not repair the ordering. All variants are
+  rejected without test evaluation; auxiliary evidence can prune false peaks
+  but does not yet recover the charted attacks the selected model misses.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,
