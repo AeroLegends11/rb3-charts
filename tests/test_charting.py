@@ -97,12 +97,53 @@ def test_repeated_riff_has_identical_mapping():
     notes=map_pitched(events,"guitar")
     assert [n.lanes for n in notes[:4]]==[n.lanes for n in notes[4:8]]==[n.lanes for n in notes[8:]]
 
+
+def test_guitar_mapping_avoids_forbidden_green_orange_triad():
+    events = [
+        {
+            "start": 1.0,
+            "end": 1.4,
+            "pitch": pitch,
+            "confidence": confidence,
+            "source_id": str(pitch),
+        }
+        for pitch, confidence in ((40, .9), (50, .8), (60, .7))
+    ]
+
+    notes = map_pitched(events, "guitar")
+
+    assert len(notes) == 1
+    assert notes[0].lanes == (0, 2, 3)
+
+
 def test_validator_rejects_three_handed_drums():
     tempo=TempoMap([0,0.5,1,1.5,2])
     charts={d:[Note(0.5,0.6,(0,1,2,3),source_id="a")] for d in ("expert","hard","medium","easy")}
     result=validate({"drums":charts},tempo,2)
     assert not result["passed"]
     assert any("hands" in e for e in result["errors"])
+
+
+def test_validator_rejects_forbidden_guitar_chord_shapes():
+    tempo = TempoMap([0, 0.5, 1, 1.5, 2])
+    charts = {
+        difficulty: [Note(.5, .565, lanes, source_id="a")]
+        for difficulty, lanes in {
+            "expert": (0, 2, 4),
+            "hard": (0, 4),
+            "medium": (1,),
+            "easy": (1,),
+        }.items()
+    }
+
+    result = validate({"guitar": charts}, tempo, 2)
+
+    assert not result["passed"]
+    assert any("Expert chord spans green through orange" in error
+               for error in result["errors"])
+    assert any("reduced chord violates fret-hand limits" in error
+               for error in result["errors"])
+
 
 def test_invalid_beat_map_rejected():
     with pytest.raises(ValueError):TempoMap([0,0.5,0.4])

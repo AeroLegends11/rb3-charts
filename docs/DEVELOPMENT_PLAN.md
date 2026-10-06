@@ -373,6 +373,20 @@ Status update (2026-09-20):
   movement and interval error but reduced exact-lane agreement 0.1008->0.0982.
   Attack F1 remained 0.5505. The existing `needs_work` diagnostic remains the
   safe outcome until stronger source evidence can justify a lane change.
+- Guitar mapping now legalizes three-note Expert chords that span green through
+  orange by moving one outer gem inward while preserving the detected attack,
+  triad, timing and source IDs. Structural validation also rejects forbidden
+  Expert and reduced-difficulty guitar shapes before packaging. Seven official
+  and 15 authorized cached replays changed only the affected chord lanes:
+  Beast and the Harlot's single illegal triad and all 17 illegal triads across
+  four authorized songs were removed. Aggregate attacks, chords, sustains,
+  density, contour changes and difficulty counts were unchanged; four songs
+  improved from `needs_work` to `review_closely`. Beast's official attack,
+  exact-lane, movement and interval metrics were unchanged. Authorized attack,
+  chord, movement, interval and motif metrics were unchanged; Your Day's exact
+  lane agreement shifted 0.0674->0.0638 because its held-out chart contains the
+  matched shape the Xbox format forbids, so structural playability takes
+  precedence over that diagnostic.
 - Whole-song canonical family selection and calibration against broader listening
   examples remain in progress; this does not complete Milestone 3.
 - Added non-destructive Band-guitar voice-continuity diagnostics over overlapping

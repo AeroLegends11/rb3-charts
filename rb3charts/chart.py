@@ -9,6 +9,17 @@ ELECTRONIC_SUSTAIN_SECONDS = 0.09
 BAND_SUSTAIN_SECONDS = 0.22
 BAND_GUITAR_SUSTAIN_SECONDS = 0.35
 
+
+def _legalize_expert_guitar_chord(lanes):
+    lanes = list(lanes)
+    if len(lanes) == 3 and 0 in lanes and 4 in lanes:
+        if 3 in lanes:
+            lanes = [1 if lane == 0 else lane for lane in lanes]
+        else:
+            lanes = [3 if lane == 4 else lane for lane in lanes]
+    return tuple(sorted(set(lanes)))
+
+
 def _reference_style(key):
     path=Path(__file__).resolve().parents[1]/"reference"/"style-profile.json"
     if not path.is_file():return {}
@@ -70,6 +81,8 @@ def map_pitched(events, instrument, style="range", sustain_threshold=None):
         else:
             group = sorted(group, key=lambda e:e["confidence"], reverse=True)[:3]
         lanes = tuple(sorted(set(mapping[e["pitch"]] for e in group)))
+        if instrument == "guitar":
+            lanes = _legalize_expert_guitar_chord(lanes)
         start = min(e["start"] for e in group)
         end = min(e["end"] for e in group)
         if instrument == "guitar" and any(e.get("lead_focus_corrected") for e in group):
@@ -457,10 +470,8 @@ def refine_band_guitar(notes,tempo):
             # Expert but is intentionally rare; use the adjacent 1-4 shape.
             if len(lanes)==2:
                 lanes=[0,3]
-            elif 3 not in lanes:
-                lanes=[3 if lane==4 else lane for lane in lanes]
             else:
-                lanes=[1 if lane==0 else lane for lane in lanes]
+                lanes=list(_legalize_expert_guitar_chord(lanes))
         stable_pitch=section_pitch_counts.get(section,{}).get(note.pitch,0)>1
         if not stable_pitch and len(lanes)==1 and refined and len(refined[-1].lanes)==1:
             previous=refined[-1]

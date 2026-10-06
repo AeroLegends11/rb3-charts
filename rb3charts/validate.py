@@ -31,6 +31,20 @@ def validate(charts, tempo, duration, midi_path=None):
                     errors.append(tag+": more than two simultaneous hands")
                 if instrument != "drums" and len(n.lanes)>3:
                     errors.append(tag+": more than three fret buttons")
+                if (
+                    instrument == "guitar"
+                    and difficulty == "expert"
+                    and len(n.lanes) == 3
+                    and 0 in n.lanes
+                    and 4 in n.lanes
+                ):
+                    errors.append(tag+": Expert chord spans green through orange")
+                if (
+                    instrument == "guitar"
+                    and difficulty != "expert"
+                    and (len(n.lanes) > 2 or (0 in n.lanes and 4 in n.lanes))
+                ):
+                    errors.append(tag+": reduced chord violates fret-hand limits")
                 if ancestry is not None and n.source_id not in ancestry:
                     errors.append(tag+": reduction lost source ancestry")
                 if prior and (n.start <= prior.start or n.start < prior.end):
