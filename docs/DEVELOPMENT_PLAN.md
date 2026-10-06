@@ -1106,6 +1106,52 @@ Status update (2026-09-22):
   deterministic majority vote across lane seeds 0-2 reduced validation joint
   exact F1 from the selected seed's 0.1323 to 0.1271 and Persephone from 0.1279
   to 0.1257, so seed 2 remains selected and the vote is rejected.
+- The same frozen distilled/seed-2 configuration was applied unchanged to the
+  Hail guitar stem as a post-generation shadow, using the existing fixed
+  -1.1-second alignment and never exposing reference notes to training,
+  threshold selection, or generation. At 25 ms it reached 0.3732 attack F1,
+  barely above the old runtime chart's 0.3702 but below the long-context
+  teacher's 0.4046. At 50 ms it reached 0.5200 versus 0.5556 for the runtime
+  chart and 0.5337 for the teacher. The seed-stable blend therefore does not
+  transfer to Hail and remains rejected from runtime despite its authorized
+  validation and Persephone gains. The reusable shadow evaluator records attack,
+  timing, lane, motif, and weakest-window metrics at fixed 25/50 ms tolerances.
+- A 2.90-ms-hop local timing refiner then preserved the blended attack identities
+  and learned bounded corrections from 35-frame, 64-channel short-FFT patches.
+  Its seed-0 training loss remained near random 35-class entropy. The smallest
+  validation-selected correction reduced macro median error from 10.87 to
+  10.70 ms, but also reduced F1 from 0.7687 to 0.7625 and worsened P95 from
+  33.46 to 34.04 ms. It failed the predeclared gate, Persephone remained sealed,
+  and additional seeds are not justified without a more informative timing
+  representation.
+- Three lane-ownership refinements were also rejected. An auxiliary phrase-motion
+  loss at weights 0.1 and 0.025 either regressed or merely tied validation before
+  reducing Persephone joint exact F1. Validation-calibrated lane confidence
+  improved joint F1 from 0.13230 to 0.13279 but reversed on Persephone from
+  0.1279 to 0.1257. Averaging logits across seeds 0-2 preserved Persephone exact
+  lanes but reduced validation joint F1 to 0.1292, while a deterministic
+  within-phrase pitch-rank decoder reached only 0.1123. Seed 2 without these
+  additions remains selected.
+- A signed-residual audit showed that the selected model's Persephone timing
+  errors are 98 percent positive with a +30.11 ms median, unlike validation
+  medians of -6.23 to +5.68 ms. An independent chart-to-isolated-guitar onset
+  audit then found Persephone's best global chart-to-audio offset at -46.44 ms,
+  with early/middle/late thirds at -58.05/-46.44/-46.44 ms and only 7.65 percent
+  of chart attacks within 25 ms of a zero-offset audio onset. The manifest still
+  declares a verified zero offset. Persephone therefore remains useful for
+  coarse 50 ms attack-selection comparisons, but its sub-25-ms timing score is
+  invalid as a model-localization gate until synchronization provenance is
+  corrected independently. The intake audit now reports a separate near-1:1
+  timing gate rather than treating any offset within 50 ms as exact enough.
+  Applying that independently measured global offset for diagnosis only changes
+  the selected blend's Persephone 50 ms attack F1 from 0.6151 to 0.6418 and
+  median absolute timing from 30.11 to 15.58 ms (P95 45.53 to 36.41 ms).
+  These corrected numbers do not select a model and do not replace the frozen
+  benchmark until the manifest and provenance are formally revised. Seven of
+  the eight newly admitted Sectoid/Muldjord songs pass the strict gate;
+  Muldjord's Internal Degeneration is flagged for a -81 ms middle-third anomaly
+  despite a -23 ms global offset and strong onset support, requiring targeted
+  listening review rather than automatic exclusion.
 - A fixed-timestamp local-peak reranker used the short-context model only to
   propose attack times and the multi-scale model only to rank their
   chartability. Its best validation candidate retained useful recall at 0.7751,

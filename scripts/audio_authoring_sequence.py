@@ -76,7 +76,7 @@ def _staged_predictions(records, predicted):
     return staged
 
 
-def _build_model(input_features):
+def _build_model(input_features, movement_head=False):
     import torch.nn as nn
 
     class Model(nn.Module):
@@ -90,16 +90,41 @@ def _build_model(input_features):
                 bidirectional=True,
             )
             self.output = nn.Linear(128, len(MASKS))
+            self.direction = (
+                nn.Linear(128, 3)
+                if movement_head else None
+            )
             self.activation = nn.ReLU()
 
+        def encode(self, features):
+            encoded, _ = self.gru(
+                self.activation(self.input(features))
+            )
+            return encoded
+
         def forward(self, features):
-            encoded, _ = self.gru(self.activation(self.input(features)))
+            encoded = self.encode(features)
             return self.output(encoded)
+
+        def movement_logits(self, encoded):
+            if self.direction is None:
+                raise ValueError("Model does not have a movement head")
+            return self.direction(encoded[:, 1:] - encoded[:, :-1])
 
     return Model()
 
 
 def _predict(model, records, mean, scale, device):
+    return _predict_with_confidence(
+        model,
+        records,
+        mean,
+        scale,
+        device,
+    )[0]
+
+
+def _predict_with_confidence(model, records, mean, scale, device):
     import torch
 
     classes_by_polyphony = {
@@ -111,6 +136,7 @@ def _predict(model, records, mean, scale, device):
         for polyphony in range(1, 6)
     }
     predicted = []
+    confidences = []
     model.eval()
     with torch.no_grad():
         for record in records:
@@ -119,13 +145,69 @@ def _predict(model, records, mean, scale, device):
             ).to(device)
             logits = model(features)[0].cpu().numpy()
             masks = []
+            margins = []
             for row, symbolic in zip(logits, record["symbolic_features"]):
                 polyphony = max(1, min(5, round(float(symbolic[3]) * 5)))
                 allowed = classes_by_polyphony[polyphony]
-                selected = max(allowed, key=lambda index: float(row[index]))
+                ranked = sorted(
+                    allowed,
+                    key=lambda index: float(row[index]),
+                    reverse=True,
+                )
+                selected = ranked[0]
                 masks.append(MASKS[selected])
+                margins.append(
+                    float(row[ranked[0]] - row[ranked[1]])
+                    if len(ranked) > 1
+                    else float("inf")
+                )
             predicted.append(masks)
-    return predicted
+            confidences.append(margins)
+    return predicted, confidences
+
+
+def _predict_logit_ensemble(models, records, mean, scale, device):
+    import torch
+
+    classes_by_polyphony = {
+        polyphony: [
+            index for index, mask in enumerate(MASKS)
+            if len([lane for lane in range(5) if mask & (1 << lane)])
+            == polyphony
+        ]
+        for polyphony in range(1, 6)
+    }
+    predicted = []
+    confidences = []
+    for model in models:
+        model.eval()
+    with torch.no_grad():
+        for record in records:
+            features = torch.from_numpy(
+                ((record["features"] - mean) / scale)[None, :, :]
+            ).to(device)
+            logits = np.mean([
+                model(features)[0].cpu().numpy()
+                for model in models
+            ], axis=0)
+            masks = []
+            margins = []
+            for row, symbolic in zip(logits, record["symbolic_features"]):
+                polyphony = max(1, min(5, round(float(symbolic[3]) * 5)))
+                ranked = sorted(
+                    classes_by_polyphony[polyphony],
+                    key=lambda index: float(row[index]),
+                    reverse=True,
+                )
+                masks.append(MASKS[ranked[0]])
+                margins.append(
+                    float(row[ranked[0]] - row[ranked[1]])
+                    if len(ranked) > 1
+                    else float("inf")
+                )
+            predicted.append(masks)
+            confidences.append(margins)
+    return predicted, confidences
 
 
 def run(

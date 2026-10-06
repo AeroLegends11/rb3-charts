@@ -26,6 +26,15 @@ train-only and Muldjord validation-only; Persephone remains the untouched test.
 Muldjord-derived model distribution requires a separate ShareAlike assessment.
 Local training eligibility does not by itself authorize publishing a checkpoint.
 
+For near-1:1 timing evaluation, the synchronization audit additionally requires
+global alignment within 25 ms, every early/middle/late regional offset within
+50 ms, and at least 40 percent of chart attacks within 25 ms of an isolated
+guitar onset. A subsequent diagnostic found that Persephone's declared
+zero-offset pair aligns best near -46 ms, so its existing sub-25-ms timing
+results are not a valid localization gate pending independently corrected
+synchronization provenance. Its artist- and author-disjoint assignment is
+unchanged, and coarse 50 ms attack-selection comparisons remain evaluation-only.
+
 ## Stages
 
 1. Collect a small opt-in set from chart authors and audio rights holders.

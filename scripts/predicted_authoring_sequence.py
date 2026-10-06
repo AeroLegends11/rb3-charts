@@ -17,6 +17,8 @@ from audio_authoring_sequence import (
     _build_model,
     _load_records,
     _predict,
+    _predict_with_confidence,
+    _predict_logit_ensemble,
     _staged_predictions,
 )
 from structure_distill_ensemble import _load_student
@@ -106,6 +108,67 @@ def _majority_predictions(records, prediction_sets):
             )
         majority.append(selected)
     return majority
+
+
+def _confidence_gated_records(records, confidences, threshold):
+    gated = []
+    for record, margins in zip(records, confidences):
+        existing = record.get(
+            "learned_lane_allowed",
+            [True] * len(margins),
+        )
+        gated.append({
+            **record,
+            "learned_lane_allowed": [
+                bool(allowed and margin >= threshold)
+                for allowed, margin in zip(existing, margins)
+            ],
+        })
+    return gated
+
+
+def _mean_confidences(confidence_sets):
+    return [
+        np.mean(
+            np.asarray([
+                confidence_set[record_index]
+                for confidence_set in confidence_sets
+            ]),
+            axis=0,
+        ).tolist()
+        for record_index in range(len(confidence_sets[0]))
+    ]
+
+
+def _phrase_rank_predictions(records, lane_min, lane_max):
+    predictions = []
+    for record in records:
+        baseline = _baseline_masks({
+            **record,
+            "features": record["symbolic_features"],
+        })
+        supported = record.get(
+            "learned_lane_allowed",
+            [True] * len(baseline),
+        )
+        masks = []
+        for baseline_mask, symbolic, features, allowed in zip(
+            baseline,
+            record["symbolic_features"],
+            record["features"],
+            supported,
+        ):
+            polyphony = max(1, min(5, round(float(symbolic[3]) * 5)))
+            if allowed and polyphony == 1:
+                rank = float(features[-2])
+                lane = int(round(
+                    lane_min + rank * (lane_max - lane_min)
+                ))
+                masks.append(1 << lane)
+            else:
+                masks.append(baseline_mask)
+        predictions.append(masks)
+    return predictions
 
 
 def _context_audio_features(arrays, frames):
@@ -371,6 +434,103 @@ def _timing_lane_metrics(references, predictions, masks, tolerance_ms=50):
     }
 
 
+def _train_lane_models(
+    records,
+    seed,
+    epochs,
+    device,
+    single_only_loss=False,
+    lane_seeds=None,
+    movement_loss_weight=0.0,
+):
+    import torch
+    import torch.nn.functional as functional
+
+    train = [record for record in records if record["split"] == "train"]
+    stacked = np.concatenate([record["features"] for record in train])
+    mean = stacked.mean(axis=0)
+    scale = np.maximum(stacked.std(axis=0), 1e-5)
+    class_polyphony = torch.tensor(
+        [len(_lanes(mask)) for mask in MASKS],
+        device=device,
+    )
+    lane_models = []
+    for lane_seed in list(lane_seeds or [seed]):
+        random.seed(lane_seed)
+        np.random.seed(lane_seed)
+        torch.manual_seed(lane_seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(lane_seed)
+        lane_model = _build_model(
+            stacked.shape[1],
+            movement_head=movement_loss_weight > 0,
+        ).to(device)
+        optimizer = torch.optim.AdamW(
+            lane_model.parameters(),
+            lr=5e-4,
+            weight_decay=1e-4,
+        )
+        for _ in range(epochs):
+            lane_model.train()
+            for record in train:
+                features = torch.from_numpy(
+                    ((record["features"] - mean) / scale)[None, :, :]
+                ).to(device)
+                targets = torch.from_numpy(
+                    record["targets"][None, :]
+                ).to(device)
+                encoded = lane_model.encode(features)
+                logits = lane_model.output(encoded)
+                if single_only_loss:
+                    single = class_polyphony[targets] == 1
+                    loss = functional.cross_entropy(
+                        logits[single],
+                        targets[single],
+                    )
+                else:
+                    allowed = (
+                        class_polyphony[targets].unsqueeze(-1)
+                        == class_polyphony.reshape(1, 1, -1)
+                    )
+                    loss = functional.cross_entropy(
+                        logits.masked_fill(
+                            ~allowed,
+                            -1e9,
+                        ).reshape(-1, len(MASKS)),
+                        targets.reshape(-1),
+                    )
+                if movement_loss_weight > 0 and len(record["targets"]) > 1:
+                    centers = torch.tensor(
+                        [
+                            float(np.mean(_lanes(MASKS[int(target)])))
+                            for target in record["targets"]
+                        ],
+                        device=device,
+                    )
+                    deltas = centers[1:] - centers[:-1]
+                    movement_targets = (
+                        torch.sign(deltas).long() + 1
+                    )
+                    close = torch.tensor(
+                        np.diff(record["times"]) < 1.0,
+                        device=device,
+                    )
+                    if bool(torch.any(close)):
+                        movement_loss = functional.cross_entropy(
+                            lane_model.movement_logits(encoded)[0][close],
+                            movement_targets[close],
+                        )
+                        loss = (
+                            loss
+                            + movement_loss_weight * movement_loss
+                        )
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+        lane_models.append(lane_model)
+    return lane_models, mean, scale
+
+
 def run(
     feature_index,
     authoring_index,
@@ -388,12 +548,21 @@ def run(
     attack_threshold=None,
     teacher_supported_lanes=False,
     lane_seeds=None,
+    movement_loss_weight=0.0,
+    calibrate_lane_confidence=False,
+    lane_ensemble="majority",
+    phrase_rank_decoder=False,
 ):
     import torch
-    import torch.nn.functional as functional
 
     if relative_pitch_only and not pitch_contour_features:
         raise ValueError("relative pitch features require pitch contour features")
+    if calibrate_lane_confidence and not teacher_supported_lanes:
+        raise ValueError(
+            "lane confidence calibration requires teacher-supported lanes"
+        )
+    if lane_ensemble not in ("majority", "logit"):
+        raise ValueError("lane ensemble must be majority or logit")
     torch.use_deterministic_algorithms(True)
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -413,59 +582,16 @@ def run(
         record for record in records if record["split"] == "validation"
     ]
     test = [record for record in records if record["split"] == "test"]
-    stacked = np.concatenate([record["features"] for record in train])
-    mean = stacked.mean(axis=0)
-    scale = np.maximum(stacked.std(axis=0), 1e-5)
-    class_polyphony = torch.tensor(
-        [len(_lanes(mask)) for mask in MASKS],
-        device=device,
-    )
     lane_seeds = list(lane_seeds or [seed])
-    lane_models = []
-    for lane_seed in lane_seeds:
-        random.seed(lane_seed)
-        np.random.seed(lane_seed)
-        torch.manual_seed(lane_seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(lane_seed)
-        lane_model = _build_model(stacked.shape[1]).to(device)
-        optimizer = torch.optim.AdamW(
-            lane_model.parameters(),
-            lr=5e-4,
-            weight_decay=1e-4,
-        )
-        for _ in range(epochs):
-            lane_model.train()
-            for record in train:
-                features = torch.from_numpy(
-                    ((record["features"] - mean) / scale)[None, :, :]
-                ).to(device)
-                targets = torch.from_numpy(
-                    record["targets"][None, :]
-                ).to(device)
-                logits = lane_model(features)
-                if single_only_loss:
-                    single = class_polyphony[targets] == 1
-                    loss = functional.cross_entropy(
-                        logits[single],
-                        targets[single],
-                    )
-                else:
-                    allowed = (
-                        class_polyphony[targets].unsqueeze(-1)
-                        == class_polyphony.reshape(1, 1, -1)
-                    )
-                    loss = functional.cross_entropy(
-                        logits.masked_fill(
-                            ~allowed,
-                            -1e9,
-                        ).reshape(-1, len(MASKS)),
-                        targets.reshape(-1),
-                    )
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-        lane_models.append(lane_model)
+    lane_models, mean, scale = _train_lane_models(
+        records,
+        seed,
+        epochs,
+        device,
+        single_only_loss=single_only_loss,
+        lane_seeds=lane_seeds,
+        movement_loss_weight=movement_loss_weight,
+    )
     structure_model, structure_configuration = _load_model(
         structure_checkpoint,
         device,
@@ -562,19 +688,36 @@ def run(
         record["song_id"]: record
         for record in validation + test
     }
-    validation_learned = _majority_predictions(
-        validation_predicted,
-        [
-            _predict(
+    if lane_ensemble == "logit":
+        validation_learned, validation_confidences = (
+            _predict_logit_ensemble(
+                lane_models,
+                validation_predicted,
+                mean,
+                scale,
+                device,
+            )
+        )
+    else:
+        validation_prediction_sets = []
+        validation_confidence_sets = []
+        for lane_model in lane_models:
+            masks, margins = _predict_with_confidence(
                 lane_model,
                 validation_predicted,
                 mean,
                 scale,
                 device,
             )
-            for lane_model in lane_models
-        ],
-    )
+            validation_prediction_sets.append(masks)
+            validation_confidence_sets.append(margins)
+        validation_learned = _majority_predictions(
+            validation_predicted,
+            validation_prediction_sets,
+        )
+        validation_confidences = _mean_confidences(
+            validation_confidence_sets
+        )
     validation_baseline_masks = [
         _baseline_masks({
             **record,
@@ -598,6 +741,79 @@ def run(
         validation_predicted,
         validation_staged,
     )
+    phrase_rank_candidates = []
+    selected_phrase_rank_span = None
+    if phrase_rank_decoder:
+        for lane_min, lane_max in ((0, 4), (1, 3)):
+            masks = _phrase_rank_predictions(
+                validation_predicted,
+                lane_min,
+                lane_max,
+            )
+            metrics = _timing_lane_metrics(
+                references,
+                validation_predicted,
+                stage(validation_predicted, masks),
+            )
+            phrase_rank_candidates.append({
+                "lane_min": lane_min,
+                "lane_max": lane_max,
+                "metrics": metrics,
+            })
+        selected_phrase_rank = max(
+            phrase_rank_candidates,
+            key=lambda row: (
+                row["metrics"]["joint_exact_f1"],
+                row["metrics"]["matched_exact_lanes"],
+                row["metrics"]["matched_lane_jaccard"],
+            ),
+        )
+        selected_phrase_rank_span = [
+            selected_phrase_rank["lane_min"],
+            selected_phrase_rank["lane_max"],
+        ]
+        validation_learned = _phrase_rank_predictions(
+            validation_predicted,
+            *selected_phrase_rank_span,
+        )
+        staged_metrics = selected_phrase_rank["metrics"]
+    confidence_candidates = []
+    confidence_threshold = None
+    if calibrate_lane_confidence:
+        finite_margins = np.asarray([
+            margin
+            for margins in validation_confidences
+            for margin in margins
+            if np.isfinite(margin)
+        ])
+        for quantile in np.linspace(0.0, 0.9, 10):
+            threshold = float(np.quantile(finite_margins, quantile))
+            gated_records = _confidence_gated_records(
+                validation_predicted,
+                validation_confidences,
+                threshold,
+            )
+            metrics = _timing_lane_metrics(
+                references,
+                gated_records,
+                stage(gated_records, validation_learned),
+            )
+            confidence_candidates.append({
+                "quantile": float(quantile),
+                "threshold": threshold,
+                "metrics": metrics,
+            })
+        selected_confidence = max(
+            confidence_candidates,
+            key=lambda row: (
+                row["metrics"]["joint_exact_f1"],
+                row["metrics"]["matched_exact_lanes"],
+                row["metrics"]["matched_lane_jaccard"],
+                -row["threshold"],
+            ),
+        )
+        confidence_threshold = selected_confidence["threshold"]
+        staged_metrics = selected_confidence["metrics"]
     guard_passed = (
         staged_metrics["joint_exact_f1"]
         > baseline_metrics["joint_exact_f1"]
@@ -620,6 +836,12 @@ def run(
         "pitch_contour_features": pitch_contour_features,
         "relative_pitch_only": relative_pitch_only,
         "single_only_loss": single_only_loss,
+        "movement_loss_weight": movement_loss_weight,
+        "calibrate_lane_confidence": calibrate_lane_confidence,
+        "lane_confidence_threshold": confidence_threshold,
+        "lane_ensemble": lane_ensemble,
+        "phrase_rank_decoder": phrase_rank_decoder,
+        "selected_phrase_rank_span": selected_phrase_rank_span,
         "distilled_student_sha256": [
             _hash_file(path)
             for path in distilled_students
@@ -641,20 +863,62 @@ def run(
             "staged_audio_candidate": staged_metrics,
         },
     }
+    if confidence_candidates:
+        report["validation"]["ungated_audio_candidate"] = (
+            _timing_lane_metrics(
+                references,
+                validation_predicted,
+                validation_staged,
+            )
+        )
+        report["validation"]["confidence_candidates"] = (
+            confidence_candidates
+        )
+    if phrase_rank_candidates:
+        report["validation"]["phrase_rank_candidates"] = (
+            phrase_rank_candidates
+        )
     if guard_passed and test_predicted:
-        test_learned = _majority_predictions(
-            test_predicted,
-            [
-                _predict(
+        if lane_ensemble == "logit":
+            test_learned, test_confidences = _predict_logit_ensemble(
+                lane_models,
+                test_predicted,
+                mean,
+                scale,
+                device,
+            )
+        else:
+            test_prediction_sets = []
+            test_confidence_sets = []
+            for lane_model in lane_models:
+                masks, margins = _predict_with_confidence(
                     lane_model,
                     test_predicted,
                     mean,
                     scale,
                     device,
                 )
-                for lane_model in lane_models
-            ],
-        )
+                test_prediction_sets.append(masks)
+                test_confidence_sets.append(margins)
+            test_learned = _majority_predictions(
+                test_predicted,
+                test_prediction_sets,
+            )
+            test_confidences = _mean_confidences(
+                test_confidence_sets
+            )
+        if selected_phrase_rank_span is not None:
+            test_learned = _phrase_rank_predictions(
+                test_predicted,
+                *selected_phrase_rank_span,
+            )
+        evaluated_test_records = test_predicted
+        if confidence_threshold is not None:
+            evaluated_test_records = _confidence_gated_records(
+                test_predicted,
+                test_confidences,
+                confidence_threshold,
+            )
         report["test"] = {
             "fixed_polyphony_baseline": _timing_lane_metrics(
                 references,
@@ -669,8 +933,8 @@ def run(
             ),
             "staged_audio_candidate": _timing_lane_metrics(
                 references,
-                test_predicted,
-                stage(test_predicted, test_learned),
+                evaluated_test_records,
+                stage(evaluated_test_records, test_learned),
             ),
         }
     save_json(output, report)
@@ -689,6 +953,14 @@ def main():
     parser.add_argument("--pitch-contour-features", action="store_true")
     parser.add_argument("--relative-pitch-only", action="store_true")
     parser.add_argument("--single-only-loss", action="store_true")
+    parser.add_argument("--movement-loss-weight", type=float, default=0.0)
+    parser.add_argument("--calibrate-lane-confidence", action="store_true")
+    parser.add_argument(
+        "--lane-ensemble",
+        choices=["majority", "logit"],
+        default="majority",
+    )
+    parser.add_argument("--phrase-rank-decoder", action="store_true")
     parser.add_argument(
         "--distilled-student",
         type=Path,
@@ -722,6 +994,10 @@ def main():
         pitch_contour_features=args.pitch_contour_features,
         relative_pitch_only=args.relative_pitch_only,
         single_only_loss=args.single_only_loss,
+        movement_loss_weight=args.movement_loss_weight,
+        calibrate_lane_confidence=args.calibrate_lane_confidence,
+        lane_ensemble=args.lane_ensemble,
+        phrase_rank_decoder=args.phrase_rank_decoder,
         distilled_students=[
             path.resolve()
             for path in args.distilled_student

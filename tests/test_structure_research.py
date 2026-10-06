@@ -21,7 +21,11 @@ import structure_beat_occupancy as beat_occupancy
 import structure_multires_spectrogram as multires_spectrogram
 import structure_short_distillation as short_distillation
 import structure_distill_ensemble as distill_ensemble
+import structure_highres_timing as highres_timing
+import structure_distill_variance as distill_variance
+import structure_timing_bias_diagnostic as timing_bias
 import predicted_authoring_sequence as predicted_authoring
+import predicted_authoring_shadow as authoring_shadow
 import predicted_authoring_self_train as self_trained_authoring
 import audio_authoring_sequence as audio_authoring
 import symbolic_authoring_sequence as symbolic_authoring
@@ -49,6 +53,205 @@ def test_timing_metrics_report_frame_error_in_milliseconds():
     assert metrics["f1"] == 1
     assert metrics["median_timing_error_ms"] == pytest.approx(frame_ms / 2)
     assert metrics["p95_timing_error_ms"] == pytest.approx(frame_ms * 0.95)
+
+
+def test_authoring_shadow_applies_fixed_offset_and_decodes_masks():
+    attacks = authoring_shadow._predicted_attacks(
+        {"times": [0.5, 1.5]},
+        [1, 20],
+        offset=-1.0,
+    )
+
+    assert attacks == [{
+        "time": 0.5,
+        "duration": 0.1,
+        "lanes": [2, 4],
+    }]
+
+
+def test_authoring_shadow_reports_fixed_tolerances():
+    reference = [{
+        "time": 1.0,
+        "duration": 0.1,
+        "lanes": [2],
+    }]
+    candidate = [{
+        "time": 1.04,
+        "duration": 0.1,
+        "lanes": [2],
+    }]
+
+    metrics = authoring_shadow._metrics(reference, candidate)
+
+    assert metrics["25"]["attack"]["matched"] == 0
+    assert metrics["50"]["attack"]["matched"] == 1
+
+
+def test_highres_timing_matches_each_reference_once():
+    pairs = highres_timing._match_times(
+        reference=[1.0, 1.1],
+        predicted=[1.02, 1.04, 1.11],
+        tolerance=0.05,
+    )
+
+    assert pairs == [(0, 0), (2, 1)]
+
+
+def test_highres_timing_patches_center_on_requested_times():
+    feature_map = np.tile(
+        np.arange(100, dtype=np.float32),
+        (highres_timing.HIGHRES_MELS * 2, 1),
+    )
+    center = 20
+    time = (
+        center
+        * highres_timing.HIGHRES_HOP_LENGTH
+        / highres_timing.FEATURE_SAMPLE_RATE
+    )
+
+    patches = highres_timing._timing_patches(feature_map, [time])
+
+    assert patches.shape == (
+        1,
+        highres_timing.HIGHRES_MELS * 2,
+        2 * highres_timing.PATCH_RADIUS + 1,
+    )
+    assert patches[0, 0, highres_timing.PATCH_RADIUS] == center
+
+
+def test_highres_timing_metrics_use_exact_seconds():
+    metrics = highres_timing._timing_metrics([{
+        "song_id": "fixture",
+        "reference": np.asarray([1.0]),
+        "predicted": np.asarray([1.01]),
+    }])
+
+    assert metrics["macro_f1"] == 1
+    assert metrics["macro_median_timing_error_ms"] == pytest.approx(10)
+
+
+def test_audio_authoring_movement_head_preserves_mask_logits():
+    import torch
+
+    model = audio_authoring._build_model(12, movement_head=True)
+    features = torch.zeros((1, 4, 12))
+    encoded = model.encode(features)
+
+    assert model(features).shape == (1, 4, len(symbolic_authoring.MASKS))
+    assert model.movement_logits(encoded).shape == (1, 3, 3)
+
+
+def test_lane_confidence_gate_preserves_existing_support():
+    records = [{
+        "learned_lane_allowed": [True, False, True],
+    }]
+
+    gated = predicted_authoring._confidence_gated_records(
+        records,
+        [[0.8, 0.9, 0.2]],
+        threshold=0.5,
+    )
+
+    assert gated[0]["learned_lane_allowed"] == [True, False, False]
+
+
+def test_lane_confidence_mean_handles_variable_song_lengths():
+    averaged = predicted_authoring._mean_confidences([
+        [[1.0, 3.0], [2.0]],
+        [[3.0, 5.0], [4.0]],
+    ])
+
+    assert averaged == [[2.0, 4.0], [3.0]]
+
+
+def test_logit_lane_ensemble_averages_before_decoding():
+    import torch
+
+    class Fixed(torch.nn.Module):
+        def __init__(self, lane, strength):
+            super().__init__()
+            self.lane = lane
+            self.strength = strength
+
+        def forward(self, features):
+            logits = torch.zeros(
+                (1, features.shape[1], len(symbolic_authoring.MASKS)),
+                device=features.device,
+            )
+            logits[:, :, self.lane] = self.strength
+            return logits
+
+    record = {
+        "features": np.zeros((1, 2), dtype=np.float32),
+        "symbolic_features": np.asarray(
+            [[0, 0, 0, 0.2, 0, 0]],
+            dtype=np.float32,
+        ),
+    }
+    masks, margins = audio_authoring._predict_logit_ensemble(
+        [Fixed(0, 1), Fixed(1, 3)],
+        [record],
+        np.zeros(2),
+        np.ones(2),
+        "cpu",
+    )
+
+    assert masks == [[2]]
+    assert margins[0][0] == pytest.approx(1)
+
+
+def test_phrase_rank_decoder_preserves_chords_and_support_gate():
+    records = [{
+        "symbolic_features": np.asarray([
+            [0, 0, 0, 0.2, 0, 0],
+            [0, 0, 0, 0.2, 0, 0],
+            [0, 0, 0, 0.4, 0, 0],
+        ], dtype=np.float32),
+        "features": np.asarray([
+            [0.0, 0.0],
+            [0.0, 1.0],
+            [0.0, 0.5],
+        ], dtype=np.float32),
+        "learned_lane_allowed": [True, False, True],
+    }]
+
+    masks = predicted_authoring._phrase_rank_predictions(
+        records,
+        0,
+        4,
+    )
+
+    assert masks == [[1, 4, 10]]
+
+
+def test_distill_variance_gate_uses_teacher_on_disagreement():
+    teacher = np.asarray([0.2, 0.8])
+    students = [
+        np.asarray([0.4, 0.1]),
+        np.asarray([0.4, 0.9]),
+        np.asarray([0.4, 0.5]),
+    ]
+
+    scores = distill_variance._variance_gated_scores(
+        teacher,
+        students,
+        student_weight=0.2,
+        variance_threshold=0.001,
+    )
+
+    assert scores[0] == pytest.approx(0.24)
+    assert scores[1] == pytest.approx(0.8)
+
+
+def test_timing_bias_diagnostic_preserves_error_sign():
+    metrics = timing_bias._signed_metrics({
+        "reference": np.asarray([1.01, 1.98]),
+        "predicted": np.asarray([1.0, 2.0]),
+    })
+
+    assert metrics["matches"] == 2
+    assert metrics["signed_mean_ms"] == pytest.approx(-5)
+    assert metrics["median_absolute_ms"] == pytest.approx(15)
 
 
 def test_score_ensemble_blends_scores_before_peak_selection():

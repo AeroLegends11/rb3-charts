@@ -31,6 +31,26 @@ def test_offset_scan_recovers_known_frame_shift():
     assert result["zero_to_best_ratio"] == pytest.approx(0.0)
 
 
+def test_near_one_to_one_sync_gate_is_stricter_than_admission():
+    global_scan = {"best_offset_seconds": -0.046}
+    windows = [
+        {"best_offset_seconds": -0.058},
+        {"best_offset_seconds": -0.046},
+        {"best_offset_seconds": -0.046},
+    ]
+    nearest = np.asarray([0.01] * 50 + [0.04] * 50)
+
+    criteria, near_one_to_one = sync_audit._sync_flags(
+        global_scan,
+        windows,
+        nearest,
+    )
+
+    assert all(criteria.values())
+    assert not all(near_one_to_one.values())
+    assert all(isinstance(value, bool) for value in criteria.values())
+
+
 def test_debian_pack_assignments_keep_authors_whole_and_disjoint():
     assert debian_pairs.PACKS["sectoid"]["split"] == "train"
     assert debian_pairs.PACKS["muldjord"]["split"] == "validation"

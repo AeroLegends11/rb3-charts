@@ -58,6 +58,38 @@ def _offset_scan(envelope, attack_times, sr, hop, limit=0.5):
     }
 
 
+def _sync_flags(global_scan, windows, nearest):
+    offsets = [row["best_offset_seconds"] for row in windows]
+    within_25 = float(np.mean(np.asarray(nearest) <= 0.025))
+    within_50 = float(np.mean(np.asarray(nearest) <= 0.05))
+    criteria = {
+        "global_offset_within_50ms": bool(
+            abs(global_scan["best_offset_seconds"]) <= 0.05
+        ),
+        "all_window_offsets_within_100ms": bool(all(
+            abs(offset) <= 0.1 for offset in offsets
+        )),
+        "window_offset_spread_within_80ms": bool(
+            max(offsets) - min(offsets) <= 0.08
+        ),
+        "at_least_40pct_attacks_near_onset": bool(
+            within_50 >= 0.4
+        ),
+    }
+    near_one_to_one = {
+        "global_offset_within_25ms": bool(
+            abs(global_scan["best_offset_seconds"]) <= 0.025
+        ),
+        "all_window_offsets_within_50ms": bool(all(
+            abs(offset) <= 0.05 for offset in offsets
+        )),
+        "at_least_40pct_attacks_within_25ms": bool(
+            within_25 >= 0.4
+        ),
+    }
+    return criteria, near_one_to_one
+
+
 def audit_pair(guitar_audio, chart):
     import librosa
     from scipy import signal
@@ -115,21 +147,11 @@ def audit_pair(guitar_audio, chart):
         float(np.min(np.abs(peak_times - time)))
         for time in attacks
     ]
-    offsets = [row["best_offset_seconds"] for row in windows]
-    criteria = {
-        "global_offset_within_50ms": (
-            abs(global_scan["best_offset_seconds"]) <= 0.05
-        ),
-        "all_window_offsets_within_100ms": all(
-            abs(offset) <= 0.1 for offset in offsets
-        ),
-        "window_offset_spread_within_80ms": (
-            max(offsets) - min(offsets) <= 0.08
-        ),
-        "at_least_40pct_attacks_near_onset": (
-            np.mean(np.asarray(nearest) <= 0.05) >= 0.4
-        ),
-    }
+    criteria, near_one_to_one = _sync_flags(
+        global_scan,
+        windows,
+        nearest,
+    )
     return {
         "audio": str(guitar_audio),
         "chart": str(chart),
@@ -154,6 +176,10 @@ def audit_pair(guitar_audio, chart):
         },
         "criteria": criteria,
         "automatic_sync_pass": all(criteria.values()),
+        "near_one_to_one_timing_criteria": near_one_to_one,
+        "near_one_to_one_timing_pass": all(
+            near_one_to_one.values()
+        ),
     }
 
 
@@ -190,11 +216,19 @@ def run(intake_path, output):
             "alignment for local training; listening review remains recommended "
             "before publishing or redistributing derived artifacts"
         ),
+        "near_one_to_one_timing_rule": (
+            "The stricter timing gate additionally requires global alignment "
+            "within 25 ms, every duration-third offset within 50 ms, and at "
+            "least 40 percent of chart attacks within 25 ms of an audio onset"
+        ),
         "pairs": pairs,
         "summary": {
             "pairs": len(pairs),
             "automatic_sync_pass": sum(
                 row["automatic_sync_pass"] for row in pairs
+            ),
+            "near_one_to_one_timing_pass": sum(
+                row["near_one_to_one_timing_pass"] for row in pairs
             ),
         },
     }
@@ -215,6 +249,9 @@ def main():
                 "pack": row["pack"],
                 "song": row["song"],
                 "automatic_sync_pass": row["automatic_sync_pass"],
+                "near_one_to_one_timing_pass": (
+                    row["near_one_to_one_timing_pass"]
+                ),
                 "global": row["global"],
                 "window_offsets": [
                     window["best_offset_seconds"]
