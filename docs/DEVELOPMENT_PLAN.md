@@ -1615,3 +1615,23 @@ Status update (2026-09-22):
   counts, repetition assignments, assessment status and collapsed-contour
   counts are unchanged on every song; long/max same-lane quality does not
   regress.
+- Added bounded rhythmic-riff consistency for adjacent three- and four-beat
+  cycles. A family requires at least three windows with 8-14 attacks, at least
+  80% monotonic attack alignment within 0.2 beat and at least 50% source-pitch
+  contour agreement. Only the widest family member's single-note lanes may
+  guide its directly matched neighbors; repeated target pitches are stabilized
+  to one majority lane, chords are preserved, and the whole pass rolls back on
+  collapsed-contour or same-lane-run regressions.
+- In the fresh Jonas intro, three consecutive three-beat cycles satisfy those
+  gates. The user-approved 2.38-4.04 s cycle remains canonical; six assignments
+  widen its neighboring cycles to four colors without changing attack count,
+  timing, pitch, source IDs or chord identity. A final-order isolated-wide-chord
+  cleanup changes the 3.426 s red-orange chord to red without re-running phrase
+  fingering or inventing the requested but unsupported extra orange attack.
+  It also collapses two low-confidence isolated outro triads.
+- The 14-song cached gate applies rhythmic consistency only to Hail to the King
+  (2 assignments), Cliffs of Dover (6) and Less Talk More Rokk (10). Attack
+  counts, audio-repeat assignments, assessment status, collapsed contours and
+  long/maximum same-lane runs remain unchanged on every song. Seven isolated
+  wide two-note detections collapse across four electronic/instrumental charts;
+  corpus chord textures and all triad counts otherwise remain unchanged.

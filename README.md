@@ -478,11 +478,18 @@ the change is rolled back if it worsens collapsed contours or same-lane runs.
 Long, dense phrases with strongly correlated, reversal-free source pitch/lane
 evidence may also spread robust pitch ranks across all five colors. Each spread
 is rejected if it introduces a collapsed contour or worsens same-lane runs.
+Consecutive three- or four-beat windows can also form a rhythmic riff family
+when at least three cycles align at 80% or better and retain compatible pitch
+contours. The widest supported cycle supplies single-note lanes to its immediate
+neighbors, with repeated target pitches stabilized to one majority lane; attacks
+and chord identities are never copied or invented.
 After motif and chord decisions are final, a source-traceable cleanup removes a
 single attack immediately before a chord only when that exact source pitch
 continues into the chord's simultaneous evidence and the chord has materially
 stronger direct attack evidence. This avoids double-authoring one sustained
-voice while preserving independent pickups and grace notes.
+voice while preserving independent pickups and grace notes. A separate final
+cleanup collapses low-confidence, isolated wide chords without re-authoring the
+surrounding phrase.
 Audio regions are saved to `analysis/guitar-audio-repetitions.json`, while
 applied and rejected authoring decisions are saved to
 `analysis/phrase-authoring.json`; earlier passes no longer rewrite lanes before

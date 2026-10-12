@@ -2,6 +2,8 @@ import numpy as np
 from rb3charts.model import Note, TempoMap
 from rb3charts.phrases import (
     _apply_audio_repeat_consistency,
+    _apply_rhythmic_riff_consistency,
+    _collapse_isolated_wide_chords,
     _lane_run_quality,
     _preserve_supported_lane_span,
     _remove_pre_chord_voice_duplicates,
@@ -30,6 +32,47 @@ def test_phrase_restores_distinct_pitches_and_repeated_shape_without_new_attacks
     assert [(n.start,n.source_id,n.pitch) for n in result] == [(n.start,n.source_id,n.pitch) for n in notes]
     assert all(n.lanes == (1,) for n in notes)  # No mutation of detector/mapping inputs.
     assert all(abs(n.end-n.start-.065)<1e-9 for n in result)
+
+
+def test_rhythmic_riff_reuses_widest_pitch_stable_cycle():
+    pitches = (51, 44, 56, 51, 47, 56, 46, 54, 42, 51)
+    offsets = (.4, .75, 1.02, 1.21, 1.48, 1.8, 2.02, 2.54, 2.76, 2.97)
+    canonical_lanes = (3, 2, 3, 2, 1, 2, 1, 3, 0, 2)
+    notes = []
+    for cycle in range(3):
+        for index, (pitch, offset) in enumerate(zip(pitches, offsets)):
+            beat = cycle * 3 + offset
+            lane = canonical_lanes[index] if cycle == 1 else 2
+            notes.append(Note(
+                beat * .5,
+                beat * .5 + .065,
+                (lane,),
+                .7,
+                f"{cycle}-{index}",
+                pitch,
+            ))
+
+    report = _apply_rhythmic_riff_consistency(notes, grid())
+
+    expected = [2, 2, 2, 2, 1, 2, 1, 3, 0, 2]
+    assert [note.lanes[0] for note in notes[:10]] == expected
+    assert [note.lanes[0] for note in notes[10:20]] == list(canonical_lanes)
+    assert [note.lanes[0] for note in notes[20:]] == expected
+    assert report["families_applied"] == 1
+    assert report["notes_changed"] == 8
+
+
+def test_final_cleanup_collapses_only_isolated_wide_chord():
+    notes = [
+        Note(i * .2, i * .2 + .065, (1, 4) if i == 5 else (2,),
+             confidence=.706 if i == 5 else .8, source_id=str(i), pitch=48 + i)
+        for i in range(11)
+    ]
+
+    report = _collapse_isolated_wide_chords(notes, grid())
+
+    assert notes[5].lanes == (1,)
+    assert report["notes_changed"] == 1
 
 
 def test_hammer_on_like_phrase_reuses_repeated_fingering_without_new_attacks():

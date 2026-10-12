@@ -931,6 +931,44 @@ def _remove_pre_chord_voice_duplicates(notes, evidence):
     return [note for note in notes if id(note) not in removed], report
 
 
+def _collapse_isolated_wide_chords(notes, tempo):
+    report = {
+        "method": "final isolated wide-chord cleanup",
+        "notes_changed": 0,
+        "events": [],
+    }
+    beats = [tempo.beat_at(note.start) for note in notes]
+    for index, note in enumerate(notes):
+        if (
+            len(note.lanes) < 2
+            or note.lanes[-1] - note.lanes[0] < 3
+            or note.confidence >= .75
+        ):
+            continue
+        neighbors = [
+            row
+            for row, beat in zip(notes, beats)
+            if abs(beat - beats[index]) <= 4
+        ]
+        local_chords = sum(len(row.lanes) > 1 for row in neighbors)
+        if (
+            len(neighbors) < 8
+            or local_chords > max(1, int(np.ceil(len(neighbors) * .15)))
+        ):
+            continue
+        before = note.lanes
+        note.lanes = (note.lanes[0],)
+        report["events"].append({
+            "source_id": note.source_id,
+            "start": note.start,
+            "confidence": note.confidence,
+            "lanes_before": list(before),
+            "lanes_after": list(note.lanes),
+        })
+    report["notes_changed"] = len(report["events"])
+    return report
+
+
 def _apply_audio_repeat_consistency(notes, tempo, evidence):
     report = {
         "method": "audio self-similarity gated by attack, rhythm, pitch and chord structure",
@@ -1143,6 +1181,233 @@ def _apply_audio_repeat_consistency(notes, tempo, evidence):
     return report
 
 
+def _apply_rhythmic_riff_consistency(notes, tempo):
+    report = {
+        "method": "three/four-beat attack alignment with pitch-contour agreement",
+        "families_considered": 0,
+        "families_applied": 0,
+        "notes_changed": 0,
+        "conflicts": 0,
+        "rejected_quality": False,
+        "families": [],
+    }
+    if len(notes) < 24:
+        return report
+
+    def align(left, right, cycle_start_left, cycle_start_right):
+        left_beats = [
+            tempo.beat_at(note.start) - cycle_start_left for note in left
+        ]
+        right_beats = [
+            tempo.beat_at(note.start) - cycle_start_right for note in right
+        ]
+        pairs = []
+        right_cursor = 0
+        for left_index, left_beat in enumerate(left_beats):
+            candidates = [
+                right_index
+                for right_index in range(right_cursor, len(right_beats))
+                if abs(right_beats[right_index] - left_beat) <= .2
+            ]
+            if not candidates:
+                continue
+            right_index = min(
+                candidates,
+                key=lambda index: abs(right_beats[index] - left_beat),
+            )
+            pairs.append((left_index, right_index))
+            right_cursor = right_index + 1
+        return pairs
+
+    proposals = {}
+    accepted = []
+    first_beat = tempo.beat_at(notes[0].start)
+    last_beat = tempo.beat_at(notes[-1].start)
+    for cycle_beats in (3, 4):
+        first_cycle = int(np.floor(first_beat / cycle_beats))
+        last_cycle = int(np.floor(last_beat / cycle_beats))
+        windows = {}
+        for cycle in range(first_cycle, last_cycle + 1):
+            start = cycle * cycle_beats
+            rows = [
+                note
+                for note in notes
+                if start <= tempo.beat_at(note.start) < start + cycle_beats
+            ]
+            if 8 <= len(rows) <= 14:
+                windows[cycle] = rows
+        if len(windows) < 3:
+            continue
+        parents = {cycle: cycle for cycle in windows}
+        links = {}
+
+        def find(cycle):
+            while parents[cycle] != cycle:
+                parents[cycle] = parents[parents[cycle]]
+                cycle = parents[cycle]
+            return cycle
+
+        def union(left_cycle, right_cycle):
+            left_root, right_root = find(left_cycle), find(right_cycle)
+            if left_root != right_root:
+                parents[max(left_root, right_root)] = min(left_root, right_root)
+
+        cycles = sorted(windows)
+        for offset, left_cycle in enumerate(cycles):
+            left = windows[left_cycle]
+            for right_cycle in cycles[offset + 1:]:
+                if right_cycle != left_cycle + 1:
+                    continue
+                right = windows[right_cycle]
+                pairs = align(
+                    left,
+                    right,
+                    left_cycle * cycle_beats,
+                    right_cycle * cycle_beats,
+                )
+                coverage = len(pairs) / max(len(left), len(right))
+                if coverage < .8:
+                    continue
+                pitch_steps = [
+                    (
+                        int(np.sign(left[b].pitch - left[a].pitch)),
+                        int(np.sign(right[d].pitch - right[c].pitch)),
+                    )
+                    for (a, c), (b, d) in zip(pairs, pairs[1:])
+                    if (
+                        left[b].pitch != left[a].pitch
+                        or right[d].pitch != right[c].pitch
+                    )
+                ]
+                contour_agreement = (
+                    sum(a == b for a, b in pitch_steps) / len(pitch_steps)
+                    if pitch_steps else 1.0
+                )
+                if contour_agreement < .5:
+                    continue
+                links[(left_cycle, right_cycle)] = (
+                    pairs,
+                    coverage,
+                    contour_agreement,
+                )
+                union(left_cycle, right_cycle)
+        families = {}
+        for cycle in cycles:
+            families.setdefault(find(cycle), []).append(cycle)
+        for family_cycles in families.values():
+            if len(family_cycles) < 3:
+                continue
+            report["families_considered"] += 1
+            canonical_cycle = max(
+                family_cycles,
+                key=lambda cycle: (
+                    len({
+                        lane
+                        for note in windows[cycle]
+                        for lane in note.lanes
+                    }),
+                    sum(
+                        lane in (0, 4)
+                        for note in windows[cycle]
+                        for lane in note.lanes
+                    ),
+                    float(np.mean([
+                        note.confidence for note in windows[cycle]
+                    ])),
+                    -cycle,
+                ),
+            )
+            canonical = windows[canonical_cycle]
+            family_changes = 0
+            matched_cycles = 0
+            for target_cycle in family_cycles:
+                if target_cycle == canonical_cycle:
+                    continue
+                pair_key = tuple(sorted((canonical_cycle, target_cycle)))
+                match = links.get(pair_key)
+                if match is None:
+                    continue
+                pairs = match[0]
+                if canonical_cycle > target_cycle:
+                    pairs = [(right, left) for left, right in pairs]
+                target = windows[target_cycle]
+                matched_cycles += 1
+                suggestions = []
+                for source_index, target_index in pairs:
+                    source_note = canonical[source_index]
+                    target_note = target[target_index]
+                    if len(source_note.lanes) != 1 or len(target_note.lanes) != 1:
+                        continue
+                    suggestions.append((target_note, source_note.lanes))
+                by_pitch = {}
+                for target_note, lanes in suggestions:
+                    by_pitch.setdefault(int(round(target_note.pitch)), []).append(
+                        (target_note, lanes)
+                    )
+                stabilized = []
+                for rows in by_pitch.values():
+                    lane_counts = {}
+                    for _, lanes in rows:
+                        lane_counts[lanes] = lane_counts.get(lanes, 0) + 1
+                    majority = max(
+                        lane_counts,
+                        key=lambda lanes: (
+                            lane_counts[lanes],
+                            sum(note.lanes == lanes for note, _ in rows),
+                            -abs(lanes[0] - 2),
+                        ),
+                    )
+                    stabilized.extend((note, majority) for note, _ in rows)
+                for target_note, lanes in stabilized:
+                    if lanes == target_note.lanes:
+                        continue
+                    proposals.setdefault(target_note.source_id, set()).add(lanes)
+                    family_changes += 1
+            if family_changes:
+                accepted.append({
+                    "cycle_beats": cycle_beats,
+                    "cycles": family_cycles,
+                    "canonical_cycle": canonical_cycle,
+                    "matched_cycles": matched_cycles,
+                    "proposed_changes": family_changes,
+                })
+    report["conflicts"] = sum(len(rows) > 1 for rows in proposals.values())
+    assignments = {
+        source_id: next(iter(rows))
+        for source_id, rows in proposals.items()
+        if len(rows) == 1
+    }
+    if not assignments:
+        return report
+    by_source = {note.source_id: note for note in notes}
+    before = {
+        source_id: by_source[source_id].lanes
+        for source_id in assignments
+        if source_id in by_source
+    }
+    baseline_quality = _lane_run_quality(_guitar_single_note_phrases(notes, tempo))
+    for source_id, lanes in assignments.items():
+        if source_id in by_source:
+            by_source[source_id].lanes = lanes
+    candidate_quality = _lane_run_quality(_guitar_single_note_phrases(notes, tempo))
+    if (
+        candidate_quality["collapsed_contour_runs"]
+        > baseline_quality["collapsed_contour_runs"]
+        or candidate_quality["long_same_lane_runs"]
+        > baseline_quality["long_same_lane_runs"]
+        or candidate_quality["max_same_lane_run"]
+        > baseline_quality["max_same_lane_run"]
+    ):
+        for source_id, lanes in before.items():
+            by_source[source_id].lanes = lanes
+        report["rejected_quality"] = True
+        return report
+    report["families_applied"] = len(accepted)
+    report["notes_changed"] = len(before)
+    report["families"] = accepted[:24]
+    return report
+
+
 def author_guitar_phrases(
     notes, tempo, chord_evidence=None, audio_repetitions=None,
     sustain_threshold=BAND_GUITAR_SUSTAIN_SECONDS,
@@ -1321,6 +1586,8 @@ def author_guitar_phrases(
     audio_repeat_consistency = _apply_audio_repeat_consistency(
         result, tempo, audio_repetitions
     )
+    rhythmic_riff_consistency = _apply_rhythmic_riff_consistency(result, tempo)
+    isolated_wide_chord_cleanup = _collapse_isolated_wide_chords(result, tempo)
     result, pre_chord_cleanup = _remove_pre_chord_voice_duplicates(
         result, chord_evidence
     )
@@ -1348,5 +1615,7 @@ def author_guitar_phrases(
                     "chord_sections": chord_sections,
                     "pre_chord_cleanup": pre_chord_cleanup,
                     "audio_repeat_consistency": audio_repeat_consistency,
+                    "rhythmic_riff_consistency": rhythmic_riff_consistency,
+                    "isolated_wide_chord_cleanup": isolated_wide_chord_cleanup,
                     "notes_added": 0,
                     "notes_removed": pre_chord_cleanup["notes_removed"]}
