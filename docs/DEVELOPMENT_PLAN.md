@@ -1538,12 +1538,21 @@ Status update (2026-09-22):
 - Reviewed the first fresh My Name Is Jonas run from the integrated GUI. The
   input remained the original full FLAC; selecting `guitar-left-channel` in
   `review.html` changed listening audio only. Precision selected left-channel
-  evidence solely for the diagnosed 164.52-165.38 s collapse window. Compared
-  with the older cached run, official attack F1 improved 0.6089 to 0.6430, but
-  exact lanes regressed 0.1260 to 0.0872, movement 0.3556 to 0.3030, mean
-  interval error 1.9603 to 2.2199 and motif coverage 0.2722 to 0.2071. The
-  principal remaining failure is downstream lane/motif authoring, not source
-  separation.
+  evidence solely for the diagnosed 164.52-165.38 s collapse window.
+- Retracted the first Jonas official metrics because onset-only alignment had
+  locked to a repeated-riff phase at +0.612 s. The acoustic intro establishes
+  +3.411 s: the source's first detected attack is 0.534 s and the official
+  chart's is 3.913 s. Constrained section fits increase from +3.402 s early to
+  +3.566 s near the end, indicating a roughly 0.1% master-rate mismatch. A
+  drift-corrected listening page therefore uses
+  `reference = 3.362164 + 1.00099854 * source`; this transform is
+  post-generation review only.
+- At the corrected fixed intro alignment, fresh versus older cached Jonas
+  attack F1 improves 0.7240 to 0.7517 and exact lanes 0.1108 to 0.1279.
+  Movement regresses 0.3779 to 0.3226, mean interval error worsens 2.0926 to
+  2.1822 and motif coverage falls 0.2604 to 0.2337. Separation and onset
+  recovery are stronger, while downstream lane movement and repeated-riff
+  consistency remain the principal authoring failures.
 - Tempo isolation rejected both available alternatives for Jonas. Reusing the
   older unstable 182 BPM map improved exact lanes and motifs but admitted 1,005
   attacks and reduced attack F1 to 0.6228. Doubling the fresh stable 93.093 BPM
