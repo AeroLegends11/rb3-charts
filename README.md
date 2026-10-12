@@ -531,7 +531,7 @@ Each run gets a new timestamped folder, so existing charts are preserved:
 ```text
 output/Artist_Song_TIMESTAMP/
   source/              decoded audio and source fingerprint
-  source/stems/        guitar, bass, drums, piano, vocals and other WAVs
+  source/stems/        separated WAVs plus guitar left/right channel views
   analysis/            beat map, note events, model activations, stems manifest
   midi/notes.mid       generated authoring MIDI
   audio/song.wav       source mix with the same lead-in as MIDI
@@ -556,7 +556,9 @@ never alter the authored chart.
 The Audio selector can play the complete song, the selected-instrument onset
 audit, or any isolated separation stem while keeping the chart synchronized.
 Comparing `guitar` with `other` is especially useful when layered lead and
-rhythm guitars may have been divided between Demucs outputs.
+rhythm guitars may have been divided between Demucs outputs. The
+`guitar-left-channel` and `guitar-right-channel` views expose panned layers
+without claiming that they are model-separated lead and rhythm instruments.
 
 `analysis/structure-diagnostics.json` records neutral eight-measure activity
 blocks, strongest unlabeled activity boundaries and repeated measure-level drum

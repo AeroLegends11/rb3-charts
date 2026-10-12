@@ -111,6 +111,55 @@ def expose_stems(stems, destination, log):
         log(f"Review stem {method}: {target}")
     return exposed
 
+def write_guitar_stereo_views(guitar_stem, destination, log):
+    """Expose panned guitar layers without claiming model-level separation."""
+    if not guitar_stem:
+        return {}
+    guitar_stem=Path(guitar_stem)
+    if not guitar_stem.is_file():
+        log(f"Guitar stem unavailable for stereo review: {guitar_stem}")
+        return {}
+    info=sf.info(guitar_stem)
+    if info.channels<2:
+        log("Guitar stem is mono; left/right review views were not created")
+        return {}
+    destination=Path(destination)
+    destination.mkdir(parents=True,exist_ok=True)
+    outputs={
+        "guitar-left-channel":destination/"guitar-left-channel.wav",
+        "guitar-right-channel":destination/"guitar-right-channel.wav",
+    }
+    with (
+        sf.SoundFile(guitar_stem) as source,
+        sf.SoundFile(
+            outputs["guitar-left-channel"],
+            mode="w",
+            samplerate=info.samplerate,
+            channels=1,
+            subtype="PCM_16",
+        ) as left,
+        sf.SoundFile(
+            outputs["guitar-right-channel"],
+            mode="w",
+            samplerate=info.samplerate,
+            channels=1,
+            subtype="PCM_16",
+        ) as right,
+    ):
+        for block in source.blocks(
+            blocksize=262144,
+            dtype="float32",
+            always_2d=True,
+        ):
+            left.write(block[:,0])
+            right.write(block[:,1])
+    log(
+        "Review guitar channels written: "
+        f"{outputs['guitar-left-channel']}, "
+        f"{outputs['guitar-right-channel']}"
+    )
+    return outputs
+
 def write_padded_audio(wav, output, lead, tail=3.0):
     y, sr = sf.read(wav, dtype="float32", always_2d=True)
     padded = np.pad(y, ((round(lead*sr), round(tail*sr)), (0, 0)))

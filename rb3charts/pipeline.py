@@ -6,7 +6,7 @@ import re
 import shutil
 import traceback
 from .model import Options, save_json
-from .audio import decode, fingerprint, separate, expose_stems, read_mono, write_padded_audio, detect_chart_profile
+from .audio import decode, fingerprint, separate, expose_stems, write_guitar_stereo_views, read_mono, write_padded_audio, detect_chart_profile
 from .timing import analyze_tempo
 from .transcribe import analyze_band_guitar_voice, pitched, neural_drums, import_gm_drums, electronic_bass_events, band_guitar_lead_events
 from .chart import ELECTRONIC_SUSTAIN_SECONDS, BAND_GUITAR_SUSTAIN_SECONDS, map_pitched, clean, reductions, overdrive, align_drum_activations, enforce_playability, analyze_patterns, conform_expert_to_reference
@@ -216,6 +216,9 @@ def generate(options: Options, progress=print):
         else:
             stems=separate(wav,ROOT/"cache"/"stems",options.quality,options.device,log)
         stems=expose_stems(stems,folder/"source"/"stems",log)
+        write_guitar_stereo_views(
+            stems.get("guitar"),folder/"source"/"stems",log
+        )
         save_json(folder/"analysis"/"stems.json",stems)
         if options.chart_profile=="auto":
             resolved_profile,profile_evidence=detect_chart_profile(stems,metadata["genre"])
@@ -692,6 +695,9 @@ def replay_cached(
         {name:Path(path) for name,path in cached_stems.items()},
         folder/"source"/"stems",
         log,
+    )
+    write_guitar_stereo_views(
+        cached_stems.get("guitar"),folder/"source"/"stems",log
     )
     save_json(analysis_folder/"stems.json",cached_stems)
     resolved_profile=profile_payload.get("resolved") or song_metadata.get("chart_profile") or "band"

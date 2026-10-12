@@ -8,7 +8,11 @@ from rb3charts.model import Note,TempoMap,Options
 from rb3charts.chart import reductions,overdrive,align_drum_activations
 from rb3charts.midi import write_midi
 from rb3charts.validate import validate
-from rb3charts.audio import expose_stems, write_padded_audio
+from rb3charts.audio import (
+    expose_stems,
+    write_guitar_stereo_views,
+    write_padded_audio,
+)
 from rb3charts.timing import analyze_tempo
 from rb3charts.preview import (
     _lane_run_diagnostics,
@@ -42,6 +46,27 @@ def test_expose_stems_retains_run_local_review_files(tmp_path):
     assert exposed["guitar"]==expected
     assert expected.is_file()
     assert any("Review stem " in message for message in messages)
+
+def test_guitar_stereo_views_expose_left_and_right_channels(tmp_path):
+    guitar=tmp_path/"guitar.wav"
+    left=np.linspace(-.8,.8,100,dtype=np.float32)
+    right=np.linspace(.6,-.6,100,dtype=np.float32)
+    sf.write(guitar,np.column_stack([left,right]),44100,subtype="FLOAT")
+    messages=[]
+    outputs=write_guitar_stereo_views(
+        guitar,tmp_path/"run"/"source"/"stems",messages.append
+    )
+    left_view,_=sf.read(
+        outputs["guitar-left-channel"],dtype="float32",always_2d=True
+    )
+    right_view,_=sf.read(
+        outputs["guitar-right-channel"],dtype="float32",always_2d=True
+    )
+    assert left_view.shape==(100,1)
+    assert right_view.shape==(100,1)
+    assert np.allclose(left_view[:,0],left,atol=4e-5)
+    assert np.allclose(right_view[:,0],right,atol=4e-5)
+    assert any("Review guitar channels written" in message for message in messages)
 
 def test_real_beat_detector_finds_click_tempo():
     sr=22050
