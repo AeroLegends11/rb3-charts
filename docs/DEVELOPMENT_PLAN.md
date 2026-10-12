@@ -1477,3 +1477,52 @@ Status update (2026-09-22):
   electronic-instrument authoring example, not real-guitar transcription data;
   it remains outside the 36-pair corpus pending human review and ShareAlike
   admission analysis.
+- Audited `Keytoyze/Mug-Diffusion` as a possible chart-model reference. The
+  released checkpoint is fixed to four lanes (`x_channels=16`, four channels
+  per lane), its README restricts weights and generated charts to
+  non-commercial use, and the maintainer confirmed in issue 9 that roughly
+  30,000 osu!/Malody charts were downloaded without individual mapper
+  permission. It does not perform source separation and cannot be converted
+  into a five-lane RB3 model without retraining. Opened upstream issue 26 to
+  ask whether the announced 4-8K work has an explicit weight/output license,
+  rights-cleared provenance or lane-generic architecture guidance. No
+  Mug-Diffusion code, data or weights are used by generation.
+- Run-local review now retains exact separation WAVs under `source/stems` and
+  exposes them in the synchronized review player. It also writes honest
+  `guitar-left-channel` and `guitar-right-channel` diagnostic views without
+  claiming model-level lead/rhythm separation. Mr. Brightside's Demucs guitar
+  has left/right correlation 0.045 and side-to-mid RMS 0.956, confirming that
+  its layered guitars contain substantial stereo-position evidence.
+- Completed a diagnostic-only Mel-Band RoFormer guitar pilot on Mr. Brightside.
+  Code commit `fad9aac7e9da7e60ba91e4dc7892a6af0713ed04` and its release are
+  MIT-labeled, but the checkpoint was trained on CC BY-NC-SA 4.0 MoisesDB and
+  is not eligible to become a bundled/default dependency. Published checkpoint
+  SHA-256 `1a81a87b46eed215c051579ac5cff3b139bfdfb9fa3bf4666df059ef87404d14`
+  was verified before local inference. RoFormer removed the one collapsed
+  contour and reduced long same-lane runs from four to three, but official
+  attack F1 regressed 0.75 to 0.71, movement agreement 0.30 to 0.27, mean
+  interval error 1.80 to 1.85 and motif coverage 0.38 to 0.27. Wholesale
+  separator replacement is rejected. Any follow-up must use RoFormer only as
+  diagnostic corroboration, preserve Demucs attacks/timing, remain five-lane,
+  and pass held-out gates before runtime consideration.
+- Transcribed the left and right Demucs guitar channels independently on all
+  nine corpus songs with left/right correlation below 0.4. Wholesale channel
+  replacement is rejected: although attack F1 improved on most of the five
+  official-chart songs, channel charts commonly added 11-30% more Expert
+  attacks and lane/motif effects were inconsistent. In particular, When You
+  Were Young and Hail to the King regressed exact-lane, movement and interval
+  metrics despite higher attack F1.
+- Added a narrowly gated Precision fallback for severe Band guitar contour
+  collapses. It evaluates both panned channels only after the full-stem chart
+  fails the existing contour diagnostic, and accepts a channel only if it
+  removes a collapse, remains within 2% of baseline Expert attacks, and does
+  not increase either long or maximum same-lane runs. The decision and all
+  rejection reasons are persisted in `guitar-stereo-authoring.json`.
+- A fresh Mr. Brightside run selected the left channel: Expert attacks changed
+  1,225 to 1,233, collapsed contours 1 to 0, long same-lane runs 4 to 3 and
+  maximum run 10 to 9. Official attack F1 improved 0.7521 to 0.7660, exact
+  lanes 0.2209 to 0.2275, movement 0.3030 to 0.3129, mean interval error
+  1.7993 to 1.7474 and motif coverage 0.3765 to 0.4407. A fresh Bury the Light
+  run retained its 2,300-attack baseline: left increased long/max runs and
+  right increased the maximum run from 10 to 15. Both integrated runs passed
+  structural validation; unresolved Bury uncertainty remains visible.

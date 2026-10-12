@@ -90,6 +90,95 @@ def _load_accepted_event_groups(analysis_folder: Path, instrument: str):
     return groups
 
 
+def _author_band_guitar_candidate(raw, chord_evidence, tempo, duration):
+    notes=map_pitched(
+        raw,
+        "guitar",
+        "range",
+        BAND_GUITAR_SUSTAIN_SECONDS,
+    )
+    stages=[stage_entry("after_map_pitched",notes)]
+    notes=[note for note in notes if note.start<duration and note.end>note.start]
+    for note in notes:
+        note.end=min(duration,note.end)
+    notes,playability=enforce_playability(
+        notes,
+        "guitar",
+        tempo,
+        "band",
+        phrase_aware=True,
+    )
+    stages.append(stage_entry("after_enforce_playability",notes))
+    notes,reference_conformance=conform_expert_to_reference(
+        notes,
+        tempo,
+        "guitar",
+    )
+    stages.append(stage_entry("after_conform_expert_to_reference",notes))
+    notes,phrase_authoring=author_guitar_phrases(
+        notes,
+        tempo,
+        chord_evidence=chord_evidence,
+        sustain_threshold=BAND_GUITAR_SUSTAIN_SECONDS,
+    )
+    stages.append(stage_entry("after_author_guitar_phrases",notes))
+    return {
+        "raw":raw,
+        "notes":notes,
+        "playability":playability,
+        "reference_conformance":reference_conformance,
+        "phrase_authoring":phrase_authoring,
+        "stages":stages,
+    }
+
+
+def _select_stereo_guitar_candidate(baseline_notes, baseline_authoring, candidates):
+    baseline_quality=baseline_authoring["lane_quality"]
+    baseline_attacks=len(baseline_notes)
+    report={
+        "schema_version":1,
+        "method":"source-only safety gate after severe collapsed-contour detection",
+        "baseline":{
+            "expert_attacks":baseline_attacks,
+            "lane_quality":baseline_quality,
+        },
+        "candidates":{},
+        "selected":None,
+    }
+    eligible=[]
+    for side,candidate in sorted(candidates.items()):
+        quality=candidate["phrase_authoring"]["lane_quality"]
+        attacks=len(candidate["notes"])
+        ratio=attacks/max(1,baseline_attacks)
+        rejections=[]
+        if quality["collapsed_contour_runs"]>=baseline_quality["collapsed_contour_runs"]:
+            rejections.append("did not reduce collapsed contours")
+        if quality["long_same_lane_runs"]>baseline_quality["long_same_lane_runs"]:
+            rejections.append("increased long same-lane runs")
+        if quality["max_same_lane_run"]>baseline_quality["max_same_lane_run"]:
+            rejections.append("increased maximum same-lane run")
+        if not .98<=ratio<=1.02:
+            rejections.append("Expert attack count differs by more than 2%")
+        report["candidates"][side]={
+            "expert_attacks":attacks,
+            "attack_ratio":round(ratio,4),
+            "lane_quality":quality,
+            "eligible":not rejections,
+            "rejections":rejections,
+        }
+        if not rejections:
+            eligible.append((
+                quality["collapsed_contour_runs"],
+                quality["long_same_lane_runs"],
+                quality["max_same_lane_run"],
+                abs(1-ratio),
+                side,
+            ))
+    if eligible:
+        report["selected"]=min(eligible)[-1]
+    return report["selected"],report
+
+
 def _replay_provenance(source_folder: Path, consumed_inputs: list[Path], options_payload: dict, profile_payload: dict):
     return {
         "mode":"cached_replay",
@@ -216,7 +305,7 @@ def generate(options: Options, progress=print):
         else:
             stems=separate(wav,ROOT/"cache"/"stems",options.quality,options.device,log)
         stems=expose_stems(stems,folder/"source"/"stems",log)
-        write_guitar_stereo_views(
+        guitar_stereo_views=write_guitar_stereo_views(
             stems.get("guitar"),folder/"source"/"stems",log
         )
         save_json(folder/"analysis"/"stems.json",stems)
@@ -352,6 +441,102 @@ def generate(options: Options, progress=print):
                         else BAND_GUITAR_SUSTAIN_SECONDS
                     ),
                 )
+                if (
+                    resolved_profile=="band"
+                    and options.quality=="precision"
+                    and phrase_authoring[instrument]["lane_quality"][
+                        "collapsed_contour_runs"
+                    ]>0
+                    and guitar_stereo_views
+                ):
+                    log(
+                        "Severe guitar contour collapse detected; evaluating "
+                        "panned channel roles"
+                    )
+                    stereo_candidates={}
+                    for side in ("left","right"):
+                        label=f"guitar-{side}-channel"
+                        channel=guitar_stereo_views.get(label)
+                        if not channel:
+                            continue
+                        channel_events=pitched(
+                            channel,
+                            "guitar",
+                            options.confidence,
+                            log,
+                            label,
+                            True,
+                            tempo=tempo,
+                            analysis_folder=folder/"analysis",
+                        )
+                        channel_raw,channel_focus=band_guitar_lead_events(
+                            channel,
+                            channel_events,
+                            60/tempo.bpm,
+                        )
+                        save_json(
+                            folder/"analysis"/f"guitar-stereo-{side}-transcription.json",
+                            channel_raw,
+                        )
+                        candidate=_author_band_guitar_candidate(
+                            channel_raw,
+                            {
+                                "candidates":[dict(event) for event in channel_events],
+                                "focus":channel_focus,
+                            },
+                            tempo,
+                            duration,
+                        )
+                        candidate["focus"]=channel_focus
+                        stereo_candidates[side]=candidate
+                    selected,stereo_report=_select_stereo_guitar_candidate(
+                        notes,
+                        phrase_authoring[instrument],
+                        stereo_candidates,
+                    )
+                    save_json(
+                        folder/"analysis"/"guitar-stereo-authoring.json",
+                        stereo_report,
+                    )
+                    if selected is not None:
+                        candidate=stereo_candidates[selected]
+                        raw=candidate["raw"]
+                        notes=candidate["notes"]
+                        lead_focus[instrument]=candidate["focus"]
+                        playability[instrument]=candidate["playability"]
+                        reference_conformance[instrument]=candidate[
+                            "reference_conformance"
+                        ]
+                        phrase_authoring[instrument]=candidate[
+                            "phrase_authoring"
+                        ]
+                        stage_snapshots[instrument]={
+                            "instrument":instrument,
+                            "source_join":"source_id",
+                            "stages":candidate["stages"],
+                        }
+                        voice_continuity[instrument]=analyze_band_guitar_voice(
+                            raw,
+                            tempo,
+                        )
+                        save_json(
+                            folder/"analysis"/f"{instrument}-transcription.json",
+                            raw,
+                        )
+                        save_json(
+                            folder/"analysis"/"guitar-voice-continuity.json",
+                            voice_continuity[instrument],
+                        )
+                        warnings.append(
+                            f"Guitar stereo role selected the {selected} channel "
+                            "after removing a severe collapsed contour without "
+                            "inflating attack density or same-lane runs."
+                        )
+                    else:
+                        warnings.append(
+                            "Panned guitar alternatives were rejected because "
+                            "they inflated density or worsened same-lane runs."
+                        )
                 changed=phrase_authoring[instrument]["chord_sections"]["notes_changed"]
                 if changed:
                     warnings.append(

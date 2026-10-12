@@ -22,6 +22,7 @@ from rb3charts.preview import (
     create_preview,
 )
 from rb3charts.audio import detect_chart_profile
+from rb3charts.pipeline import _select_stereo_guitar_candidate
 
 def test_missing_beats_repaired_without_moving_detected_anchors():
     from rb3charts.timing import repair_beat_gaps
@@ -67,6 +68,86 @@ def test_guitar_stereo_views_expose_left_and_right_channels(tmp_path):
     assert np.allclose(left_view[:,0],left,atol=4e-5)
     assert np.allclose(right_view[:,0],right,atol=4e-5)
     assert any("Review guitar channels written" in message for message in messages)
+
+
+def test_stereo_guitar_candidate_requires_bounded_density_and_run_quality():
+    baseline={
+        "lane_quality":{
+            "collapsed_contour_runs":1,
+            "long_same_lane_runs":4,
+            "max_same_lane_run":10,
+        },
+    }
+    candidates={
+        "left":{
+            "notes":[object()]*101,
+            "phrase_authoring":{
+                "lane_quality":{
+                    "collapsed_contour_runs":0,
+                    "long_same_lane_runs":3,
+                    "max_same_lane_run":9,
+                },
+            },
+        },
+        "right":{
+            "notes":[object()]*100,
+            "phrase_authoring":{
+                "lane_quality":{
+                    "collapsed_contour_runs":0,
+                    "long_same_lane_runs":4,
+                    "max_same_lane_run":10,
+                },
+            },
+        },
+    }
+    selected,report=_select_stereo_guitar_candidate(
+        [object()]*100,
+        baseline,
+        candidates,
+    )
+    assert selected=="left"
+    assert report["candidates"]["left"]["eligible"]
+
+
+def test_stereo_guitar_candidate_rejects_attack_and_run_regressions():
+    baseline={
+        "lane_quality":{
+            "collapsed_contour_runs":1,
+            "long_same_lane_runs":2,
+            "max_same_lane_run":10,
+        },
+    }
+    candidates={
+        "left":{
+            "notes":[object()]*103,
+            "phrase_authoring":{
+                "lane_quality":{
+                    "collapsed_contour_runs":0,
+                    "long_same_lane_runs":2,
+                    "max_same_lane_run":10,
+                },
+            },
+        },
+        "right":{
+            "notes":[object()]*100,
+            "phrase_authoring":{
+                "lane_quality":{
+                    "collapsed_contour_runs":0,
+                    "long_same_lane_runs":2,
+                    "max_same_lane_run":15,
+                },
+            },
+        },
+    }
+    selected,report=_select_stereo_guitar_candidate(
+        [object()]*100,
+        baseline,
+        candidates,
+    )
+    assert selected is None
+    assert not report["candidates"]["left"]["eligible"]
+    assert not report["candidates"]["right"]["eligible"]
+
 
 def test_real_beat_detector_finds_click_tempo():
     sr=22050
