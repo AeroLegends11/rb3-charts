@@ -478,6 +478,11 @@ the change is rolled back if it worsens collapsed contours or same-lane runs.
 Long, dense phrases with strongly correlated, reversal-free source pitch/lane
 evidence may also spread robust pitch ranks across all five colors. Each spread
 is rejected if it introduces a collapsed contour or worsens same-lane runs.
+After motif and chord decisions are final, a source-traceable cleanup removes a
+single attack immediately before a chord only when that exact source pitch
+continues into the chord's simultaneous evidence and the chord has materially
+stronger direct attack evidence. This avoids double-authoring one sustained
+voice while preserving independent pickups and grace notes.
 Audio regions are saved to `analysis/guitar-audio-repetitions.json`, while
 applied and rejected authoring decisions are saved to
 `analysis/phrase-authoring.json`; earlier passes no longer rewrite lanes before

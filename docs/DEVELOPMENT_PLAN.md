@@ -1598,3 +1598,20 @@ Status update (2026-09-22):
   official metrics were unchanged; When You Were Young exact lanes improved
   0.1253 to 0.1335 with unchanged movement/motifs and mean interval error
   1.5956 to 1.6066. Joker and the Thief's long/max runs improve 4/11 to 3/10.
+- Added a final Expert cleanup for split single-to-chord interpretations. It
+  removes a single only when the following chord begins within 160 ms, the
+  single's exact source pitch appears in that chord's simultaneous accepted
+  evidence, and the original source activation continues to within 35 ms of
+  the chord. The single's direct attack must be below 0.03, while the chord
+  attack must be at least 0.04 and twice as strong. The pass runs after chord
+  and repetition authoring, records every source ID and timing decision, and
+  does not synthesize missing chord tones.
+  Independent grace notes, pickups and different-pitch attacks remain intact.
+- On the fresh Jonas replay, the pass removes five of roughly 800 Expert attacks,
+  including the weak pitch-49 event at 25.265 s that continues into the
+  25.390 s chord. The approximate 24.736 s orange report is a distinct
+  source-transcription event and is retained rather than guessed into a chord.
+  The final 14-song cached gate removes 22 of 14,002 attacks (0.16%). Chord
+  counts, repetition assignments, assessment status and collapsed-contour
+  counts are unchanged on every song; long/max same-lane quality does not
+  regress.

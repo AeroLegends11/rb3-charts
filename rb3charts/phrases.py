@@ -843,6 +843,94 @@ def _apply_band_chord_sections(notes, tempo, evidence):
     return report
 
 
+def _remove_pre_chord_voice_duplicates(notes, evidence):
+    report = {
+        "method": "continuing source voice duplicated immediately before chord",
+        "notes_removed": 0,
+        "events": [],
+    }
+    candidates = sorted(
+        (
+            dict(event)
+            for event in (evidence or {}).get("candidates", ())
+            if event.get("accepted", True)
+        ),
+        key=lambda event: (event["start"], event["pitch"]),
+    )
+    if len(notes) < 2 or not candidates:
+        return notes, report
+    by_source = {
+        str(event.get("source_id")): event
+        for event in candidates
+        if event.get("source_id")
+    }
+    groups = []
+    for event in candidates:
+        if groups and event["start"] - groups[-1][0]["start"] <= .045:
+            groups[-1].append(event)
+        else:
+            groups.append([event])
+    removed = set()
+    for single, chord in zip(notes, notes[1:]):
+        gap = chord.start - single.start
+        if (
+            len(single.lanes) != 1
+            or len(chord.lanes) < 2
+            or gap <= 0
+            or gap > .16
+        ):
+            continue
+        chord_group = min(
+            groups,
+            key=lambda rows: abs(rows[0]["start"] - chord.start),
+        )
+        if abs(chord_group[0]["start"] - chord.start) > .045:
+            continue
+        chord_pitches = {int(event["pitch"]) for event in chord_group}
+        if int(single.pitch) not in chord_pitches:
+            continue
+        source_events = [
+            by_source[source_id]
+            for source_id in str(single.source_id).split("+")
+            if source_id in by_source
+            and int(by_source[source_id]["pitch"]) == int(single.pitch)
+        ]
+        if (
+            not source_events
+            or max(float(event["end"]) for event in source_events)
+            < chord.start - .035
+        ):
+            continue
+        single_attack = max(
+            float(event.get("evidence", {}).get("attack_strength", 0))
+            for event in source_events
+        )
+        chord_attack = max(
+            float(event.get("evidence", {}).get("attack_strength", 0))
+            for event in chord_group
+        )
+        if (
+            single_attack >= .03
+            or chord_attack < .04
+            or chord_attack < single_attack * 2
+        ):
+            continue
+        removed.add(id(single))
+        report["events"].append({
+            "source_id": single.source_id,
+            "start": single.start,
+            "pitch": single.pitch,
+            "following_chord_source_id": chord.source_id,
+            "following_chord_start": chord.start,
+            "attack_gap_ms": round(gap * 1000, 3),
+            "single_attack_strength": round(single_attack, 6),
+            "chord_attack_strength": round(chord_attack, 6),
+            "reason": "same source pitch continues into immediate chord evidence",
+        })
+    report["notes_removed"] = len(removed)
+    return [note for note in notes if id(note) not in removed], report
+
+
 def _apply_audio_repeat_consistency(notes, tempo, evidence):
     report = {
         "method": "audio self-similarity gated by attack, rhythm, pitch and chord structure",
@@ -1061,8 +1149,8 @@ def author_guitar_phrases(
 ):
     """Sight-reading pass: phrase contour, repeatable fingering, short tails.
 
-    Preserve event identity, pitch, attack timing and count. Chords are barriers
-    to single-note fingering; their already-mapped voicing is retained.
+    Preserve retained event identity, pitch and attack timing. Chords are
+    barriers to single-note fingering; their already-mapped voicing is retained.
     """
     result = [replace(n) for n in sorted(notes, key=lambda n: n.start)]
     phrases = _guitar_single_note_phrases(result,tempo)
@@ -1228,12 +1316,15 @@ def author_guitar_phrases(
                 "reversed_pitch_changes": sum((b.pitch-a.pitch)*(b.lanes[0]-a.lanes[0]) < 0 for a,b in pairs)}
     chord_sections = _apply_band_chord_sections(result, tempo, chord_evidence)
     repeat_fingerings = _stabilize_repeat_fingerings(
-        result,tempo,quality_phrases=phrases
+        result, tempo, quality_phrases=phrases
     )
     audio_repeat_consistency = _apply_audio_repeat_consistency(
         result, tempo, audio_repetitions
     )
-    lane_quality = _lane_run_quality(phrases)
+    result, pre_chord_cleanup = _remove_pre_chord_voice_duplicates(
+        result, chord_evidence
+    )
+    lane_quality = _lane_run_quality(_guitar_single_note_phrases(result, tempo))
     for phrase, rows in zip(phrase_report, phrases):
         phrase["final_lanes"] = [list(note.lanes) for note in rows]
     return result, {"method": "phrase-local fingering with whole-sequence ergonomic costs and bounded motif windows",
@@ -1255,5 +1346,7 @@ def author_guitar_phrases(
                     ),
                     "window_motif_low_confidence_closures": len(low_confidence_closures),
                     "chord_sections": chord_sections,
+                    "pre_chord_cleanup": pre_chord_cleanup,
                     "audio_repeat_consistency": audio_repeat_consistency,
-                    "notes_added": 0, "notes_removed": 0}
+                    "notes_added": 0,
+                    "notes_removed": pre_chord_cleanup["notes_removed"]}

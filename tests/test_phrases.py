@@ -4,6 +4,7 @@ from rb3charts.phrases import (
     _apply_audio_repeat_consistency,
     _lane_run_quality,
     _preserve_supported_lane_span,
+    _remove_pre_chord_voice_duplicates,
     _spread_supported_pitch_contour,
     _stabilize_repeat_fingerings,
     _stabilize_repeated_pitch_lanes,
@@ -175,6 +176,92 @@ def test_phrase_fingering_spreads_supported_no_reversal_contour():
     assert changed
     assert set(lanes) == set(range(5))
     assert lanes == lanes[:5] * 7
+
+
+def test_pre_chord_cleanup_removes_continuing_voice_duplicate():
+    notes = [
+        Note(1.0, 1.065, (4,), .58, "single", 54),
+        Note(1.125, 1.19, (1, 3), .62, "low+continued", 47),
+        Note(1.5, 1.565, (2,), .7, "tail", 52),
+    ]
+    evidence = {"candidates": [
+        {
+            "start": 1.0, "end": 1.11, "pitch": 54, "confidence": .58,
+            "source_id": "single", "accepted": True,
+            "evidence": {"attack_strength": .01},
+        },
+        {
+            "start": 1.125, "end": 1.2, "pitch": 47, "confidence": .62,
+            "source_id": "low", "accepted": True,
+            "evidence": {"attack_strength": .08},
+        },
+        {
+            "start": 1.125, "end": 1.2, "pitch": 54, "confidence": .6,
+            "source_id": "continued", "accepted": True,
+            "evidence": {"attack_strength": .08},
+        },
+    ]}
+
+    result, report = _remove_pre_chord_voice_duplicates(notes, evidence)
+
+    assert [note.source_id for note in result] == ["low+continued", "tail"]
+    assert report["notes_removed"] == 1
+    assert report["events"][0]["attack_gap_ms"] == 125
+
+
+def test_pre_chord_cleanup_preserves_separate_grace_note():
+    notes = [
+        Note(1.0, 1.065, (4,), .7, "grace", 54),
+        Note(1.125, 1.19, (1, 3), .62, "low+high", 47),
+    ]
+    evidence = {"candidates": [
+        {
+            "start": 1.0, "end": 1.065, "pitch": 54, "confidence": .7,
+            "source_id": "grace", "accepted": True,
+        },
+        {
+            "start": 1.125, "end": 1.2, "pitch": 47, "confidence": .62,
+            "source_id": "low", "accepted": True,
+        },
+        {
+            "start": 1.125, "end": 1.2, "pitch": 55, "confidence": .6,
+            "source_id": "high", "accepted": True,
+        },
+    ]}
+
+    result, report = _remove_pre_chord_voice_duplicates(notes, evidence)
+
+    assert result == notes
+    assert report["notes_removed"] == 0
+
+
+def test_pre_chord_cleanup_preserves_strong_separate_attack():
+    notes = [
+        Note(1.0, 1.065, (4,), .7, "single", 54),
+        Note(1.125, 1.19, (1, 3), .62, "low+continued", 47),
+    ]
+    evidence = {"candidates": [
+        {
+            "start": 1.0, "end": 1.11, "pitch": 54, "confidence": .7,
+            "source_id": "single", "accepted": True,
+            "evidence": {"attack_strength": .07},
+        },
+        {
+            "start": 1.125, "end": 1.2, "pitch": 47, "confidence": .62,
+            "source_id": "low", "accepted": True,
+            "evidence": {"attack_strength": .08},
+        },
+        {
+            "start": 1.125, "end": 1.2, "pitch": 54, "confidence": .6,
+            "source_id": "continued", "accepted": True,
+            "evidence": {"attack_strength": .08},
+        },
+    ]}
+
+    result, report = _remove_pre_chord_voice_duplicates(notes, evidence)
+
+    assert result == notes
+    assert report["notes_removed"] == 0
 
 
 def test_repeated_exact_riff_preserves_structural_variation():
