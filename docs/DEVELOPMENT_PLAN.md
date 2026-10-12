@@ -1516,13 +1516,22 @@ Status update (2026-09-22):
   collapses. It evaluates both panned channels only after the full-stem chart
   fails the existing contour diagnostic, and accepts a channel only if it
   removes a collapse, remains within 2% of baseline Expert attacks, and does
-  not increase either long or maximum same-lane runs. The decision and all
-  rejection reasons are persisted in `guitar-stereo-authoring.json`.
+  not increase either long or maximum same-lane runs. If both whole-song
+  candidates fail, it applies the same gates to only the diagnosed collapse
+  windows and additionally requires each local replacement to retain 50-150%
+  of the window's attacks. The decision and all rejection reasons are
+  persisted in `guitar-stereo-authoring.json`.
 - A fresh Mr. Brightside run selected the left channel: Expert attacks changed
   1,225 to 1,233, collapsed contours 1 to 0, long same-lane runs 4 to 3 and
   maximum run 10 to 9. Official attack F1 improved 0.7521 to 0.7660, exact
   lanes 0.2209 to 0.2275, movement 0.3030 to 0.3129, mean interval error
-  1.7993 to 1.7474 and motif coverage 0.3765 to 0.4407. A fresh Bury the Light
-  run retained its 2,300-attack baseline: left increased long/max runs and
-  right increased the maximum run from 10 to 15. Both integrated runs passed
-  structural validation; unresolved Bury uncertainty remains visible.
+  1.7993 to 1.7474 and motif coverage 0.3765 to 0.4407.
+- Whole-song candidates remained unsafe for Bury the Light, but a bounded
+  six-for-six left-channel replacement removed its collapse while retaining
+  2,300 Expert attacks, two long same-lane runs and maximum run 10. A current
+  When You Were Young run selected a bounded right-channel replacement:
+  Expert attacks changed 1,035 to 1,033, collapse count 1 to 0, and long/max
+  runs remained 9/12. Against the frozen official chart, exact lanes, movement,
+  interval error, motif coverage and motif shape were unchanged while attack
+  F1 changed 0.5474 to 0.5481. Both integrated localized runs passed structural
+  validation.

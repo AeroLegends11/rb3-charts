@@ -27,8 +27,10 @@ branch, then starts the GUI).
   collapsed contour, Precision also tests the panned guitar channels
   independently. A channel is used only when it removes the collapse, stays
   within 2% of the original attack count, and does not worsen long or maximum
-  same-lane runs. Otherwise the full guitar stem remains authoritative.
-  Precision is slower and caches its separation results.
+  same-lane runs. If neither complete channel is safe, the same checks are
+  applied only inside diagnosed collapse windows, where each replacement must
+  retain 50-150% of the local attacks. Otherwise the full guitar stem remains
+  authoritative. Precision is slower and caches its separation results.
 - Balanced mode uses the six-stem model only.
 - NVIDIA GPU is selected automatically when available; CPU can be selected.
 - All four difficulties are always generated. Keys are optional and experimental.
@@ -566,8 +568,9 @@ rhythm guitars may have been divided between Demucs outputs. The
 without claiming that they are model-separated lead and rhythm instruments.
 When the Precision fallback runs, `analysis/guitar-stereo-authoring.json`
 records both candidates, every rejection reason, and the selected channel or
-an explicit baseline decision. Channel transcriptions remain traceable in the
-same analysis folder.
+an explicit baseline decision. Localized decisions also record each bounded
+window's baseline and candidate attack counts. Channel transcriptions remain
+traceable in the same analysis folder.
 
 `analysis/structure-diagnostics.json` records neutral eight-measure activity
 blocks, strongest unlabeled activity boundaries and repeated measure-level drum

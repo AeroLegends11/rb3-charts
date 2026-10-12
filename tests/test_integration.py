@@ -22,7 +22,10 @@ from rb3charts.preview import (
     create_preview,
 )
 from rb3charts.audio import detect_chart_profile
-from rb3charts.pipeline import _select_stereo_guitar_candidate
+from rb3charts.pipeline import (
+    _localized_stereo_guitar_candidate,
+    _select_stereo_guitar_candidate,
+)
 
 def test_missing_beats_repaired_without_moving_detected_anchors():
     from rb3charts.timing import repair_beat_gaps
@@ -147,6 +150,91 @@ def test_stereo_guitar_candidate_rejects_attack_and_run_regressions():
     assert selected is None
     assert not report["candidates"]["left"]["eligible"]
     assert not report["candidates"]["right"]["eligible"]
+
+
+def test_localized_stereo_candidate_replaces_only_bounded_collapse_window():
+    tempo=TempoMap([float(beat) for beat in range(20)])
+    baseline=[
+        Note(
+            start=1+index*.1,
+            end=1.06+index*.1,
+            lanes=(0,),
+            pitch=pitch,
+            source_id=f"baseline-{index}",
+        )
+        for index,pitch in enumerate((48,52,55,57,52,60))
+    ]
+    baseline_authoring={
+        "lane_quality":{
+            "collapsed_contour_runs":1,
+            "long_same_lane_runs":0,
+            "max_same_lane_run":6,
+            "runs":[{
+                "start":1.0,
+                "end":1.5,
+                "collapsed_contour":True,
+            }],
+        },
+    }
+    candidate={
+        "notes":[
+            Note(
+                start=1+index*.1,
+                end=1.06+index*.1,
+                lanes=(index%5,),
+                pitch=pitch,
+                source_id=f"channel-{index}",
+            )
+            for index,pitch in enumerate((60,64,67,69,64,72))
+        ],
+        "phrase_authoring":{},
+    }
+    localized,report=_localized_stereo_guitar_candidate(
+        baseline,
+        baseline_authoring,
+        candidate,
+        tempo,
+    )
+    assert localized is not None
+    assert report["rejection"] is None
+    assert localized["phrase_authoring"]["lane_quality"][
+        "collapsed_contour_runs"
+    ]==0
+    assert all(
+        note.source_id.startswith("channel-")
+        for note in localized["notes"]
+    )
+
+
+def test_localized_stereo_candidate_rejects_sparse_window():
+    tempo=TempoMap([float(beat) for beat in range(20)])
+    baseline=[
+        Note(1+index*.1,1.06+index*.1,(0,),pitch=pitch)
+        for index,pitch in enumerate((48,52,55,57,52,60))
+    ]
+    baseline_authoring={
+        "lane_quality":{
+            "runs":[{
+                "start":1.0,
+                "end":1.5,
+                "collapsed_contour":True,
+            }],
+        },
+    }
+    localized,report=_localized_stereo_guitar_candidate(
+        baseline,
+        baseline_authoring,
+        {
+            "notes":[
+                Note(1.1,1.16,(1,),pitch=60),
+                Note(1.4,1.46,(2,),pitch=64),
+            ],
+            "phrase_authoring":{},
+        },
+        tempo,
+    )
+    assert localized is None
+    assert report["rejection"]
 
 
 def test_real_beat_detector_finds_click_tempo():

@@ -170,6 +170,32 @@ def _lane_run_quality(phrases):
     }
 
 
+def _guitar_single_note_phrases(notes, tempo):
+    phrases = []
+    current = []
+    for note in sorted(notes, key=lambda row: row.start):
+        if len(note.lanes) != 1:
+            if current:
+                phrases.append(current)
+                current = []
+            continue
+        if current:
+            beat = tempo.beat_at(note.start)
+            period = tempo.seconds_at(beat + 1) - tempo.seconds_at(beat)
+            rest = note.start - current[-1].end
+            if rest > period * .75:
+                phrases.append(current)
+                current = []
+        current.append(note)
+    if current:
+        phrases.append(current)
+    return phrases
+
+
+def analyze_guitar_lane_quality(notes, tempo):
+    return _lane_run_quality(_guitar_single_note_phrases(notes,tempo))
+
+
 def _preserve_supported_lane_span(rows, lanes):
     incoming = [note.lanes[0] for note in rows]
     duration = rows[-1].start - rows[0].start
@@ -774,24 +800,7 @@ def author_guitar_phrases(
     to single-note fingering; their already-mapped voicing is retained.
     """
     result = [replace(n) for n in sorted(notes, key=lambda n: n.start)]
-    phrases = []
-    current = []
-    for note in result:
-        if len(note.lanes) != 1:
-            if current:
-                phrases.append(current)
-                current = []
-            continue
-        if current:
-            beat = tempo.beat_at(note.start)
-            period = tempo.seconds_at(beat + 1) - tempo.seconds_at(beat)
-            rest = note.start - current[-1].end
-            if rest > period * .75:
-                phrases.append(current)
-                current = []
-        current.append(note)
-    if current:
-        phrases.append(current)
+    phrases = _guitar_single_note_phrases(result,tempo)
     vocabulary = {}
     phrase_report = []
     indices={id(note):i for i,note in enumerate(result)}

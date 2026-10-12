@@ -1,6 +1,7 @@
 from pathlib import Path
 from dataclasses import asdict
 from datetime import datetime, timezone
+from copy import deepcopy
 import json
 import re
 import shutil
@@ -21,7 +22,11 @@ from .assessment import (
     write_batch_review,
 )
 from .events import write_event_trace
-from .phrases import select_lead_phrases, author_guitar_phrases
+from .phrases import (
+    analyze_guitar_lane_quality,
+    author_guitar_phrases,
+    select_lead_phrases,
+)
 from .regression import (
     compute_regression_metrics,
     git_state,
@@ -177,6 +182,78 @@ def _select_stereo_guitar_candidate(baseline_notes, baseline_authoring, candidat
     if eligible:
         report["selected"]=min(eligible)[-1]
     return report["selected"],report
+
+
+def _localized_stereo_guitar_candidate(
+    baseline_notes,
+    baseline_authoring,
+    candidate,
+    tempo,
+):
+    windows=[
+        row for row in baseline_authoring["lane_quality"]["runs"]
+        if row["collapsed_contour"]
+    ]
+    notes=[]
+    window_reports=[]
+    for window in windows:
+        baseline_window=[
+            note for note in baseline_notes
+            if window["start"]<=note.start<=window["end"]
+        ]
+        candidate_window=[
+            note for note in candidate["notes"]
+            if window["start"]<=note.start<=window["end"]
+        ]
+        minimum=max(1,(len(baseline_window)+1)//2)
+        maximum=max(minimum,int(len(baseline_window)*1.5))
+        window_reports.append({
+            "start":window["start"],
+            "end":window["end"],
+            "baseline_attacks":len(baseline_window),
+            "candidate_attacks":len(candidate_window),
+            "minimum_attacks":minimum,
+            "maximum_attacks":maximum,
+            "eligible":minimum<=len(candidate_window)<=maximum,
+        })
+    if not windows or not all(row["eligible"] for row in window_reports):
+        return None,{
+            "windows":window_reports,
+            "rejection":"candidate attack count outside a collapsed window is unbounded",
+        }
+    notes.extend(
+        note for note in baseline_notes
+        if not any(
+            window["start"]<=note.start<=window["end"]
+            for window in windows
+        )
+    )
+    notes.extend(
+        note for note in candidate["notes"]
+        if any(
+            window["start"]<=note.start<=window["end"]
+            for window in windows
+        )
+    )
+    notes.sort(key=lambda note:note.start)
+    phrase_authoring=deepcopy(baseline_authoring)
+    phrase_authoring["lane_quality"]=analyze_guitar_lane_quality(
+        notes,
+        tempo,
+    )
+    phrase_authoring["stereo_role_splice"]={
+        "scope":"collapsed windows only",
+        "windows":window_reports,
+    }
+    return {
+        **candidate,
+        "notes":notes,
+        "phrase_authoring":phrase_authoring,
+        "localized_windows":window_reports,
+    },{
+        "windows":window_reports,
+        "rejection":None,
+    }
 
 
 def _replay_provenance(source_folder: Path, consumed_inputs: list[Path], options_payload: dict, profile_payload: dict):
@@ -494,41 +571,91 @@ def generate(options: Options, progress=print):
                         phrase_authoring[instrument],
                         stereo_candidates,
                     )
+                    selection_scope="whole song"
+                    if selected is None:
+                        localized_candidates={}
+                        localized_inputs={}
+                        for side,candidate in stereo_candidates.items():
+                            localized,localized_input=_localized_stereo_guitar_candidate(
+                                notes,
+                                phrase_authoring[instrument],
+                                candidate,
+                                tempo,
+                            )
+                            localized_inputs[side]=localized_input
+                            if localized is not None:
+                                localized_candidates[side]=localized
+                        localized_selected,localized_report=(
+                            _select_stereo_guitar_candidate(
+                                notes,
+                                phrase_authoring[instrument],
+                                localized_candidates,
+                            )
+                            if localized_candidates else (None,{
+                                "schema_version":1,
+                                "method":"source-only localized safety gate",
+                                "baseline":{
+                                    "expert_attacks":len(notes),
+                                    "lane_quality":phrase_authoring[
+                                        instrument
+                                    ]["lane_quality"],
+                                },
+                                "candidates":{},
+                                "selected":None,
+                            })
+                        )
+                        localized_report["inputs"]=localized_inputs
+                        stereo_report["localized"]=localized_report
+                        if localized_selected is not None:
+                            selected=localized_selected
+                            selection_scope="collapsed windows"
+                            stereo_candidates=localized_candidates
+                            stereo_report["selected"]=(
+                                f"{selected}-localized"
+                            )
                     save_json(
                         folder/"analysis"/"guitar-stereo-authoring.json",
                         stereo_report,
                     )
                     if selected is not None:
                         candidate=stereo_candidates[selected]
-                        raw=candidate["raw"]
                         notes=candidate["notes"]
-                        lead_focus[instrument]=candidate["focus"]
-                        playability[instrument]=candidate["playability"]
-                        reference_conformance[instrument]=candidate[
-                            "reference_conformance"
-                        ]
                         phrase_authoring[instrument]=candidate[
                             "phrase_authoring"
                         ]
-                        stage_snapshots[instrument]={
-                            "instrument":instrument,
-                            "source_join":"source_id",
-                            "stages":candidate["stages"],
-                        }
-                        voice_continuity[instrument]=analyze_band_guitar_voice(
-                            raw,
-                            tempo,
-                        )
-                        save_json(
-                            folder/"analysis"/f"{instrument}-transcription.json",
-                            raw,
-                        )
-                        save_json(
-                            folder/"analysis"/"guitar-voice-continuity.json",
-                            voice_continuity[instrument],
-                        )
+                        if selection_scope=="whole song":
+                            raw=candidate["raw"]
+                            lead_focus[instrument]=candidate["focus"]
+                            playability[instrument]=candidate["playability"]
+                            reference_conformance[instrument]=candidate[
+                                "reference_conformance"
+                            ]
+                            stage_snapshots[instrument]={
+                                "instrument":instrument,
+                                "source_join":"source_id",
+                                "stages":candidate["stages"],
+                            }
+                            voice_continuity[
+                                instrument
+                            ]=analyze_band_guitar_voice(raw,tempo)
+                            save_json(
+                                folder/"analysis"/f"{instrument}-transcription.json",
+                                raw,
+                            )
+                            save_json(
+                                folder/"analysis"/"guitar-voice-continuity.json",
+                                voice_continuity[instrument],
+                            )
+                        else:
+                            _record_stage_snapshot(
+                                stage_snapshots,
+                                instrument,
+                                "after_stereo_role_splice",
+                                notes,
+                            )
                         warnings.append(
                             f"Guitar stereo role selected the {selected} channel "
+                            f"for {selection_scope} "
                             "after removing a severe collapsed contour without "
                             "inflating attack density or same-lane runs."
                         )
