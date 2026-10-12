@@ -8,7 +8,7 @@ from rb3charts.model import Note,TempoMap,Options
 from rb3charts.chart import reductions,overdrive,align_drum_activations
 from rb3charts.midi import write_midi
 from rb3charts.validate import validate
-from rb3charts.audio import write_padded_audio
+from rb3charts.audio import expose_stems, write_padded_audio
 from rb3charts.timing import analyze_tempo
 from rb3charts.preview import (
     _lane_run_diagnostics,
@@ -27,6 +27,21 @@ def test_missing_beats_repaired_without_moving_detected_anchors():
     assert discarded==1
     assert set(original[:-1])<=set(result)
     assert np.allclose(np.diff(result),.375)
+
+def test_expose_stems_retains_run_local_review_files(tmp_path):
+    cached=tmp_path/"cache"/"guitar.wav"
+    cached.parent.mkdir()
+    sf.write(cached,np.zeros((100,2),dtype=np.float32),44100)
+    messages=[]
+    exposed=expose_stems(
+        {"guitar":cached},
+        tmp_path/"run"/"source"/"stems",
+        messages.append,
+    )
+    expected=tmp_path/"run"/"source"/"stems"/"guitar.wav"
+    assert exposed["guitar"]==expected
+    assert expected.is_file()
+    assert any("Review stem " in message for message in messages)
 
 def test_real_beat_detector_finds_click_tempo():
     sr=22050
@@ -243,7 +258,9 @@ def test_existing_run_validation_rechecks_midi_and_manifest(
 
 def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     (tmp_path/"audio").mkdir()
+    (tmp_path/"source"/"stems").mkdir(parents=True)
     sf.write(tmp_path/"audio"/"song.wav",np.zeros((44100*2,2),dtype=np.float32),44100)
+    sf.write(tmp_path/"source"/"stems"/"guitar.wav",np.zeros((44100*2,2),dtype=np.float32),44100)
     tempo=TempoMap([0,.5,1,1.5,2])
     notes=[
         Note(.5,.6,(0,),confidence=.4,source_id="one"),
@@ -303,6 +320,11 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     assert '"kind": "activity boundary"' in page
     assert "Difficulty attacks" in page
     assert "Review markers jump to low-confidence notes" in page
+    assert '"stems": ["guitar"]' in page
+    assert "o.textContent=stem+' stem only'" in page
+    assert "'source/stems/'+currentMode.slice(5)+'.wav'" in page
+    assert "const chartTime=()=>audio.currentTime+" in page
+    assert "Switch audio to an isolated separation stem" in page
     assert "suspicious same-lane runs" in page
     assert "laneRuns=payload.lane_runs||{}" in page
     assert "diff.addEventListener('change',showDiagnostics)" in page

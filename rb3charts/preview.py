@@ -237,6 +237,10 @@ def create_preview(
         "beats":[beat+lead for beat in tempo.beats],
         "meter":tempo.numerator,
         "lead":lead,
+        "stems":sorted(
+            path.stem
+            for path in (folder/"source"/"stems").glob("*.wav")
+        ),
         "overlays":overlays,
         "diagnostics":_review_diagnostics(
             charts,lead,profile,patterns,structure_diagnostics
@@ -261,6 +265,40 @@ def create_preview(
 <script>const payload=__DATA__,data=payload.charts,beats=payload.beats,meter=payload.meter,lead=payload.lead,overlays=payload.overlays||{},difficultyCounts=payload.difficulty_counts||{};const inst=document.getElementById('inst'),diff=document.getElementById('diff'),audio=document.getElementById('audio'),canvas=document.getElementById('chart'),ctx=canvas.getContext('2d'),mode=document.getElementById('mode'),speed=document.getElementById('speed'),highway=document.getElementById('highway');Object.keys(data).forEach(i=>{const o=document.createElement('option');o.textContent=i;inst.append(o)});function setAudio(){const t=audio.currentTime,playing=!audio.paused;audio.src='audio/'+(mode.value==='audit'?'timing-audit-'+inst.value+'.wav':'song.wav');audio.onloadedmetadata=()=>{audio.currentTime=t;audio.playbackRate=+speed.value;if(playing)audio.play()}}mode.onchange=setAudio;inst.onchange=()=>{if(mode.value==='audit')setAudio()};speed.onchange=()=>audio.playbackRate=+speed.value;highway.onchange=()=>lookAhead=+highway.value;document.getElementById('back').onclick=()=>audio.currentTime=Math.max(0,audio.currentTime-5);document.getElementById('toggle').onclick=()=>audio.paused?audio.play():audio.pause();document.addEventListener('keydown',e=>{if(e.target.tagName==='SELECT')return;if(e.code==='Space'){e.preventDefault();audio.paused?audio.play():audio.pause()}if(e.code==='ArrowLeft')audio.currentTime=Math.max(0,audio.currentTime-5);if(e.code==='ArrowRight')audio.currentTime=Math.min(audio.duration||Infinity,audio.currentTime+5)});
 const diagnostics=payload.diagnostics||{},diagnosticBox=document.getElementById('diagnostics'),difficultySummary=document.getElementById('difficultySummary');function showDiagnostics(){diagnosticBox.replaceChildren();for(const marker of diagnostics[inst.value]||[]){const button=document.createElement('button');button.textContent=marker.time.toFixed(2)+'s · '+marker.kind+' · '+marker.detail;button.onclick=()=>audio.currentTime=marker.time;diagnosticBox.append(button)}const counts=difficultyCounts[inst.value]||{};difficultySummary.textContent='Difficulty attacks · Expert '+(counts.expert||0)+' · Hard '+(counts.hard||0)+' · Medium '+(counts.medium||0)+' · Easy '+(counts.easy||0)}inst.addEventListener('change',showDiagnostics);showDiagnostics();
 const colors=['#65df7b','#ff5864','#f8d45d','#4c9dff','#ff973d'],W=1100,H=700,horizon=48,strike=590,topWidth=300,bottomWidth=820;let lookAhead=+highway.value;function geom(y){const p=Math.max(0,Math.min(1,(y-horizon)/(strike-horizon))),width=topWidth+(bottomWidth-topWidth)*p;return {left:(W-width)/2,width}}function yFor(t,time){return strike-(t-time)/lookAhead*(strike-horizon)}function laneX(lane,y){const g=geom(y);return g.left+(lane+.5)*g.width/5}function lineAt(y,color,width=1){const g=geom(y);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(g.left,y);ctx.lineTo(g.left+g.width,y);ctx.stroke()}function draw(){const time=audio.currentTime,notes=data[inst.value][diff.value],regions=overlays[inst.value]||[];ctx.clearRect(0,0,W,H);const floor=ctx.createLinearGradient(0,horizon,0,strike);floor.addColorStop(0,'#111d31');floor.addColorStop(1,'#17283d');const bottom=geom(strike),top=geom(horizon);ctx.fillStyle=floor;ctx.beginPath();ctx.moveTo(top.left,horizon);ctx.lineTo(top.left+top.width,horizon);ctx.lineTo(bottom.left+bottom.width,strike);ctx.lineTo(bottom.left,strike);ctx.closePath();ctx.fill();for(const region of regions){const y1=Math.max(horizon,Math.min(strike,yFor(region.start,time))),y2=Math.max(horizon,Math.min(strike,yFor(region.end,time)));if(yFor(region.start,time)<horizon||yFor(region.end,time)>strike)continue;const high=geom(Math.min(y1,y2)),low=geom(Math.max(y1,y2));ctx.globalAlpha=.18;ctx.fillStyle='#ffb454';ctx.beginPath();ctx.moveTo(high.left,Math.min(y1,y2));ctx.lineTo(high.left+high.width,Math.min(y1,y2));ctx.lineTo(low.left+low.width,Math.max(y1,y2));ctx.lineTo(low.left,Math.max(y1,y2));ctx.closePath();ctx.fill()}ctx.globalAlpha=1;for(let lane=0;lane<=5;lane++){ctx.strokeStyle='#52647d';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(top.left+lane*top.width/5,horizon);ctx.lineTo(bottom.left+lane*bottom.width/5,strike);ctx.stroke()}beats.forEach((beat,index)=>{const y=yFor(beat,time);if(y<horizon||y>strike+20)return;lineAt(y,index%meter===0?'#95aac5':'#344760',index%meter===0?3:1)});lineAt(strike,'#ffffff',6);ctx.shadowBlur=0;const labels=inst.value==='drums'?['Kick','Snare','Hi-hat','Blue','Green']:['Green','Red','Yellow','Blue','Orange'];ctx.font='16px system-ui';ctx.textAlign='center';for(let lane=0;lane<5;lane++){const x=laneX(lane,strike);ctx.fillStyle=colors[lane];ctx.beginPath();ctx.arc(x,strike,22,0,Math.PI*2);ctx.fill();ctx.fillStyle='#dfe9f5';ctx.fillText(labels[lane],x,642)}for(const n of notes){const rawStart=yFor(n.t,time),rawEnd=yFor(n.end,time);if(rawStart<horizon-30||rawEnd>strike+45)continue;const y=Math.min(strike,rawStart),endY=Math.max(horizon,rawEnd);for(const lane of n.lanes){if(n.end-n.t>.15&&endY<y){const x1=laneX(lane,y),x2=laneX(lane,endY),w1=5+10*(y-horizon)/(strike-horizon),w2=5+10*(endY-horizon)/(strike-horizon);ctx.globalAlpha=.25+.5*n.c;ctx.fillStyle=colors[lane];ctx.beginPath();ctx.moveTo(x1-w1,y);ctx.lineTo(x1+w1,y);ctx.lineTo(x2+w2,endY);ctx.lineTo(x2-w2,endY);ctx.closePath();ctx.fill()}const x=laneX(lane,y),size=7+13*Math.max(0,Math.min(1,(y-horizon)/(strike-horizon)));ctx.globalAlpha=.38+.62*n.c;ctx.fillStyle=colors[lane];ctx.strokeStyle='#f7fbff';ctx.lineWidth=2;if(Math.abs(n.t-time)<.07||(n.t<time&&n.end>time)){ctx.shadowColor=colors[lane];ctx.shadowBlur=28}ctx.beginPath();ctx.roundRect(x-size*1.35,y-size*.62,size*2.7,size*1.24,size*.55);ctx.fill();ctx.stroke();ctx.shadowBlur=0}}ctx.globalAlpha=1;ctx.textAlign='left';ctx.fillStyle='#b9c8db';ctx.fillText('NOTES APPROACH THIS LINE',bottom.left+8,strike+38);const sourceTime=Math.max(0,time-lead),local=notes.filter(n=>Math.abs(n.t-time)<=2).length/4,active=regions.find(region=>region.start<=time&&time<=region.end),voice=active?' · voice conflict '+active.register_separation.toFixed(1)+' semitones · '+active.register_switches+' switches':'';document.getElementById('stats').textContent=notes.length+' notes · player '+time.toFixed(2)+'s · song '+sourceTime.toFixed(2)+'s · local density '+local.toFixed(1)+'/s · '+notes.filter(n=>n.end-n.t>=.15).length+' holds'+voice+' · Space: play/pause · Arrows: ±5s';requestAnimationFrame(draw)}draw();</script></html>'''
+    page=page.replace(
+        "Switch to click audio to hear Expert onsets, slow playback for dense "
+        "passages, and scrub or jump back to repeat a section.",
+        "Switch audio to an isolated separation stem to determine whether a "
+        "problem begins in separation, or to click audio to hear Expert "
+        "onsets. Slow playback and scrub or jump back to repeat a section.",
+    ).replace(
+        "Object.keys(data).forEach(i=>{const o=document.createElement('option');"
+        "o.textContent=i;inst.append(o)});function setAudio()",
+        "Object.keys(data).forEach(i=>{const o=document.createElement('option');"
+        "o.textContent=i;inst.append(o)});for(const stem of payload.stems||[]){"
+        "const o=document.createElement('option');o.value='stem:'+stem;"
+        "o.textContent=stem+' stem only';mode.append(o)}let currentMode='song';"
+        "const stemMode=value=>value.startsWith('stem:');"
+        "const chartTime=()=>audio.currentTime+(stemMode(currentMode)?lead:0);"
+        "function setAudio()",
+    ).replace(
+        "function setAudio(){const t=audio.currentTime,playing=!audio.paused;"
+        "audio.src='audio/'+(mode.value==='audit'?'timing-audit-'+inst.value+"
+        "'.wav':'song.wav');audio.onloadedmetadata=()=>{audio.currentTime=t;",
+        "function setAudio(){const t=chartTime(),playing=!audio.paused;"
+        "currentMode=mode.value;audio.src=currentMode==='audit'?"
+        "'audio/timing-audit-'+inst.value+'.wav':stemMode(currentMode)?"
+        "'source/stems/'+currentMode.slice(5)+'.wav':'audio/song.wav';"
+        "audio.onloadedmetadata=()=>{audio.currentTime=Math.max(0,t-"
+        "(stemMode(currentMode)?lead:0));",
+    ).replace(
+        "button.onclick=()=>audio.currentTime=marker.time;",
+        "button.onclick=()=>audio.currentTime=Math.max(0,marker.time-"
+        "(stemMode(currentMode)?lead:0));",
+    ).replace(
+        "function draw(){const time=audio.currentTime,notes=data",
+        "function draw(){const time=chartTime(),notes=data",
+    )
     page=page.replace(
         "for(const n of notes){const rawStart=yFor(n.t,time),rawEnd=yFor(n.end,time);"
         "if(rawStart<horizon-30||rawEnd>strike+45)continue;"

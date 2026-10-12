@@ -531,10 +531,11 @@ Each run gets a new timestamped folder, so existing charts are preserved:
 ```text
 output/Artist_Song_TIMESTAMP/
   source/              decoded audio and source fingerprint
+  source/stems/        guitar, bass, drums, piano, vocals and other WAVs
   analysis/            beat map, note events, model activations, stems manifest
   midi/notes.mid       generated authoring MIDI
   audio/song.wav       source mix with the same lead-in as MIDI
-  audio/timing-audit.wav
+  audio/timing-audit-{instrument}.wav
   metadata/            song and generation options
   import/              song.ini, MIDI, audio for Onyx import
   onyx-project/        imported project and compilation intermediates
@@ -552,16 +553,21 @@ whose final lane pattern differs from the family majority. Marker thresholds
 follow the selected Band or Electronic chart profile; they guide listening and
 never alter the authored chart.
 
+The Audio selector can play the complete song, the selected-instrument onset
+audit, or any isolated separation stem while keeping the chart synchronized.
+Comparing `guitar` with `other` is especially useful when layered lead and
+rhythm guitars may have been divided between Demucs outputs.
+
 `analysis/structure-diagnostics.json` records neutral eight-measure activity
 blocks, strongest unlabeled activity boundaries and repeated measure-level drum
 grooves. Review pages link the eight strongest boundaries. These reports do not
 invent verse/chorus names or rewrite notes.
 
-`cache/stems` is keyed by decoded-audio hash and quality settings. Source/stems
-are retained, which uses disk space but permits troubleshooting without repeating
-separation. Original files are never overwritten. Batch processing continues
-after a failed song and writes a report. Cached stems are referenced in the
-manifest rather than copied into every run.
+`cache/stems` is keyed by decoded-audio hash and quality settings. Every run
+also retains its exact review stems under `source/stems`. On the same volume
+these are hard links to the cache and consume no second copy of the audio;
+cross-volume supplied stems are copied as a fallback. Original files are never
+overwritten. Batch processing continues after a failed song and writes a report.
 
 The package currently uses the original stereo mix as backing audio. Instrument
 audio does not mute independently when the player misses. This preserves source

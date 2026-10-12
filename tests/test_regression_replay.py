@@ -193,7 +193,9 @@ def test_cached_replay_recomputes_band_lead_from_cached_stem(
         )
     )
 
-    assert calls and calls[0][0]==stem
+    assert calls
+    assert calls[0][0]==replay_folder/"source"/"stems"/"guitar.wav"
+    assert calls[0][0].is_file()
     assert {event["pitch"] for event in transcription}=={60}
 
 

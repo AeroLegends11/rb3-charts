@@ -1,6 +1,7 @@
 from pathlib import Path
 import hashlib
 import os
+import shutil
 import subprocess
 import numpy as np
 import soundfile as sf
@@ -86,6 +87,29 @@ def separate(wav, cache, quality, device, log):
             torch.cuda.empty_cache()
     save_json(manifest, {"models": models, "device": device, "source": fingerprint(wav)})
     return paths
+
+def expose_stems(stems, destination, log):
+    """Retain reviewable run-local names without duplicating cached audio."""
+    destination=Path(destination)
+    destination.mkdir(parents=True,exist_ok=True)
+    exposed={}
+    for name,source in sorted(stems.items()):
+        source=Path(source).resolve()
+        if not source.is_file():
+            log(f"Stem unavailable for review: {name} ({source})")
+            continue
+        target=destination/f"{Path(name).name}.wav"
+        if target.exists():
+            target.unlink()
+        try:
+            os.link(source,target)
+            method="linked"
+        except OSError:
+            shutil.copy2(source,target)
+            method="copied"
+        exposed[name]=target
+        log(f"Review stem {method}: {target}")
+    return exposed
 
 def write_padded_audio(wav, output, lead, tail=3.0):
     y, sr = sf.read(wav, dtype="float32", always_2d=True)
