@@ -471,7 +471,12 @@ contour checks to `analysis/patterns.json`.
 After chord cleanup, one final Band Guitar phrase author owns Expert fingering.
 It compares whole phrases and bounded three-to-five-note windows, reuses compact
 lane shapes only for supported motif matches, and keeps strong variations
-independent. Its decisions and rejected matches are saved to
+independent. Precision mode also compares four-second chroma, attack and energy
+sequences across the isolated guitar stem. A long, high-similarity audio repeat
+may reuse the higher-confidence lane and chord pattern when its attacks align;
+the change is rolled back if it worsens collapsed contours or same-lane runs.
+Audio regions are saved to `analysis/guitar-audio-repetitions.json`, while
+applied and rejected authoring decisions are saved to
 `analysis/phrase-authoring.json`; earlier passes no longer rewrite lanes before
 this authoritative stage.
 

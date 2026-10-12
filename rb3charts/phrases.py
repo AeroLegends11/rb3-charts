@@ -790,8 +790,220 @@ def _apply_band_chord_sections(notes, tempo, evidence):
     return report
 
 
+def _apply_audio_repeat_consistency(notes, tempo, evidence):
+    report = {
+        "method": "audio self-similarity gated by attack, rhythm, pitch and chord structure",
+        "regions_considered": 0,
+        "regions_compatible": 0,
+        "regions_applied": 0,
+        "notes_changed": 0,
+        "conflicts": 0,
+        "rejected_quality": False,
+        "regions": [],
+    }
+    regions = (evidence or {}).get("regions", ())
+    if not notes or not regions:
+        return report
+    report["regions_considered"] = len(regions)
+
+    def region_notes(start, end):
+        return [note for note in notes if start <= note.start < end]
+
+    def shape_quality(rows):
+        pairs = [
+            (left, right)
+            for left, right in zip(rows, rows[1:])
+            if len(left.lanes) == len(right.lanes) == 1
+            and left.pitch != right.pitch
+        ]
+        directional = sum(
+            (right.pitch - left.pitch)
+            * (right.lanes[0] - left.lanes[0]) > 0
+            for left, right in pairs
+        )
+        flattened = sum(left.lanes == right.lanes for left, right in pairs)
+        diversity = len({tuple(note.lanes) for note in rows})
+        confidence = float(np.mean([note.confidence for note in rows]))
+        chord_rate = sum(len(note.lanes) > 1 for note in rows) / len(rows)
+        return (
+            confidence,
+            chord_rate,
+            directional - flattened,
+            diversity,
+        )
+
+    proposals = {}
+    accepted_regions = []
+    for region in regions:
+        left = region_notes(region["left_start"], region["left_end"])
+        right = region_notes(region["right_start"], region["right_end"])
+        if min(len(left), len(right)) < 4 or max(len(left), len(right)) > 64:
+            continue
+        left_times = np.asarray([
+            note.start - region["left_start"] for note in left
+        ])
+        right_times = np.asarray([
+            note.start - region["right_start"] for note in right
+        ])
+        shifts = [
+            float(right_time - left_time)
+            for left_time in left_times
+            for right_time in right_times
+            if abs(right_time - left_time) <= .5
+        ]
+        if not shifts:
+            continue
+        shift = min(
+            shifts,
+            key=lambda value: (
+                -sum(
+                    np.min(np.abs(right_times - (left_time + value))) <= .09
+                    for left_time in left_times
+                ),
+                abs(value),
+            ),
+        )
+        alignment = []
+        right_cursor = 0
+        for left_index, left_time in enumerate(left_times):
+            candidates = [
+                right_index
+                for right_index in range(right_cursor, len(right_times))
+                if abs(right_times[right_index] - (left_time + shift)) <= .09
+            ]
+            if not candidates:
+                continue
+            right_index = min(
+                candidates,
+                key=lambda index: abs(
+                    right_times[index] - (left_time + shift)
+                ),
+            )
+            alignment.append((left_index, right_index))
+            right_cursor = right_index + 1
+        coverage = len(alignment) / max(len(left), len(right))
+        high_audio_match = (
+            region["similarity"] >= .83
+            and region.get("duration", 0) >= 8
+            and region.get("anchors", 0) >= 20
+            and coverage >= .65
+        )
+        if len(alignment) < 4 or (coverage < .7 and not high_audio_match):
+            continue
+        aligned_left = [left[i] for i, _ in alignment]
+        aligned_right = [right[j] for _, j in alignment]
+        polyphony_agreement = sum(
+            len(a.lanes) == len(b.lanes)
+            for a, b in zip(aligned_left, aligned_right)
+        ) / len(alignment)
+        if polyphony_agreement < .75 and not high_audio_match:
+            continue
+        pitch_delta = np.asarray([
+            right_note.pitch - left_note.pitch
+            for left_note, right_note in zip(aligned_left, aligned_right)
+        ])
+        transposition = float(np.median(pitch_delta))
+        if (
+            float(np.max(np.abs(pitch_delta - transposition))) > 2
+            and not high_audio_match
+        ):
+            continue
+        pitch_steps = [
+            (
+                int(np.sign(b.pitch - a.pitch)),
+                int(np.sign(d.pitch - c.pitch)),
+            )
+            for a, b, c, d in zip(
+                aligned_left,
+                aligned_left[1:],
+                aligned_right,
+                aligned_right[1:],
+            )
+            if b.pitch != a.pitch or d.pitch != c.pitch
+        ]
+        if (
+            pitch_steps
+            and sum(a == b for a, b in pitch_steps) / len(pitch_steps) < .8
+            and not high_audio_match
+        ):
+            continue
+        report["regions_compatible"] += 1
+        source, target = (
+            (aligned_left, aligned_right)
+            if shape_quality(aligned_left) >= shape_quality(aligned_right)
+            else (aligned_right, aligned_left)
+        )
+        flat_source = [lane for note in source for lane in note.lanes]
+        shifts = range(-min(flat_source), 5 - max(flat_source))
+        shift = min(
+            shifts,
+            key=lambda value: (
+                sum(
+                    abs(
+                        float(np.mean(source_note.lanes)) + value
+                        - float(np.mean(target_note.lanes))
+                    )
+                    for source_note, target_note in zip(source, target)
+                ),
+                abs(value),
+            ),
+        )
+        changed = 0
+        for source_note, target_note in zip(source, target):
+            lanes = tuple(lane + shift for lane in source_note.lanes)
+            if lanes == target_note.lanes:
+                continue
+            proposals.setdefault(target_note.source_id, set()).add(lanes)
+            changed += 1
+        if changed:
+            accepted_regions.append({
+                "left_start": region["left_start"],
+                "right_start": region["right_start"],
+                "matched_attacks": len(alignment),
+                "coverage": round(coverage, 4),
+                "high_audio_match": high_audio_match,
+                "proposed_changes": changed,
+                "similarity": region["similarity"],
+            })
+    report["conflicts"] = sum(len(rows) > 1 for rows in proposals.values())
+    assignments = {
+        source_id: next(iter(rows))
+        for source_id, rows in proposals.items()
+        if len(rows) == 1
+    }
+    if not assignments:
+        return report
+    by_source = {note.source_id: note for note in notes}
+    before = {
+        source_id: by_source[source_id].lanes
+        for source_id in assignments
+        if source_id in by_source
+    }
+    baseline_quality = _lane_run_quality(_guitar_single_note_phrases(notes, tempo))
+    for source_id, lanes in assignments.items():
+        if source_id in by_source:
+            by_source[source_id].lanes = lanes
+    candidate_quality = _lane_run_quality(_guitar_single_note_phrases(notes, tempo))
+    if (
+        candidate_quality["collapsed_contour_runs"]
+        > baseline_quality["collapsed_contour_runs"]
+        or candidate_quality["long_same_lane_runs"]
+        > baseline_quality["long_same_lane_runs"]
+        or candidate_quality["max_same_lane_run"]
+        > baseline_quality["max_same_lane_run"]
+    ):
+        for source_id, lanes in before.items():
+            by_source[source_id].lanes = lanes
+        report["rejected_quality"] = True
+        return report
+    report["regions_applied"] = len(accepted_regions)
+    report["notes_changed"] = len(before)
+    report["regions"] = accepted_regions[:24]
+    return report
+
+
 def author_guitar_phrases(
-    notes, tempo, chord_evidence=None,
+    notes, tempo, chord_evidence=None, audio_repetitions=None,
     sustain_threshold=BAND_GUITAR_SUSTAIN_SECONDS,
 ):
     """Sight-reading pass: phrase contour, repeatable fingering, short tails.
@@ -934,6 +1146,9 @@ def author_guitar_phrases(
     repeat_fingerings = _stabilize_repeat_fingerings(
         result,tempo,quality_phrases=phrases
     )
+    audio_repeat_consistency = _apply_audio_repeat_consistency(
+        result, tempo, audio_repetitions
+    )
     lane_quality = _lane_run_quality(phrases)
     for phrase, rows in zip(phrase_report, phrases):
         phrase["final_lanes"] = [list(note.lanes) for note in rows]
@@ -953,4 +1168,5 @@ def author_guitar_phrases(
                     ),
                     "window_motif_low_confidence_closures": len(low_confidence_closures),
                     "chord_sections": chord_sections,
+                    "audio_repeat_consistency": audio_repeat_consistency,
                     "notes_added": 0, "notes_removed": 0}

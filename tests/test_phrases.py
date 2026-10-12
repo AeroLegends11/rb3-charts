@@ -1,6 +1,7 @@
 import numpy as np
 from rb3charts.model import Note, TempoMap
 from rb3charts.phrases import (
+    _apply_audio_repeat_consistency,
     _lane_run_quality,
     _preserve_supported_lane_span,
     _stabilize_repeat_fingerings,
@@ -680,3 +681,40 @@ def test_phrase_motif_matching_is_deterministic():
     second,second_report=author_guitar_phrases(notes,grid())
     assert [(n.lanes,n.pitch,n.end) for n in first]==[(n.lanes,n.pitch,n.end) for n in second]
     assert first_report["phrases"]==second_report["phrases"]
+
+
+def test_audio_repeat_consistency_reuses_supported_lane_and_chord_shape():
+    notes = []
+    for occurrence, (offset, confidence, lanes) in enumerate((
+        (1.0, .9, ((0, 2), (1,), (2, 4), (3,))),
+        (5.0, .6, ((1, 3), (1,), (1, 3), (1,))),
+    )):
+        for step, (pitch, gems) in enumerate(zip((60, 62, 64, 65), lanes)):
+            notes.append(Note(
+                offset + step * .25,
+                offset + step * .25 + .1,
+                gems,
+                confidence,
+                f"{occurrence}-{step}",
+                pitch,
+            ))
+    pitches = [note.pitch for note in notes]
+    starts = [note.start for note in notes]
+
+    report = _apply_audio_repeat_consistency(
+        notes,
+        grid(),
+        {"regions": [{
+            "left_start": 1.0,
+            "left_end": 2.0,
+            "right_start": 5.0,
+            "right_end": 6.0,
+            "similarity": .95,
+        }]},
+    )
+
+    assert [note.pitch for note in notes] == pitches
+    assert [note.start for note in notes] == starts
+    assert [note.lanes for note in notes[:4]] == [note.lanes for note in notes[4:]]
+    assert report["regions_applied"] == 1
+    assert report["notes_changed"] == 3

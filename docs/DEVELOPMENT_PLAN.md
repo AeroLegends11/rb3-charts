@@ -1562,3 +1562,19 @@ Status update (2026-09-22):
   authoritative `guitar-guitar-events.json` rather than merging diagnostic
   left/right event reports into one candidate stream. This does not alter fresh
   GUI generation, but restores trustworthy cached experiments.
+- Added source-only multi-second guitar self-similarity for Precision authoring.
+  Four-second chroma, onset and energy sequences identify repeated regions
+  before lane assignment. Only long, high-similarity regions with aligned
+  attacks may reuse the higher-confidence lane and chord pattern; attack times,
+  pitches and source IDs remain unchanged, and the proposal is rolled back if
+  collapsed contours or same-lane runs worsen. On cached Jonas evidence, the
+  isolated stem identified an 11.2-second repeat at 39.6/97.6 s with similarity
+  0.8362. Reusing 27 matched assignments improved corrected official exact-lane
+  agreement 0.1263 to 0.1400 and matched chord classification 0.5503 to 0.5564;
+  chord recall improved 0.2769 to 0.2876. Attack count, timing, pitches,
+  collapsed-contour count and maximum same-lane run were unchanged.
+- A bounded-window consensus variant was rejected after Jonas exposed 7,343
+  pairwise matches. Although it removed ambiguous proposals, a 14-song cached
+  replay increased Joker and the Thief's long same-lane runs 4 to 8 and maximum
+  run 11 to 19. The existing window matcher remains unchanged; audio-level
+  repeats are a separate, stricter evidence path.

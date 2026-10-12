@@ -22,6 +22,7 @@ from .assessment import (
     write_batch_review,
 )
 from .events import write_event_trace
+from .audio_motifs import analyze_guitar_repetitions
 from .phrases import (
     analyze_guitar_lane_quality,
     author_guitar_phrases,
@@ -104,7 +105,9 @@ def _load_accepted_event_groups(
     return groups
 
 
-def _author_band_guitar_candidate(raw, chord_evidence, tempo, duration):
+def _author_band_guitar_candidate(
+    raw, chord_evidence, tempo, duration, audio_repetitions=None
+):
     notes=map_pitched(
         raw,
         "guitar",
@@ -133,6 +136,7 @@ def _author_band_guitar_candidate(raw, chord_evidence, tempo, duration):
         notes,
         tempo,
         chord_evidence=chord_evidence,
+        audio_repetitions=audio_repetitions,
         sustain_threshold=BAND_GUITAR_SUSTAIN_SECONDS,
     )
     stages.append(stage_entry("after_author_guitar_phrases",notes))
@@ -418,6 +422,7 @@ def generate(options: Options, progress=print):
         lead_focus={}
         voice_continuity={}
         phrase_authoring={}
+        guitar_audio_repetitions=None
         stage_snapshots={}
         warnings=[]
         ordered=list(options.instruments)
@@ -519,8 +524,20 @@ def generate(options: Options, progress=print):
                     notes,
                 )
             if instrument=="guitar":
+                if (
+                    resolved_profile=="band"
+                    and options.quality=="precision"
+                    and guitar_audio_repetitions is None
+                ):
+                    log("Comparing repeated multi-second guitar regions")
+                    guitar_audio_repetitions=analyze_guitar_repetitions(stem)
+                    save_json(
+                        folder/"analysis"/"guitar-audio-repetitions.json",
+                        guitar_audio_repetitions,
+                    )
                 notes,phrase_authoring[instrument]=author_guitar_phrases(
                     notes,tempo,chord_evidence=chord_evidence,
+                    audio_repetitions=guitar_audio_repetitions,
                     sustain_threshold=(
                         ELECTRONIC_SUSTAIN_SECONDS
                         if resolved_profile=="electronic"
@@ -572,6 +589,7 @@ def generate(options: Options, progress=print):
                             },
                             tempo,
                             duration,
+                            guitar_audio_repetitions,
                         )
                         candidate["focus"]=channel_focus
                         stereo_candidates[side]=candidate
@@ -1043,6 +1061,7 @@ def replay_cached(
     lead_focus={}
     voice_continuity={}
     phrase_authoring={}
+    guitar_audio_repetitions=None
     stage_snapshots={}
     warnings=[]
     shadow_payload=None
@@ -1171,8 +1190,28 @@ def replay_cached(
                 notes,
             )
         if instrument=="guitar":
+            if resolved_profile=="band" and guitar_audio_repetitions is None:
+                cached_repetitions=analysis_source/"guitar-audio-repetitions.json"
+                if cached_repetitions.is_file():
+                    guitar_audio_repetitions=json.loads(
+                        cached_repetitions.read_text(encoding="utf-8")
+                    )
+                    consumed_inputs.add(cached_repetitions)
+                else:
+                    guitar_stem=Path(cached_stems.get("guitar",""))
+                    if guitar_stem.is_file():
+                        log("Comparing repeated multi-second guitar regions")
+                        guitar_audio_repetitions=analyze_guitar_repetitions(
+                            guitar_stem
+                        )
+                if guitar_audio_repetitions is not None:
+                    save_json(
+                        analysis_folder/"guitar-audio-repetitions.json",
+                        guitar_audio_repetitions,
+                    )
             notes,phrase_authoring[instrument]=author_guitar_phrases(
                 notes,tempo,chord_evidence=chord_evidence,
+                audio_repetitions=guitar_audio_repetitions,
                 sustain_threshold=(
                     ELECTRONIC_SUSTAIN_SECONDS
                     if resolved_profile=="electronic"
