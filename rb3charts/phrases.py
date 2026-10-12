@@ -238,6 +238,59 @@ def _preserve_supported_lane_span(rows, lanes):
     return stable, stable != lanes
 
 
+def _spread_supported_pitch_contour(rows, lanes):
+    incoming = np.asarray([note.lanes[0] for note in rows], dtype=float)
+    pitches = np.asarray([note.pitch for note in rows], dtype=float)
+    duration = rows[-1].start - rows[0].start
+    if (
+        len(rows) < 32
+        or duration <= 0
+        or len(rows) / duration < 4
+        or len(set(pitches)) < 5
+        or np.ptp(pitches) < 10
+        or np.ptp(incoming) < 3
+    ):
+        return lanes, False
+    correlation = np.corrcoef(pitches, incoming)[0, 1]
+    if not np.isfinite(correlation) or correlation < .9:
+        return lanes, False
+    incoming_min, incoming_max = min(incoming), max(incoming)
+    if (
+        sum(incoming == incoming_min) < 2
+        or sum(incoming == incoming_max) < 2
+    ):
+        return lanes, False
+    pitch_lanes = {}
+    for pitch, lane in zip(pitches, incoming):
+        pitch_lanes.setdefault(pitch, []).append(lane)
+    stable = np.asarray([
+        max(set(pitch_lanes[pitch]), key=lambda lane: (
+            pitch_lanes[pitch].count(lane),
+            -lane,
+        ))
+        for pitch in pitches
+    ])
+    directions = [
+        (right_pitch - left_pitch) * (right_lane - left_lane)
+        for left_pitch, right_pitch, left_lane, right_lane
+        in zip(pitches, pitches[1:], stable, stable[1:])
+        if right_pitch != left_pitch
+    ]
+    agreement = sum(value > 0 for value in directions) / max(1, len(directions))
+    reversals = sum(value < 0 for value in directions) / max(1, len(directions))
+    if agreement < .78 or reversals:
+        return lanes, False
+    unique_pitches = sorted(set(pitches))
+    spread_map = {
+        pitch: int(round(index * 4 / (len(unique_pitches) - 1)))
+        for index, pitch in enumerate(unique_pitches)
+    }
+    spread = [spread_map[pitch] for pitch in pitches]
+    if set(spread) != set(range(5)):
+        return lanes, False
+    return spread, spread != lanes
+
+
 def _stabilize_repeated_pitch_lanes(rows, lanes):
     proposals = {}
     for pitch in {note.pitch for note in rows}:
@@ -1024,6 +1077,8 @@ def author_guitar_phrases(
     pitch_anchor_changes = 0
     pitch_anchor_contours_protected = 0
     supported_span_preservations = 0
+    supported_contour_spreads = 0
+    supported_contour_spread_rejections = 0
     for phrase_index, rows in enumerate(phrases):
         index = indices[id(rows[0])]
         previous, _, _ = _continuity_anchor(baseline, index, rows[0].start, tempo)
@@ -1101,6 +1156,34 @@ def author_guitar_phrases(
         pitch_anchor_contours_protected += protected
         lanes, span_preserved = _preserve_supported_lane_span(rows, lanes)
         supported_span_preservations += int(span_preserved)
+        if not span_preserved:
+            spread_lanes, contour_spread = _spread_supported_pitch_contour(
+                rows, lanes
+            )
+            if contour_spread:
+                baseline_quality = _lane_run_quality([[
+                    replace(note, lanes=(lane,))
+                    for note, lane in zip(rows, lanes)
+                ]])
+                spread_quality = _lane_run_quality([[
+                    replace(note, lanes=(lane,))
+                    for note, lane in zip(rows, spread_lanes)
+                ]])
+                if (
+                    spread_quality["collapsed_contour_runs"]
+                    > baseline_quality["collapsed_contour_runs"]
+                    or spread_quality["long_same_lane_runs"]
+                    > baseline_quality["long_same_lane_runs"]
+                    or spread_quality["max_same_lane_run"]
+                    > baseline_quality["max_same_lane_run"]
+                ):
+                    contour_spread = False
+                    supported_contour_spread_rejections += 1
+                else:
+                    lanes = spread_lanes
+            supported_contour_spreads += int(contour_spread)
+        else:
+            contour_spread = False
         before = [n.lanes[0] for n in rows]
         for note, lane in zip(rows, lanes):
             note.lanes = (lane,)
@@ -1115,6 +1198,7 @@ def author_guitar_phrases(
                               "motif_reused": motif_reused,
                               "motif_reason": motif_reason,
                               "supported_span_preserved": span_preserved,
+                              "supported_contour_spread": contour_spread,
                               "window_motif_constrained": window_constrained})
     for (phrase_index, note_index), closure in low_confidence_closures.items():
         if phrase_report[phrase_index]["supported_span_preserved"]:
@@ -1158,6 +1242,9 @@ def author_guitar_phrases(
                     "pitch_anchor_changes": pitch_anchor_changes,
                     "pitch_anchor_contours_protected": pitch_anchor_contours_protected,
                     "supported_span_preservations": supported_span_preservations,
+                    "supported_contour_spreads": supported_contour_spreads,
+                    "supported_contour_spread_rejections":
+                    supported_contour_spread_rejections,
                     "lane_quality": lane_quality,
                     "repeat_fingerings": repeat_fingerings,
                     "sustain_threshold_seconds": sustain_threshold,

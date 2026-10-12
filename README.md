@@ -475,6 +475,9 @@ independent. Precision mode also compares four-second chroma, attack and energy
 sequences across the isolated guitar stem. A long, high-similarity audio repeat
 may reuse the higher-confidence lane and chord pattern when its attacks align;
 the change is rolled back if it worsens collapsed contours or same-lane runs.
+Long, dense phrases with strongly correlated, reversal-free source pitch/lane
+evidence may also spread robust pitch ranks across all five colors. Each spread
+is rejected if it introduces a collapsed contour or worsens same-lane runs.
 Audio regions are saved to `analysis/guitar-audio-repetitions.json`, while
 applied and rejected authoring decisions are saved to
 `analysis/phrase-authoring.json`; earlier passes no longer rewrite lanes before

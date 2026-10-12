@@ -1578,3 +1578,23 @@ Status update (2026-09-22):
   replay increased Joker and the Thief's long same-lane runs 4 to 8 and maximum
   run 11 to 19. The existing window matcher remains unchanged; audio-level
   repeats are a separate, stricter evidence path.
+- The fresh Jonas review identified a separate first-minute lane-compression
+  failure after approximately 9 s. In the 13.25-26.98 s phrase, the final
+  optimizer had reduced 24 incoming green attacks to five and produced no
+  orange attacks despite a 0.945 pitch/lane correlation and zero reversals.
+  A guarded post-pass now spreads robust pitch ranks across all five lanes only
+  for long, dense phrases with strongly correlated, reversal-free incoming
+  evidence and repeated support at both lane edges. Per-phrase quality checks
+  reject any spread that adds collapsed contours or worsens long/maximum
+  same-lane runs.
+- On the fresh Jonas replay, 9-35 s green/orange use changes 6/2 to 6/6 and the
+  accepted 13.25-26.98 s phrase uses all five lanes. Corrected official
+  exact-lane agreement changes 0.1400 to 0.1385 and mean interval error improves
+  2.1822 to 2.1667; attack count, timing, movement agreement and final lane
+  safety are unchanged. A global pitch-rank-weight increase was rejected because
+  it added long runs in Beast and the Harlot and Mr. Brightside.
+- The final 14-song cached gate accepted three spreads and rejected eight.
+  Collapsed-contour and maximum-run counts did not regress. Hail's available
+  official metrics were unchanged; When You Were Young exact lanes improved
+  0.1253 to 0.1335 with unchanged movement/motifs and mean interval error
+  1.5956 to 1.6066. Joker and the Thief's long/max runs improve 4/11 to 3/10.

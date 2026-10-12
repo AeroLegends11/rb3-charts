@@ -4,6 +4,7 @@ from rb3charts.phrases import (
     _apply_audio_repeat_consistency,
     _lane_run_quality,
     _preserve_supported_lane_span,
+    _spread_supported_pitch_contour,
     _stabilize_repeat_fingerings,
     _stabilize_repeated_pitch_lanes,
     author_guitar_phrases,
@@ -157,6 +158,23 @@ def test_phrase_fingering_preserves_repeated_supported_lane_span():
 
     assert changed
     assert lanes == [0, 1, 3, 4] * 8
+
+
+def test_phrase_fingering_spreads_supported_no_reversal_contour():
+    pitches = (48, 50, 52, 55, 60) * 7
+    incoming = (0, 0, 1, 2, 3) * 7
+    rows = [
+        Note(i * .125, i * .125 + .065, (lane,), pitch=pitch, source_id=str(i))
+        for i, (pitch, lane) in enumerate(zip(pitches, incoming))
+    ]
+
+    lanes, changed = _spread_supported_pitch_contour(
+        rows, [1, 1, 2, 2, 3] * 7
+    )
+
+    assert changed
+    assert set(lanes) == set(range(5))
+    assert lanes == lanes[:5] * 7
 
 
 def test_repeated_exact_riff_preserves_structural_variation():
