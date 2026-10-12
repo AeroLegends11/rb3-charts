@@ -199,6 +199,56 @@ def test_cached_replay_recomputes_band_lead_from_cached_stem(
     assert {event["pitch"] for event in transcription}=={60}
 
 
+def test_cached_replay_ignores_stereo_diagnostic_event_reports(
+    tmp_path,monkeypatch
+):
+    source=tmp_path/"source"
+    _write_replay_fixture(source,profile="band",instruments=["guitar"])
+    analysis=source/"analysis"
+    diagnostic={
+        "events":[{
+            "start":1.0,
+            "end":1.2,
+            "pitch":84,
+            "confidence":.9,
+            "source_id":"diagnostic-left",
+            "source":"guitar-left-channel",
+            "accepted":True,
+        }],
+    }
+    (analysis/"guitar-guitar-left-channel-events.json").write_text(
+        json.dumps(diagnostic),
+        encoding="utf-8",
+    )
+    stem=tmp_path/"cached-guitar.wav"
+    sf.write(stem,np.zeros((44100*8,2),dtype=np.float32),44100)
+    (analysis/"stems.json").write_text(
+        json.dumps({"guitar":str(stem)}),
+        encoding="utf-8",
+    )
+    captured=[]
+
+    def focus(stem,events,beat_period):
+        captured.extend(events)
+        return events,{"groups_resolved":0}
+
+    monkeypatch.setattr(
+        "rb3charts.pipeline.band_guitar_lead_events",
+        focus,
+    )
+    replay_cached(
+        source,
+        output=tmp_path/"output",
+        progress=lambda _:None,
+        compile=False,
+    )
+    assert captured
+    assert all(
+        event["source_id"]!="diagnostic-left"
+        for event in captured
+    )
+
+
 def test_cached_replay_writes_snapshots_and_metrics_for_each_instrument(tmp_path):
     source=tmp_path/"source-run"
     _write_replay_fixture(

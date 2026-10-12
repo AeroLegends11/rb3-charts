@@ -1535,3 +1535,21 @@ Status update (2026-09-22):
   interval error, motif coverage and motif shape were unchanged while attack
   F1 changed 0.5474 to 0.5481. Both integrated localized runs passed structural
   validation.
+- Reviewed the first fresh My Name Is Jonas run from the integrated GUI. The
+  input remained the original full FLAC; selecting `guitar-left-channel` in
+  `review.html` changed listening audio only. Precision selected left-channel
+  evidence solely for the diagnosed 164.52-165.38 s collapse window. Compared
+  with the older cached run, official attack F1 improved 0.6089 to 0.6430, but
+  exact lanes regressed 0.1260 to 0.0872, movement 0.3556 to 0.3030, mean
+  interval error 1.9603 to 2.2199 and motif coverage 0.2722 to 0.2071. The
+  principal remaining failure is downstream lane/motif authoring, not source
+  separation.
+- Tempo isolation rejected both available alternatives for Jonas. Reusing the
+  older unstable 182 BPM map improved exact lanes and motifs but admitted 1,005
+  attacks and reduced attack F1 to 0.6228. Doubling the fresh stable 93.093 BPM
+  grid admitted 1,032 attacks, reached only 0.1022 exact lanes and reduced
+  attack F1 to 0.6245. No tempo-map change is accepted from this song.
+- Fixed cached replay after stereo diagnostics: Band replay now consumes the
+  authoritative `guitar-guitar-events.json` rather than merging diagnostic
+  left/right event reports into one candidate stream. This does not alter fresh
+  GUI generation, but restores trustworthy cached experiments.

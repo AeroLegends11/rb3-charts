@@ -82,9 +82,18 @@ def _notes_from_payload(rows):
     ]
 
 
-def _load_accepted_event_groups(analysis_folder: Path, instrument: str):
+def _load_accepted_event_groups(
+    analysis_folder: Path,
+    instrument: str,
+    report_paths=None,
+):
     groups=[]
-    for report_path in sorted(analysis_folder.glob(f"{instrument}-*-events.json")):
+    paths=(
+        sorted(report_paths)
+        if report_paths is not None
+        else sorted(analysis_folder.glob(f"{instrument}-*-events.json"))
+    )
+    for report_path in paths:
         payload=json.loads(report_path.read_text(encoding="utf-8"))
         events=payload.get("events",[])
         if not isinstance(events,list):
@@ -1088,8 +1097,22 @@ def replay_cached(
             raw=json.loads(transcription_path.read_text(encoding="utf-8"))
             consumed_inputs.add(transcription_path)
             if resolved_profile=="band" and instrument=="guitar":
-                report_paths=sorted(analysis_source.glob("guitar-*-events.json"))
-                candidate_groups=_load_accepted_event_groups(analysis_source,instrument)
+                primary_report=analysis_source/"guitar-guitar-events.json"
+                report_paths=(
+                    [primary_report]
+                    if primary_report.is_file()
+                    else [
+                        path for path in sorted(
+                            analysis_source.glob("guitar-*-events.json")
+                        )
+                        if "-channel-events.json" not in path.name
+                    ]
+                )
+                candidate_groups=_load_accepted_event_groups(
+                    analysis_source,
+                    instrument,
+                    report_paths,
+                )
                 guitar_stem=Path(cached_stems.get("guitar",""))
                 if candidate_groups and guitar_stem.is_file():
                     raw,lead_focus[instrument]=band_guitar_lead_events(
