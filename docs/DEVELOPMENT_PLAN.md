@@ -1635,3 +1635,17 @@ Status update (2026-09-22):
   long/maximum same-lane runs remain unchanged on every song. Seven isolated
   wide two-note detections collapse across four electronic/instrumental charts;
   corpus chord textures and all triad counts otherwise remain unchanged.
+- Added harmonic overtone power-chord propagation and sandwiched weak single-note
+  cleanup for heavy post-transition rhythm sections. In repeated fifth-evidence
+  sections, single notes matching harmonic intervals (fifths and octaves at +7,
+  +12, +19 semitones) of an established repeated root inherit the root's power
+  chord voicing instead of leaving isolated high single-gem overtones during
+  distorted rhythm strums. In addition, weak single notes (attack strength < 0.045
+  or reattacks) sandwiched between identical chords within 320 ms are pruned as
+  resonance flutter.
+- On My Name Is Jonas, this eliminates the spurious orange gem at 21.306 s
+  sandwiched between identical [0, 2] chords and stabilizes the F#5 strum block
+  at 24.35-25.4 s into consistent power chords. Across the 14-song regression
+  corpus, collapsed contours remain at 0 on 13 songs and 1 on When You Were Young;
+  long and maximum same-lane runs do not regress on any song.
+

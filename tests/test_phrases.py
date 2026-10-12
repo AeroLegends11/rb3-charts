@@ -2,6 +2,7 @@ import numpy as np
 from rb3charts.model import Note, TempoMap
 from rb3charts.phrases import (
     _apply_audio_repeat_consistency,
+    _apply_band_chord_sections,
     _apply_rhythmic_riff_consistency,
     _collapse_isolated_wide_chords,
     _lane_run_quality,
@@ -447,6 +448,84 @@ def test_phrase_authoring_keeps_supported_pitch_lanes_consistent():
         len({note.lanes for note in result if note.pitch == pitch}) == 1
         for pitch in set(pitches)
     )
+
+
+def test_pre_chord_cleanup_removes_sandwiched_weak_single_note_between_identical_chords():
+    notes = [
+        Note(21.15, 21.25, (0, 2), .8, "chord-1", 42),
+        Note(21.30, 21.36, (4,), .5, "guitar-reattack-1844-54", 54),
+        Note(21.50, 21.60, (0, 2), .8, "chord-2", 42),
+    ]
+    evidence = {"candidates": [
+        {
+            "start": 21.15, "end": 21.25, "pitch": 42, "confidence": .8,
+            "source_id": "chord-1", "accepted": True,
+            "evidence": {"attack_strength": .08},
+        },
+        {
+            "start": 21.30, "end": 21.36, "pitch": 54, "confidence": .5,
+            "source_id": "guitar-reattack-1844-54", "accepted": True,
+            "evidence": {"attack_strength": .02},
+        },
+        {
+            "start": 21.50, "end": 21.60, "pitch": 42, "confidence": .8,
+            "source_id": "chord-2", "accepted": True,
+            "evidence": {"attack_strength": .08},
+        },
+    ]}
+
+    result, report = _remove_pre_chord_voice_duplicates(notes, evidence)
+
+    assert [note.source_id for note in result] == ["chord-1", "chord-2"]
+    assert report["notes_removed"] == 1
+    assert report["events"][0]["reason"] == "weak single note sandwiched between identical chords"
+
+
+def test_band_chord_sections_propagates_power_chord_harmonic_overtones():
+    notes = [
+        Note(24.0, 24.1, (0,), .8, "seed-v1", 60),
+        Note(24.2, 24.3, (0,), .8, "seed-v2", 61),
+        Note(24.35, 24.50, (0,), .8, "chord-1", 42),
+        Note(24.6, 24.65, (0,), .8, "seed-v3", 62),
+        Note(24.70, 24.85, (4,), .7, "overtone-octave", 54),
+        Note(24.8, 24.85, (0,), .8, "seed-v4", 63),
+        Note(24.95, 25.10, (3,), .7, "overtone-fifth", 49),
+        Note(25.35, 25.50, (0,), .8, "chord-2", 42),
+        Note(25.70, 25.85, (0,), .8, "chord-3", 42),
+    ]
+    candidates = [
+        {"start": 24.0, "pitch": 60, "confidence": .8, "source_id": "seed-v1", "accepted": True, "model_onset_strength": .8},
+        {"start": 24.0, "pitch": 67, "confidence": .8, "source_id": "seed-v1-5th", "accepted": True, "model_onset_strength": .8},
+        {"start": 24.2, "pitch": 61, "confidence": .8, "source_id": "seed-v2", "accepted": True, "model_onset_strength": .8},
+        {"start": 24.2, "pitch": 68, "confidence": .8, "source_id": "seed-v2-5th", "accepted": True, "model_onset_strength": .8},
+        {"start": 24.35, "pitch": 42, "confidence": .8, "source_id": "chord-1", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 24.35, "pitch": 49, "confidence": .8, "source_id": "chord-1-5th", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 24.6, "pitch": 62, "confidence": .8, "source_id": "seed-v3", "accepted": True, "model_onset_strength": .8},
+        {"start": 24.6, "pitch": 69, "confidence": .8, "source_id": "seed-v3-5th", "accepted": True, "model_onset_strength": .8},
+        {"start": 24.70, "pitch": 54, "confidence": .7, "source_id": "overtone-octave", "accepted": True, "evidence": {"attack_strength": .07}},
+        {"start": 24.8, "pitch": 63, "confidence": .8, "source_id": "seed-v4", "accepted": True, "model_onset_strength": .8},
+        {"start": 24.8, "pitch": 70, "confidence": .8, "source_id": "seed-v4-5th", "accepted": True, "model_onset_strength": .8},
+        {"start": 24.95, "pitch": 49, "confidence": .7, "source_id": "overtone-fifth", "accepted": True, "evidence": {"attack_strength": .07}},
+        {"start": 25.35, "pitch": 42, "confidence": .8, "source_id": "chord-2", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 25.35, "pitch": 49, "confidence": .8, "source_id": "chord-2-5th", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 25.70, "pitch": 42, "confidence": .8, "source_id": "chord-3", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 25.70, "pitch": 49, "confidence": .8, "source_id": "chord-3-5th", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+    ]
+    evidence = {
+        "focus": {"onset_groups": 10, "pitch_corrections": 1, "octave_anchors": 0},
+        "candidates": candidates,
+    }
+    tempo = TempoMap(np.arange(0, 30, .5).tolist())
+    report = _apply_band_chord_sections(notes, tempo, evidence, min_proposals=5)
+    assert report["propagation_gate_passed"]
+    assert report["propagated_notes"] >= 2
+    by_id = {note.source_id: note for note in notes}
+    assert by_id["overtone-octave"].lanes == (0, 2)
+    assert by_id["overtone-fifth"].lanes == (0, 2)
+    assert by_id["chord-1"].lanes == (0, 2)
+    assert by_id["chord-2"].lanes == (0, 2)
+    assert by_id["chord-3"].lanes == (0, 2)
+
 
 
 def test_phrase_authoring_stabilizes_broad_four_note_per_second_run():

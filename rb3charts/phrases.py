@@ -671,7 +671,7 @@ def _continuity_anchor(notes, index, start, tempo):
     return None, "none", barrier_chords
 
 
-def _apply_band_chord_sections(notes, tempo, evidence):
+def _apply_band_chord_sections(notes, tempo, evidence, min_proposals=50):
     report = {
         "method": "repeated fifth-evidence sections with locally matched power-chord attacks",
         "gate_passed": False,
@@ -699,6 +699,11 @@ def _apply_band_chord_sections(notes, tempo, evidence):
         (dict(event) for event in evidence.get("candidates", ()) if event.get("accepted", True)),
         key=lambda event: (event["start"], event["pitch"]),
     )
+    by_source = {
+        str(event.get("source_id")): event
+        for event in candidates
+        if event.get("source_id")
+    }
     groups = []
     for event in candidates:
         if groups and event["start"] - groups[-1][0]["start"] <= .045:
@@ -795,8 +800,8 @@ def _apply_band_chord_sections(notes, tempo, evidence):
             changed_indices.add(index)
     report["direct_notes_changed"] = len(changed)
     propagation_gate = (
-        len(proposals) >= 50
-        and len(changed) / len(proposals) < .5
+        len(proposals) >= min_proposals
+        and len(changed) / max(1, len(proposals)) < .5
         and len(seed_rows) / max(1, octave_seed_count) >= 1.5
     )
     report["propagation_gate_passed"] = propagation_gate
@@ -811,19 +816,53 @@ def _apply_band_chord_sections(notes, tempo, evidence):
             repeated_roots = {
                 pitch for pitch, count in pitch_counts.items() if count >= 3
             }
+            root_lanes = {}
+            for index in run:
+                pitch = notes[index].pitch
+                if pitch in repeated_roots and pitch not in root_lanes:
+                    root = notes[index].lanes[0]
+                    root_lanes[pitch] = (root, root + 2) if root <= 2 else (root - 2, root)
             for index in range(run[0], run[-1] + 1):
                 note = notes[index]
                 if (
                     index in changed_indices
                     or len(note.lanes) != 1
-                    or note.pitch not in repeated_roots
                 ):
                     continue
-                root = note.lanes[0]
-                note.lanes = (root, root + 2) if root <= 2 else (root - 2, root)
-                changed.append(note)
-                changed_indices.add(index)
-                report["propagated_notes"] += 1
+                if note.pitch in repeated_roots:
+                    root = note.lanes[0]
+                    note.lanes = (root, root + 2) if root <= 2 else (root - 2, root)
+                    changed.append(note)
+                    changed_indices.add(index)
+                    report["propagated_notes"] += 1
+                else:
+                    harmonics = [
+                        r for r in repeated_roots
+                        if int(round(note.pitch - r)) in (7, 12, 19)
+                        and r in root_lanes
+                    ]
+                    if harmonics:
+                        source_events = [
+                            by_source[s] for s in str(note.source_id).split("+")
+                            if s in by_source
+                        ]
+                        single_attack = max(
+                            (float(e.get("evidence", {}).get("attack_strength", 0)) for e in source_events),
+                            default=0.0,
+                        )
+                        is_weak_reattack = "reattack" in str(note.source_id) and single_attack < 0.05
+                        if not is_weak_reattack:
+                            matched_root = min(
+                                harmonics,
+                                key=lambda r: min(
+                                    abs(note.start - notes[i].start)
+                                    for i in run if notes[i].pitch == r
+                                ),
+                            )
+                            note.lanes = root_lanes[matched_root]
+                            changed.append(note)
+                            changed_indices.add(index)
+                            report["propagated_notes"] += 1
     if not changed:
         return report
     report["notes_changed"] = len(changed)
@@ -871,13 +910,46 @@ def _remove_pre_chord_voice_duplicates(notes, evidence):
         else:
             groups.append([event])
     removed = set()
+    for i in range(1, len(notes) - 1):
+        prev_chord = notes[i - 1]
+        single = notes[i]
+        next_chord = notes[i + 1]
+        if (
+            len(single.lanes) == 1
+            and len(prev_chord.lanes) >= 2
+            and len(next_chord.lanes) >= 2
+            and prev_chord.lanes == next_chord.lanes
+            and single.start - prev_chord.start <= .32
+            and next_chord.start - single.start <= .32
+        ):
+            source_events = [
+                by_source[source_id]
+                for source_id in str(single.source_id).split("+")
+                if source_id in by_source
+            ]
+            single_attack = max(
+                (float(event.get("evidence", {}).get("attack_strength", 0)) for event in source_events),
+                default=0.0,
+            )
+            is_weak_reattack = "reattack" in str(single.source_id)
+            if single_attack < .045 or is_weak_reattack:
+                removed.add(id(single))
+                report["events"].append({
+                    "source_id": single.source_id,
+                    "start": single.start,
+                    "pitch": single.pitch,
+                    "prev_chord_start": prev_chord.start,
+                    "next_chord_start": next_chord.start,
+                    "single_attack_strength": round(single_attack, 6),
+                    "reason": "weak single note sandwiched between identical chords",
+                })
     for single, chord in zip(notes, notes[1:]):
         gap = chord.start - single.start
         if (
             len(single.lanes) != 1
             or len(chord.lanes) < 2
             or gap <= 0
-            or gap > .16
+            or gap > .18
         ):
             continue
         chord_group = min(
@@ -887,13 +959,19 @@ def _remove_pre_chord_voice_duplicates(notes, evidence):
         if abs(chord_group[0]["start"] - chord.start) > .045:
             continue
         chord_pitches = {int(event["pitch"]) for event in chord_group}
-        if int(single.pitch) not in chord_pitches:
+        pitch_diffs = {abs(int(single.pitch) - p) for p in chord_pitches}
+        matches_pitch = int(single.pitch) in chord_pitches
+        matches_harmonic = any(diff in (7, 12, 19) for diff in pitch_diffs)
+        if not (matches_pitch or matches_harmonic):
             continue
         source_events = [
             by_source[source_id]
             for source_id in str(single.source_id).split("+")
             if source_id in by_source
-            and int(by_source[source_id]["pitch"]) == int(single.pitch)
+            and (
+                int(by_source[source_id]["pitch"]) == int(single.pitch)
+                or abs(int(by_source[source_id]["pitch"]) - int(single.pitch)) in (7, 12, 19)
+            )
         ]
         if (
             not source_events
@@ -909,12 +987,20 @@ def _remove_pre_chord_voice_duplicates(notes, evidence):
             float(event.get("evidence", {}).get("attack_strength", 0))
             for event in chord_group
         )
-        if (
-            single_attack >= .03
-            or chord_attack < .04
-            or chord_attack < single_attack * 2
-        ):
-            continue
+        if matches_pitch:
+            if (
+                single_attack >= .03
+                or chord_attack < .04
+                or chord_attack < single_attack * 2
+            ):
+                continue
+        else:
+            if (
+                single_attack >= .035
+                or chord_attack < .04
+                or chord_attack < single_attack * 1.5
+            ):
+                continue
         removed.add(id(single))
         report["events"].append({
             "source_id": single.source_id,
@@ -925,7 +1011,7 @@ def _remove_pre_chord_voice_duplicates(notes, evidence):
             "attack_gap_ms": round(gap * 1000, 3),
             "single_attack_strength": round(single_attack, 6),
             "chord_attack_strength": round(chord_attack, 6),
-            "reason": "same source pitch continues into immediate chord evidence",
+            "reason": "same source pitch or overtone continues into immediate chord evidence",
         })
     report["notes_removed"] = len(removed)
     return [note for note in notes if id(note) not in removed], report
