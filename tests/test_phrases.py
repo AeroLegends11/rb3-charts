@@ -1039,3 +1039,36 @@ def test_audio_repeat_consistency_propagates_chords_to_single_note_region():
     assert by_id["right-1"].lanes == (0, 2)
     assert by_id["right-2"].lanes == (1, 3)
     assert by_id["right-3"].lanes == (1, 3)
+
+
+def test_rhythmic_riff_uses_transitions_and_octave_tolerance_in_canonical_scoring():
+    pitches = (51, 44, 56, 51, 47, 56, 46, 54, 42, 51)
+    offsets = (.4, .75, 1.02, 1.21, 1.48, 1.8, 2.02, 2.54, 2.76, 2.97)
+    canonical_lanes = (3, 2, 3, 2, 1, 2, 1, 3, 0, 2)
+    flat_lanes = (2, 2, 2, 2, 2, 2, 2, 2, 2, 2)
+    notes = []
+    for cycle in range(3):
+        cycle_pitches = (
+            [p + 12 if idx in (0, 9) else p for idx, p in enumerate(pitches)]
+            if cycle == 2 else pitches
+        )
+        for index, (pitch, offset) in enumerate(zip(cycle_pitches, offsets)):
+            beat = cycle * 3 + offset
+            lane = canonical_lanes[index] if cycle == 1 else flat_lanes[index]
+            notes.append(Note(
+                beat * .5,
+                beat * .5 + .065,
+                (lane,),
+                .75,
+                f"{cycle}-{index}",
+                pitch,
+            ))
+
+    report = _apply_rhythmic_riff_consistency(notes, grid())
+
+    expected = [2, 2, 2, 2, 1, 2, 1, 3, 0, 2]
+    assert report["families_applied"] == 1
+    assert [note.lanes[0] for note in notes[:10]] == expected
+    assert [note.lanes[0] for note in notes[10:20]] == list(canonical_lanes)
+    assert [note.lanes[0] for note in notes[20:]] == expected
+

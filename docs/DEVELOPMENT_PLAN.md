@@ -1674,6 +1674,13 @@ Status update (2026-09-22):
   guitar strumming from acoustic arpeggios with ring-out overtones. On My Name Is
   Jonas, this drops spurious intro chords (0–8.88s) from 17 down to 2 transition pickups,
   while cleanly retaining 67 heavy power chords in the post-8.88s distorted rhythm sections.
+- In `_apply_rhythmic_riff_consistency`, updated canonical cycle scoring to factor
+  in lane transitions (`transitions = sum(a.lanes != b.lanes for a, b in zip(windows[cycle], windows[cycle][1:]))`)
+  alongside unique lane count and outer lane density, ensuring expressive, dynamic
+  fingerings are favored over static single-lane shapes. In addition, relaxed pairwise
+  alignment beat tolerance from 0.20 to 0.25 beats and incorporated octave tolerance
+  (`abs(diff) % 12 == 0`) for pitch step comparisons to bridge acoustic arpeggio flutter.
+
 
 - On My Name Is Jonas, this recovers 468 chords (54.4% chord density, matching
   the authentic reference target of 54.4%), eliminates single-gem dropouts

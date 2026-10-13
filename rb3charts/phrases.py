@@ -1331,7 +1331,7 @@ def _apply_rhythmic_riff_consistency(notes, tempo):
             candidates = [
                 right_index
                 for right_index in range(right_cursor, len(right_beats))
-                if abs(right_beats[right_index] - left_beat) <= .2
+                if abs(right_beats[right_index] - left_beat) <= .25
             ]
             if not candidates:
                 continue
@@ -1392,17 +1392,18 @@ def _apply_rhythmic_riff_consistency(notes, tempo):
                 coverage = len(pairs) / max(len(left), len(right))
                 if coverage < .8:
                     continue
-                pitch_steps = [
-                    (
-                        int(np.sign(left[b].pitch - left[a].pitch)),
-                        int(np.sign(right[d].pitch - right[c].pitch)),
-                    )
-                    for (a, c), (b, d) in zip(pairs, pairs[1:])
-                    if (
-                        left[b].pitch != left[a].pitch
-                        or right[d].pitch != right[c].pitch
-                    )
-                ]
+                pitch_steps = []
+                for (a, c), (b, d) in zip(pairs, pairs[1:]):
+                    left_diff = left[b].pitch - left[a].pitch
+                    right_diff = right[d].pitch - right[c].pitch
+                    if left_diff != 0 or right_diff != 0:
+                        left_step = int(np.sign(left_diff))
+                        right_step = int(np.sign(right_diff))
+                        if left_step == 0 and abs(left_diff) % 12 == 0:
+                            left_step = right_step
+                        elif right_step == 0 and abs(right_diff) % 12 == 0:
+                            right_step = left_step
+                        pitch_steps.append((left_step, right_step))
                 contour_agreement = (
                     sum(a == b for a, b in pitch_steps) / len(pitch_steps)
                     if pitch_steps else 1.0
@@ -1434,6 +1435,10 @@ def _apply_rhythmic_riff_consistency(notes, tempo):
                         lane in (0, 4)
                         for note in windows[cycle]
                         for lane in note.lanes
+                    ),
+                    sum(
+                        a.lanes != b.lanes
+                        for a, b in zip(windows[cycle], windows[cycle][1:])
                     ),
                     float(np.mean([
                         note.confidence for note in windows[cycle]
