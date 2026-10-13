@@ -545,9 +545,11 @@ def test_band_chord_sections_propagates_two_strum_chord_progressions():
         {"start": 10.4, "pitch": 42, "confidence": .8, "source_id": "chord-fsharp-1", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
         {"start": 10.4, "pitch": 49, "confidence": .8, "source_id": "chord-fsharp-1-5th", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
         {"start": 10.6, "pitch": 42, "confidence": .8, "source_id": "chord-fsharp-2", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 10.6, "pitch": 49, "confidence": .8, "source_id": "chord-fsharp-2-5th", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
         {"start": 10.8, "pitch": 44, "confidence": .8, "source_id": "chord-gsharp-1", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
         {"start": 10.8, "pitch": 51, "confidence": .8, "source_id": "chord-gsharp-1-5th", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
         {"start": 11.0, "pitch": 44, "confidence": .8, "source_id": "chord-gsharp-2", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 11.0, "pitch": 51, "confidence": .8, "source_id": "chord-gsharp-2-5th", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
         {"start": 11.2, "pitch": 62, "confidence": .8, "source_id": "seed-3", "accepted": True, "model_onset_strength": .8},
         {"start": 11.2, "pitch": 69, "confidence": .8, "source_id": "seed-3-5th", "accepted": True, "model_onset_strength": .8},
     ]

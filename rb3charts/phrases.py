@@ -800,6 +800,10 @@ def _apply_band_chord_sections(notes, tempo, evidence, min_proposals=50):
     for run in runs:
         if len(run) < 3:
             continue
+        seed_pitches = [notes[idx].pitch for idx in run]
+        seed_counts = {p: sum(notes[idx].pitch == p for idx in run) for p in set(seed_pitches)}
+        if not any(count >= 2 for count in seed_counts.values()):
+            continue
         span_indices = list(range(run[0], run[-1] + 1))
         pitch_counts = {
             pitch: sum(notes[index].pitch == pitch for index in span_indices)
@@ -826,6 +830,10 @@ def _apply_band_chord_sections(notes, tempo, evidence, min_proposals=50):
     if propagation_gate:
         for run in runs:
             if len(run) < 3:
+                continue
+            seed_pitches = [notes[idx].pitch for idx in run]
+            seed_counts = {p: sum(notes[idx].pitch == p for idx in run) for p in set(seed_pitches)}
+            if not any(count >= 2 for count in seed_counts.values()):
                 continue
             span_indices = list(range(run[0], run[-1] + 1))
             pitch_counts = {

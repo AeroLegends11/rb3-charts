@@ -1668,6 +1668,13 @@ Status update (2026-09-22):
   so that high-similarity audio repetitions where one section captured chords
   can harmonize repetitions where lower onset confidence missed polyphony,
   strictly protected by existing `_lane_run_quality` rollback.
+- In `_apply_band_chord_sections`, added a seed repetition check (`any(count >= 2 for count in seed_counts.values())`)
+  to ensure that power chord propagation only triggers when the detected seeds
+  themselves repeat within the run, cleanly distinguishing genuine repeated rhythm
+  guitar strumming from acoustic arpeggios with ring-out overtones. On My Name Is
+  Jonas, this drops spurious intro chords (0–8.88s) from 17 down to 2 transition pickups,
+  while cleanly retaining 67 heavy power chords in the post-8.88s distorted rhythm sections.
+
 - On My Name Is Jonas, this recovers 468 chords (54.4% chord density, matching
   the authentic reference target of 54.4%), eliminates single-gem dropouts
   during post-9s rhythm strums, decreases the maximum same-lane run from 18 to 12,
