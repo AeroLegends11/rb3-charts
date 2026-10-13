@@ -235,6 +235,23 @@ def _preserve_supported_lane_span(rows, lanes):
     reversals = sum(direction < 0 for direction in directions) / max(1, len(directions))
     if agreement < .85 or reversals > .08:
         return lanes, False
+    stable_quality = _lane_run_quality([[
+        replace(note, lanes=(lane,))
+        for note, lane in zip(rows, stable)
+    ]])
+    baseline_quality = _lane_run_quality([[
+        replace(note, lanes=(lane,))
+        for note, lane in zip(rows, lanes)
+    ]])
+    if (
+        stable_quality["collapsed_contour_runs"]
+        > baseline_quality["collapsed_contour_runs"]
+        or stable_quality["long_same_lane_runs"]
+        > baseline_quality["long_same_lane_runs"]
+        or stable_quality["max_same_lane_run"]
+        > baseline_quality["max_same_lane_run"]
+    ):
+        return lanes, False
     return stable, stable != lanes
 
 

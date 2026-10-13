@@ -555,6 +555,25 @@ def test_phrase_span_rejects_locally_reversed_mapping():
     assert lanes == authored
 
 
+def test_phrase_span_rejects_collapsed_contour_regression():
+    # Pitches that climb over 12 semitones, but incoming has collapsed higher notes onto lane 4
+    pitches = [48, 50, 52, 55, 57, 60, 62, 65] * 4
+    # Incoming maps top 4 pitches all to lane 4, creating collapsed contour
+    incoming = [0, 1, 2, 3, 4, 4, 4, 4] * 4
+    rows = [
+        Note(i * .125, i * .125 + .065, (lane,), pitch=pitch, source_id=str(i))
+        for i, (pitch, lane) in enumerate(zip(pitches, incoming))
+    ]
+    # Authored correctly distributes notes across frets without collapsed contours
+    authored = [0, 0, 1, 1, 2, 2, 3, 4] * 4
+
+    lanes, changed = _preserve_supported_lane_span(rows, authored)
+
+    assert not changed
+    assert lanes == authored
+
+
+
 def test_repeated_pitch_stability_does_not_flatten_supported_contour():
     rows = [
         Note(i * .25, i * .25 + .065, (lane,), pitch=pitch, source_id=str(i))

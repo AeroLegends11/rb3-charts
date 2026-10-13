@@ -1648,4 +1648,15 @@ Status update (2026-09-22):
   at 24.35-25.4 s into consistent power chords. Across the 14-song regression
   corpus, collapsed contours remain at 0 on 13 songs and 1 on When You Were Young;
   long and maximum same-lane runs do not regress on any song.
+- Added lane-run quality gating and rollback to `_preserve_supported_lane_span`.
+  When a candidate pitch-to-lane majority mapping introduces new collapsed
+  contour runs, increases long same-lane runs (>= 8 attacks) or increases the
+  maximum same-lane run, the pass rolls back to the sequence-optimized fingering.
+- Across the 14-song benchmark corpus, this eliminates the last remaining
+  collapsed contour in The Killers - When You Were Young (1 -> 0 collapsed,
+  6 -> 5 long runs), reduces long same-lane runs in Cheap Trick - Surrender
+  (9 -> 7 long runs), and prevents the outro solo climb in My Name Is Jonas
+  from flattening into lane 4. Zero collapsed contour runs now remain across
+  the entire 14-song benchmark corpus.
+
 
