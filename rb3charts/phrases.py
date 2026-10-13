@@ -800,12 +800,13 @@ def _apply_band_chord_sections(notes, tempo, evidence, min_proposals=50):
     for run in runs:
         if len(run) < 3:
             continue
+        span_indices = list(range(run[0], run[-1] + 1))
         pitch_counts = {
-            pitch: sum(notes[index].pitch == pitch for index in run)
-            for pitch in {notes[index].pitch for index in run}
+            pitch: sum(notes[index].pitch == pitch for index in span_indices)
+            for pitch in {notes[index].pitch for index in span_indices}
         }
         repeated_roots = {
-            pitch for pitch, count in pitch_counts.items() if count >= 3
+            pitch for pitch, count in pitch_counts.items() if count >= 2
         }
         for index in run:
             if index not in proposals or notes[index].pitch not in repeated_roots:
@@ -818,7 +819,7 @@ def _apply_band_chord_sections(notes, tempo, evidence, min_proposals=50):
     report["direct_notes_changed"] = len(changed)
     propagation_gate = (
         len(proposals) >= min_proposals
-        and len(changed) / max(1, len(proposals)) < .5
+        and len(changed) > 0
         and len(seed_rows) / max(1, octave_seed_count) >= 1.5
     )
     report["propagation_gate_passed"] = propagation_gate
@@ -826,20 +827,21 @@ def _apply_band_chord_sections(notes, tempo, evidence, min_proposals=50):
         for run in runs:
             if len(run) < 3:
                 continue
+            span_indices = list(range(run[0], run[-1] + 1))
             pitch_counts = {
-                pitch: sum(notes[index].pitch == pitch for index in run)
-                for pitch in {notes[index].pitch for index in run}
+                pitch: sum(notes[index].pitch == pitch for index in span_indices)
+                for pitch in {notes[index].pitch for index in span_indices}
             }
             repeated_roots = {
-                pitch for pitch, count in pitch_counts.items() if count >= 3
+                pitch for pitch, count in pitch_counts.items() if count >= 2
             }
             root_lanes = {}
-            for index in run:
+            for index in span_indices:
                 pitch = notes[index].pitch
                 if pitch in repeated_roots and pitch not in root_lanes:
                     root = notes[index].lanes[0]
                     root_lanes[pitch] = (root, root + 2) if root <= 2 else (root - 2, root)
-            for index in range(run[0], run[-1] + 1):
+            for index in span_indices:
                 note = notes[index]
                 if (
                     index in changed_indices
@@ -855,7 +857,7 @@ def _apply_band_chord_sections(notes, tempo, evidence, min_proposals=50):
                 else:
                     harmonics = [
                         r for r in repeated_roots
-                        if int(round(note.pitch - r)) in (7, 12, 19)
+                        if abs(int(round(note.pitch - r))) in (5, 7, 12, 19)
                         and r in root_lanes
                     ]
                     if harmonics:
@@ -873,7 +875,7 @@ def _apply_band_chord_sections(notes, tempo, evidence, min_proposals=50):
                                 harmonics,
                                 key=lambda r: min(
                                     abs(note.start - notes[i].start)
-                                    for i in run if notes[i].pitch == r
+                                    for i in span_indices if notes[i].pitch == r
                                 ),
                             )
                             note.lanes = root_lanes[matched_root]
@@ -1178,7 +1180,16 @@ def _apply_audio_repeat_consistency(notes, tempo, evidence):
             len(a.lanes) == len(b.lanes)
             for a, b in zip(aligned_left, aligned_right)
         ) / len(alignment)
-        if polyphony_agreement < .75 and not high_audio_match:
+        chord_density_diff = abs(
+            sum(len(a.lanes) > 1 for a in aligned_left) / len(aligned_left)
+            - sum(len(b.lanes) > 1 for b in aligned_right) / len(aligned_right)
+        )
+        chord_asymmetry_match = (
+            region["similarity"] >= .78
+            and coverage >= .60
+            and chord_density_diff >= .25
+        )
+        if polyphony_agreement < .75 and not high_audio_match and not chord_asymmetry_match:
             continue
         pitch_delta = np.asarray([
             right_note.pitch - left_note.pitch
@@ -1188,6 +1199,7 @@ def _apply_audio_repeat_consistency(notes, tempo, evidence):
         if (
             float(np.max(np.abs(pitch_delta - transposition))) > 2
             and not high_audio_match
+            and not chord_asymmetry_match
         ):
             continue
         pitch_steps = [
@@ -1207,6 +1219,7 @@ def _apply_audio_repeat_consistency(notes, tempo, evidence):
             pitch_steps
             and sum(a == b for a, b in pitch_steps) / len(pitch_steps) < .8
             and not high_audio_match
+            and not chord_asymmetry_match
         ):
             continue
         report["regions_compatible"] += 1

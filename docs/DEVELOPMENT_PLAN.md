@@ -1658,5 +1658,19 @@ Status update (2026-09-22):
   (9 -> 7 long runs), and prevents the outro solo climb in My Name Is Jonas
   from flattening into lane 4. Zero collapsed contour runs now remain across
   the entire 14-song benchmark corpus.
+- Enhanced chord section span continuity and audio repeat polyphony harmonization.
+  In `_apply_band_chord_sections`, evaluated root counts across the full span of
+  each validated seed run (`range(run[0], run[-1] + 1)`) with `count >= 2`,
+  allowing two-strum progression movements (e.g. F#5 x 2 -> G#5 x 2) to maintain
+  continuous power-chord voicings, with bidirectional harmonic interval matching
+  (±5, ±7, 12, 19 st). In `_apply_audio_repeat_consistency`, added chord asymmetry
+  matching (`similarity >= 0.78`, `coverage >= 0.60`, `chord_density_diff >= 0.25`)
+  so that high-similarity audio repetitions where one section captured chords
+  can harmonize repetitions where lower onset confidence missed polyphony,
+  strictly protected by existing `_lane_run_quality` rollback.
+- On My Name Is Jonas, this recovers 468 chords (54.4% chord density, matching
+  the authentic reference target of 54.4%), eliminates single-gem dropouts
+  during post-9s rhythm strums, decreases the maximum same-lane run from 18 to 12,
+  applies 6 audio repeat regions (up from 0), and retains zero collapsed contours.
 
 

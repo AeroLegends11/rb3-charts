@@ -527,6 +527,44 @@ def test_band_chord_sections_propagates_power_chord_harmonic_overtones():
     assert by_id["chord-3"].lanes == (0, 2)
 
 
+def test_band_chord_sections_propagates_two_strum_chord_progressions():
+    notes = [
+        Note(10.0, 10.1, (0,), .8, "seed-1", 60),
+        Note(10.2, 10.3, (0,), .8, "seed-2", 61),
+        Note(10.4, 10.5, (0,), .8, "chord-fsharp-1", 42),
+        Note(10.6, 10.7, (0,), .8, "chord-fsharp-2", 42),
+        Note(10.8, 10.9, (1,), .8, "chord-gsharp-1", 44),
+        Note(11.0, 11.1, (1,), .8, "chord-gsharp-2", 44),
+        Note(11.2, 11.3, (0,), .8, "seed-3", 62),
+    ]
+    candidates = [
+        {"start": 10.0, "pitch": 60, "confidence": .8, "source_id": "seed-1", "accepted": True, "model_onset_strength": .8},
+        {"start": 10.0, "pitch": 67, "confidence": .8, "source_id": "seed-1-5th", "accepted": True, "model_onset_strength": .8},
+        {"start": 10.2, "pitch": 61, "confidence": .8, "source_id": "seed-2", "accepted": True, "model_onset_strength": .8},
+        {"start": 10.2, "pitch": 68, "confidence": .8, "source_id": "seed-2-5th", "accepted": True, "model_onset_strength": .8},
+        {"start": 10.4, "pitch": 42, "confidence": .8, "source_id": "chord-fsharp-1", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 10.4, "pitch": 49, "confidence": .8, "source_id": "chord-fsharp-1-5th", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 10.6, "pitch": 42, "confidence": .8, "source_id": "chord-fsharp-2", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 10.8, "pitch": 44, "confidence": .8, "source_id": "chord-gsharp-1", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 10.8, "pitch": 51, "confidence": .8, "source_id": "chord-gsharp-1-5th", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 11.0, "pitch": 44, "confidence": .8, "source_id": "chord-gsharp-2", "accepted": True, "model_onset_strength": .8, "evidence": {"attack_strength": .08}},
+        {"start": 11.2, "pitch": 62, "confidence": .8, "source_id": "seed-3", "accepted": True, "model_onset_strength": .8},
+        {"start": 11.2, "pitch": 69, "confidence": .8, "source_id": "seed-3-5th", "accepted": True, "model_onset_strength": .8},
+    ]
+    evidence = {
+        "focus": {"onset_groups": 10, "pitch_corrections": 1, "octave_anchors": 0},
+        "candidates": candidates,
+    }
+    tempo = TempoMap(np.arange(0, 20, .5).tolist())
+    report = _apply_band_chord_sections(notes, tempo, evidence, min_proposals=3)
+    assert report["propagation_gate_passed"]
+    by_id = {note.source_id: note for note in notes}
+    assert by_id["chord-fsharp-1"].lanes == (0, 2)
+    assert by_id["chord-fsharp-2"].lanes == (0, 2)
+    assert by_id["chord-gsharp-1"].lanes == (1, 3)
+    assert by_id["chord-gsharp-2"].lanes == (1, 3)
+
+
 
 def test_phrase_authoring_stabilizes_broad_four_note_per_second_run():
     pitches = (48, 55, 60, 67) * 8
@@ -964,3 +1002,38 @@ def test_audio_repeat_consistency_reuses_supported_lane_and_chord_shape():
     assert [note.lanes for note in notes[:4]] == [note.lanes for note in notes[4:]]
     assert report["regions_applied"] == 1
     assert report["notes_changed"] == 3
+
+
+def test_audio_repeat_consistency_propagates_chords_to_single_note_region():
+    notes = [
+        # Left region (has chords)
+        Note(1.0, 1.1, (0, 2), .9, "left-0", 42),
+        Note(1.25, 1.35, (0, 2), .9, "left-1", 42),
+        Note(1.5, 1.6, (1, 3), .9, "left-2", 44),
+        Note(1.75, 1.85, (1, 3), .9, "left-3", 44),
+        # Right region (missed chords, only singles)
+        Note(5.0, 5.1, (0,), .6, "right-0", 42),
+        Note(5.25, 5.35, (0,), .6, "right-1", 42),
+        Note(5.5, 5.6, (1,), .6, "right-2", 44),
+        Note(5.75, 5.85, (1,), .6, "right-3", 44),
+    ]
+
+    report = _apply_audio_repeat_consistency(
+        notes,
+        grid(),
+        {"regions": [{
+            "left_start": 1.0,
+            "left_end": 2.0,
+            "right_start": 5.0,
+            "right_end": 6.0,
+            "similarity": .80,
+        }]},
+    )
+
+    assert report["regions_applied"] == 1
+    assert report["notes_changed"] == 4
+    by_id = {note.source_id: note for note in notes}
+    assert by_id["right-0"].lanes == (0, 2)
+    assert by_id["right-1"].lanes == (0, 2)
+    assert by_id["right-2"].lanes == (1, 3)
+    assert by_id["right-3"].lanes == (1, 3)
