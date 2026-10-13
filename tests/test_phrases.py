@@ -308,6 +308,36 @@ def test_pre_chord_cleanup_preserves_strong_separate_attack():
     assert report["notes_removed"] == 0
 
 
+def test_pre_chord_cleanup_removes_tight_sandwiched_single_note():
+    notes = [
+        Note(1.0, 1.065, (1, 3), .7, "prev_chord", 42),
+        Note(1.060, 1.100, (4,), .5, "sandwiched_flam", 58),
+        Note(1.130, 1.195, (2, 4), .75, "next_chord", 49),
+    ]
+    evidence = {"candidates": [
+        {"start": 1.0, "end": 1.065, "pitch": 42, "confidence": .7, "source_id": "prev_chord", "accepted": True},
+        {"start": 1.060, "end": 1.100, "pitch": 58, "confidence": .5, "source_id": "sandwiched_flam", "accepted": True},
+        {"start": 1.130, "end": 1.195, "pitch": 49, "confidence": .75, "source_id": "next_chord", "accepted": True},
+    ]}
+    result, report = _remove_pre_chord_voice_duplicates(notes, evidence)
+    assert [n.source_id for n in result] == ["prev_chord", "next_chord"]
+    assert report["notes_removed"] == 1
+
+
+def test_pre_chord_cleanup_removes_weak_strum_flam():
+    notes = [
+        Note(1.050, 1.090, (2,), .5, "flam", 56),
+        Note(1.120, 1.185, (1, 3), .75, "chord", 40),
+    ]
+    evidence = {"candidates": [
+        {"start": 1.050, "end": 1.090, "pitch": 56, "confidence": .5, "source_id": "flam", "accepted": True, "evidence": {"attack_strength": 0.0}},
+        {"start": 1.120, "end": 1.185, "pitch": 40, "confidence": .75, "source_id": "chord", "accepted": True, "evidence": {"attack_strength": 0.08}},
+    ]}
+    result, report = _remove_pre_chord_voice_duplicates(notes, evidence)
+    assert [n.source_id for n in result] == ["chord"]
+    assert report["notes_removed"] == 1
+
+
 def test_repeated_exact_riff_preserves_structural_variation():
     notes = []
     for occurrence, lanes in enumerate((

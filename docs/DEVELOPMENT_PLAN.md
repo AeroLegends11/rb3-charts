@@ -1680,6 +1680,15 @@ Status update (2026-09-22):
   fingerings are favored over static single-lane shapes. In addition, relaxed pairwise
   alignment beat tolerance from 0.20 to 0.25 beats and incorporated octave tolerance
   (`abs(diff) % 12 == 0`) for pitch step comparisons to bridge acoustic arpeggio flutter.
+- In `_apply_band_chord_sections`, enabled candidate pitch inspection and 1-semitone
+  f0-guide pitch tolerance when matching notes against repeated roots during power-chord
+  propagation. This eliminates isolated single gems (such as single orange or single green)
+  in heavy rhythm strumming passages where lead-guide continuous f0 tracking slightly drifted
+  or collapsed multi-event clusters.
+- In `_remove_pre_chord_voice_duplicates`, added removal for tight single-note sandwiches
+  between chords (both gaps <= 120 ms) and weak pre-chord strum flams/pick rakes
+  (gap <= 85 ms with attack strength < 0.035). On My Name Is Jonas, this eliminates spurious
+  55–85 ms flams and isolated singles throughout the post-8.88s distorted rhythm passages.
 
 
 - On My Name Is Jonas, this recovers 468 chords (54.4% chord density, matching
