@@ -1062,13 +1062,89 @@ def test_audio_repeat_consistency_propagates_chords_to_single_note_region():
         }]},
     )
 
-    assert report["regions_applied"] == 1
-    assert report["notes_changed"] == 4
+    assert report["regions_applied"] == 0
+    assert report["notes_changed"] == 0
     by_id = {note.source_id: note for note in notes}
-    assert by_id["right-0"].lanes == (0, 2)
-    assert by_id["right-1"].lanes == (0, 2)
-    assert by_id["right-2"].lanes == (1, 3)
-    assert by_id["right-3"].lanes == (1, 3)
+    assert [by_id[f"right-{index}"].lanes for index in range(4)] == [
+        (0,), (0,), (1,), (1,)
+    ]
+
+
+def test_audio_repeat_consistency_only_copies_locally_supported_chords():
+    notes = [
+        Note(1.0, 1.1, (0, 2), .9, "left-0", 42),
+        Note(1.25, 1.35, (0, 2), .9, "left-1", 42),
+        Note(1.5, 1.6, (1, 3), .9, "left-2", 44),
+        Note(1.75, 1.85, (1, 3), .9, "left-3", 44),
+        Note(5.0, 5.1, (0,), .6, "right-0+candidate", 42),
+        Note(5.25, 5.35, (0,), .6, "right-1", 42),
+        Note(5.5, 5.6, (1,), .6, "right-2+candidate", 44),
+        Note(5.75, 5.85, (1,), .6, "right-3", 44),
+    ]
+
+    report = _apply_audio_repeat_consistency(
+        notes,
+        grid(),
+        {"regions": [{
+            "left_start": 1.0,
+            "left_end": 2.0,
+            "right_start": 5.0,
+            "right_end": 6.0,
+            "similarity": .80,
+        }]},
+    )
+
+    assert report["regions_applied"] == 1
+    assert report["notes_changed"] == 2
+    by_id = {note.source_id: note for note in notes}
+    assert len(by_id["right-0+candidate"].lanes) == 2
+    assert by_id["right-1"].lanes == (0,)
+    assert len(by_id["right-2+candidate"].lanes) == 2
+    assert by_id["right-3"].lanes == (1,)
+
+
+def test_audio_repeat_consistency_propagates_chords_with_strong_audio_match():
+    notes = []
+    for index in range(16):
+        pitch = 42 + 2 * (index % 2)
+        offset = index * .5
+        notes.extend((
+            Note(
+                1.0 + offset,
+                1.1 + offset,
+                (0, 2) if index % 2 == 0 else (1, 3),
+                .9,
+                f"left-{index}",
+                pitch,
+            ),
+            Note(
+                20.0 + offset,
+                20.1 + offset,
+                (0,) if index % 2 == 0 else (1,),
+                .6,
+                f"right-{index}",
+                pitch,
+            ),
+        ))
+
+    report = _apply_audio_repeat_consistency(
+        notes,
+        grid(),
+        {"regions": [{
+            "left_start": 1.0,
+            "left_end": 9.0,
+            "right_start": 20.0,
+            "right_end": 28.0,
+            "duration": 8.0,
+            "similarity": .92,
+            "anchors": 20,
+        }]},
+    )
+
+    assert report["regions_applied"] == 1
+    assert report["notes_changed"] == 16
+    by_id = {note.source_id: note for note in notes}
+    assert all(len(by_id[f"right-{index}"].lanes) == 2 for index in range(16))
 
 
 def test_rhythmic_riff_uses_transitions_and_octave_tolerance_in_canonical_scoring():
@@ -1101,4 +1177,3 @@ def test_rhythmic_riff_uses_transitions_and_octave_tolerance_in_canonical_scorin
     assert [note.lanes[0] for note in notes[:10]] == expected
     assert [note.lanes[0] for note in notes[10:20]] == list(canonical_lanes)
     assert [note.lanes[0] for note in notes[20:]] == expected
-

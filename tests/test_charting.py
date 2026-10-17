@@ -471,6 +471,96 @@ def test_band_guitar_mapping_turns_short_sustain_into_tap():
     assert note.end-note.start==pytest.approx(.065)
 
 
+def test_band_guitar_mapping_shortens_weak_tail_after_rapid_attack():
+    events = [
+        {
+            "start": 1.0,
+            "end": 1.4,
+            "pitch": 55,
+            "confidence": .8,
+            "source_id": "guitar-1",
+            "evidence": {"attack_strength": .2},
+        },
+        {
+            "start": 1.2,
+            "end": 1.8,
+            "pitch": 57,
+            "confidence": .6,
+            "source_id": "guitar-2",
+            "evidence": {"attack_strength": .05},
+        },
+    ]
+
+    notes = map_pitched(events, "guitar", "range")
+
+    assert notes[1].end - notes[1].start == pytest.approx(.065)
+
+
+def test_band_guitar_mapping_shortens_moderate_same_pitch_reattack_tail():
+    events = [
+        {
+            "start": 1.0,
+            "end": 1.1,
+            "pitch": 55,
+            "confidence": .8,
+            "source_id": "guitar-1",
+            "evidence": {"attack_strength": .2},
+        },
+        {
+            "start": 1.2,
+            "end": 1.8,
+            "pitch": 55,
+            "confidence": .8,
+            "source_id": "guitar-2",
+            "evidence": {"attack_strength": .1},
+        },
+    ]
+
+    notes = map_pitched(events, "guitar", "range")
+
+    assert notes[1].end - notes[1].start == pytest.approx(.065)
+
+
+def test_band_guitar_mapping_preserves_strong_rapid_sustain():
+    events = [
+        {
+            "start": 1.0,
+            "end": 1.1,
+            "pitch": 55,
+            "confidence": .8,
+            "source_id": "guitar-1",
+            "evidence": {"attack_strength": .2},
+        },
+        {
+            "start": 1.2,
+            "end": 1.8,
+            "pitch": 57,
+            "confidence": .8,
+            "source_id": "guitar-2",
+            "evidence": {"attack_strength": .15},
+        },
+    ]
+
+    notes = map_pitched(events, "guitar", "range")
+
+    assert notes[1].end - notes[1].start == pytest.approx(.6)
+
+
+def test_band_guitar_mapping_turns_attackless_sustain_into_tap():
+    events = [{
+        "start": 1.0,
+        "end": 1.8,
+        "pitch": 57,
+        "confidence": .6,
+        "source_id": "guitar-1",
+        "evidence": {"attack_strength": 0.0},
+    }]
+
+    note = map_pitched(events, "guitar", "range")[0]
+
+    assert note.end - note.start == pytest.approx(.065)
+
+
 def test_band_guitar_mapping_drops_sustain_from_lead_corrected_pitch():
     events=[{"start":1.0,"end":1.8,"pitch":55,"confidence":.8,
              "source_id":"guitar-1","lead_focus_corrected":True}]

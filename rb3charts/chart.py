@@ -73,7 +73,7 @@ def map_pitched(events, instrument, style="range", sustain_threshold=None):
         else:
             groups.append([event])
     notes = []
-    for group in groups:
+    for group_index, group in enumerate(groups):
         if instrument == "bass":
             # Harmonic overtones should not become bass chords.
             strongest = max(e["confidence"] for e in group)
@@ -87,6 +87,35 @@ def map_pitched(events, instrument, style="range", sustain_threshold=None):
         end = min(e["end"] for e in group)
         if instrument == "guitar" and any(e.get("lead_focus_corrected") for e in group):
             end = start + 0.065
+        if instrument == "guitar":
+            attack_strengths = [
+                e["evidence"]["attack_strength"]
+                for e in group
+                if "attack_strength" in e.get("evidence", {})
+            ]
+            unsupported_sustain = (
+                bool(attack_strengths) and max(attack_strengths) <= .005
+            )
+            rapid_weak_attack = False
+            if group_index:
+                previous_group = groups[group_index - 1]
+                previous_start = previous_group[0]["start"]
+                repeated_pitch = bool(
+                    {e["pitch"] for e in group}
+                    & {e["pitch"] for e in previous_group}
+                )
+                weak_attack = (
+                    bool(attack_strengths)
+                    and max(attack_strengths) < (.15 if repeated_pitch else .08)
+                )
+                rapid_weak_attack = (
+                    0 < start - previous_start <= .25 and weak_attack
+                )
+            if (
+                end - start >= sustain_threshold
+                and (unsupported_sustain or rapid_weak_attack)
+            ):
+                end = start + 0.065
         # Preserve brief audible electronic decays. Only normalize events too
         # short to draw or play as a meaningful sustain.
         if end-start < sustain_threshold:

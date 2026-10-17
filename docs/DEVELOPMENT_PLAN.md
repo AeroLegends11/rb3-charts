@@ -1696,4 +1696,13 @@ Status update (2026-09-22):
   during post-9s rhythm strums, decreases the maximum same-lane run from 18 to 12,
   applies 6 audio repeat regions (up from 0), and retains zero collapsed contours.
 
-
+- Cached Jonas review follow-up: weak audio-repeat matches can no longer project
+  chord shapes across polyphony mismatches unless the receiving notes retain
+  locally grouped source-candidate evidence; strong audio matches remain eligible.
+  Guitar sustains with no measured attack are rendered as taps, and weak rapid
+  reattacks use a stricter threshold when they repeat the same pitch. On the same
+  cached candidate, the 10.289 s tail changed from 0.478 s to 0.065 s and the
+  14.025 s attackless sustain from 0.501 s to 0.065 s; guitar hold ratio changed
+  0.025 to 0.014 with 869 attacks unchanged. The replay remains `review_closely`;
+  these are cached-replay and structural results, not a human listening or Xbox
+  playability sign-off.

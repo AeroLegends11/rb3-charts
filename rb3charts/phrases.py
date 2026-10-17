@@ -1137,7 +1137,7 @@ def _collapse_isolated_wide_chords(notes, tempo):
 
 def _apply_audio_repeat_consistency(notes, tempo, evidence):
     report = {
-        "method": "audio self-similarity gated by attack, rhythm, pitch and chord structure",
+        "method": "audio self-similarity with local source support for asymmetric repeats",
         "regions_considered": 0,
         "regions_compatible": 0,
         "regions_applied": 0,
@@ -1145,11 +1145,15 @@ def _apply_audio_repeat_consistency(notes, tempo, evidence):
         "conflicts": 0,
         "rejected_quality": False,
         "regions": [],
+        "region_audits": [],
     }
     regions = (evidence or {}).get("regions", ())
     if not notes or not regions:
         return report
     report["regions_considered"] = len(regions)
+
+    def has_chord_evidence(note):
+        return len(note.source_id.split("+")) > 1
 
     def region_notes(start, end):
         return [note for note in notes if start <= note.start < end]
@@ -1245,12 +1249,30 @@ def _apply_audio_repeat_consistency(notes, tempo, evidence):
             sum(len(a.lanes) > 1 for a in aligned_left) / len(aligned_left)
             - sum(len(b.lanes) > 1 for b in aligned_right) / len(aligned_right)
         )
-        chord_asymmetry_match = (
-            region["similarity"] >= .78
-            and coverage >= .60
-            and chord_density_diff >= .25
+        asymmetric_evidence = sum(
+            len(a.lanes) != len(b.lanes)
+            and (has_chord_evidence(a) or has_chord_evidence(b))
+            for a, b in zip(aligned_left, aligned_right)
         )
-        if polyphony_agreement < .75 and not high_audio_match and not chord_asymmetry_match:
+        chord_asymmetry_match = (
+            chord_density_diff >= .25
+            and (high_audio_match or asymmetric_evidence >= 1)
+        )
+        report["region_audits"].append({
+            "left_start": region["left_start"],
+            "right_start": region["right_start"],
+            "coverage": round(coverage, 4),
+            "polyphony_agreement": round(polyphony_agreement, 4),
+            "chord_density_diff": round(chord_density_diff, 4),
+            "asymmetric_evidence": asymmetric_evidence,
+            "high_audio_match": high_audio_match,
+            "chord_asymmetry_match": chord_asymmetry_match,
+        })
+        if (
+            polyphony_agreement < .75
+            and not high_audio_match
+            and not chord_asymmetry_match
+        ):
             continue
         pitch_delta = np.asarray([
             right_note.pitch - left_note.pitch
@@ -1306,6 +1328,15 @@ def _apply_audio_repeat_consistency(notes, tempo, evidence):
         )
         changed = 0
         for source_note, target_note in zip(source, target):
+            if (
+                len(source_note.lanes) != len(target_note.lanes)
+                and not high_audio_match
+            ):
+                single_note = (
+                    source_note if len(source_note.lanes) == 1 else target_note
+                )
+                if len(single_note.lanes) == 1 and not has_chord_evidence(single_note):
+                    continue
             lanes = tuple(lane + shift for lane in source_note.lanes)
             if lanes == target_note.lanes:
                 continue
