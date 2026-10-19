@@ -40,9 +40,11 @@ branch, then starts the GUI).
   a generated review on your phone, connect both devices to the same trusted
   Wi-Fi and run `python -m rb3charts.cli serve-review "output/<run-folder>"`.
   Open the printed address on your phone; use **View → Scrollable chart**, then
-  swipe through the lanes and share screenshots with song timestamps for feedback.
+  swipe through the lanes. Add timestamped issue notes from **Review notes**;
+  they save in that browser and can be downloaded as JSON to send with screenshots.
   Stop sharing with Ctrl+C. The read-only server exposes only that run's review
-  page and audio files; do not use it on a public network.
+  page and audio files; do not use it on a public network. Notes stay on the phone
+  unless you download and share them.
 - After review, **Package reviewed chart for Xbox** runs Onyx/Magma without
   repeating separation or transcription. Immediate compilation remains an
   advanced opt-in.

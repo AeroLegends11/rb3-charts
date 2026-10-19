@@ -126,6 +126,9 @@ def test_visual_review_contains_synced_controls_and_beat_grid(tmp_path):
     assert "Highway spacing" in page and "Spread out" in page
     assert "Scrollable chart" in page and 'id="scroll-wrap" hidden' in page
     assert "touch-action:pan-x pan-y" in page and "renderScroll()" in page
+    assert "Review notes" in page and "Use current playback" in page
+    assert "Download feedback" in page and "localStorage" in page
+    assert "feedback.push({time,instrument:inst.value,difficulty:diff.value" in page
     assert "const payload=" in page and '"beats": [0, 0.5, 1, 1.5, 2]' in page
     assert '"lead": 0' in page and "local density" in page
     assert 'height="700"' in page and "NOTES APPROACH THIS LINE" in page
