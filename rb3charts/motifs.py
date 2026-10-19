@@ -108,14 +108,22 @@ def match_occurrences(a, b, max_insertions=1):
         if abs(a.relative_pitches[i] - b.relative_pitches[j]) >= 3
         and min(a.confidences[i], b.confidences[j]) >= 0.75
     ]
-    if strong_divergence:
+    isolated_pitch_variation = (
+        len(strong_divergence) == 1
+        and len(alignment) >= 4
+        and abs(
+            a.relative_pitches[strong_divergence[0][0]]
+            - b.relative_pitches[strong_divergence[0][1]]
+        ) <= 4
+    )
+    if strong_divergence and not isolated_pitch_variation:
         return MotifMatch(False, "strong_variation", float("inf"), 0, alignment)
     score = float(costs[n, m] / len(alignment))
     if score > 1.2:
         return MotifMatch(False, "score", score, 0, alignment)
     return MotifMatch(
         True,
-        "matched_relative_motif",
+        "matched_motif_with_pitch_variation" if isolated_pitch_variation else "matched_relative_motif",
         score,
         int(round(b.root_pitch - a.root_pitch)),
         alignment,

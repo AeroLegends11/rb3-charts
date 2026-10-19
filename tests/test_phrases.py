@@ -173,6 +173,28 @@ def test_phrase_motif_reuses_transposed_shape_without_pitch_edits():
     assert report["phrases"][0]["motif_family"]==report["phrases"][1]["motif_family"]
 
 
+def test_phrase_motif_reuses_motion_with_one_pitch_variation():
+    notes=[]
+    for offset,pitches in ((1.0,(60,63,67,71,75)),(4.0,(67,70,77,78,82))):
+        for step,pitch in enumerate(pitches):
+            notes.append(Note(offset+step*.25,offset+step*.25+.11,(4,),.9,f"{offset}-{step}",pitch))
+    result,report=author_guitar_phrases(notes,grid())
+    assert [n.pitch for n in result]==[n.pitch for n in notes]
+    assert [n.lanes for n in result[:5]]==[n.lanes for n in result[5:]]
+    assert report["phrases"][0]["motif_family"]==report["phrases"][1]["motif_family"]
+    assert report["phrases"][1]["motif_reason"]=="matched_motif_with_pitch_variation"
+
+
+def test_phrase_motif_rejects_multiple_strong_pitch_variations():
+    notes=[]
+    for offset,pitches in ((1.0,(60,63,67,71,75)),(4.0,(60,66,70,71,75))):
+        for step,pitch in enumerate(pitches):
+            notes.append(Note(offset+step*.25,offset+step*.25+.11,(4,),.9,f"{offset}-{step}",pitch))
+    _,report=author_guitar_phrases(notes,grid())
+    assert report["phrases"][0]["motif_family"] is None
+    assert report["phrases"][1]["motif_family"] is None
+
+
 def test_phrase_motif_keeps_strong_variation_and_rhythm_only_coincidence_distinct():
     notes=[]
     for offset,pitches in (
