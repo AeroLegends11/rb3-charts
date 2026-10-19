@@ -5,21 +5,25 @@ import socket
 from urllib.parse import unquote, urlsplit
 
 
-_AUDIO_FILES = {
-    "/audio/song.wav",
-    *(f"/audio/timing-audit-{instrument}.wav" for instrument in ("guitar", "bass", "drums", "keys")),
-}
-
-
 def _handler_for(root):
     root = root.resolve()
+    assets = {
+        "/review.html": root / "review.html",
+        "/audio/song.wav": root / "audio" / "song.wav",
+        **{
+            f"/audio/timing-audit-{instrument}.wav":
+                root / "audio" / f"timing-audit-{instrument}.wav"
+            for instrument in ("guitar", "bass", "drums", "keys")
+        },
+    }
 
     class ReviewHandler(SimpleHTTPRequestHandler):
         def _asset(self, request_path=None):
             path = unquote(urlsplit(request_path or self.path).path)
-            if path != "/review.html" and path not in _AUDIO_FILES:
+            asset = assets.get(path)
+            if asset is None:
                 return None
-            asset = (root / path.lstrip("/")).resolve()
+            asset = asset.resolve()
             if not asset.is_relative_to(root) or not asset.is_file():
                 return None
             return asset
