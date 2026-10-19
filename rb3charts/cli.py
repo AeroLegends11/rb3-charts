@@ -16,6 +16,10 @@ def main():
     parser=argparse.ArgumentParser(description="Generate local Rock Band 3 draft charts")
     sub=parser.add_subparsers(dest="command")
     sub.add_parser("gui")
+    review=sub.add_parser("serve-review",help="Serve one generated review page to a phone on your local network")
+    review.add_argument("folder",type=Path,help="Chart output folder containing review.html and audio/song.wav")
+    review.add_argument("--host",default="0.0.0.0",help="Network interface to bind (default: all local interfaces)")
+    review.add_argument("--port",type=int,default=8000)
     share=sub.add_parser("share-chatgpt",help="Export project context and optional chart diagnostics locally")
     share.add_argument("--folder",type=Path,help="Individual chart output folder containing result.json")
     share.add_argument("--output",type=Path,required=True,help="New .txt file to review and transfer to your phone")
@@ -63,6 +67,13 @@ def main():
         except (OSError,ValueError) as exc:
             parser.error(str(exc))
         print(f"Saved {destination}. Review before sharing; nothing was uploaded.")
+        return 0
+    if args.command=="serve-review":
+        from .review_server import serve_review
+        try:
+            serve_review(args.folder,args.host,args.port)
+        except (OSError,ValueError) as exc:
+            parser.error(str(exc))
         return 0
     from .pipeline import generate,batch,package_existing,replay_cached
     if args.command=="analyze-reference":
