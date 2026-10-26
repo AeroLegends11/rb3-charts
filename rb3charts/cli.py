@@ -49,6 +49,19 @@ def main():
     normalize.add_argument("--top-k",type=int)
     normalize.add_argument("--runtime-seconds",type=float)
     normalize.add_argument("--tempo-file",type=Path,help="JSON with beats_seconds, numerator and provenance")
+    normalize_chart=sub.add_parser("normalize-audio2chart-chart",help="Normalize an audio2chart ExpertSingle .chart file; does not run inference")
+    normalize_chart.add_argument("source",type=Path,help="The exact source WAV supplied to audio2chart")
+    normalize_chart.add_argument("chart",type=Path,help="The .chart file written by audio2chart")
+    normalize_chart.add_argument("output",type=Path,help="New normalized event-bundle JSON path")
+    normalize_chart.add_argument("--tempo-file",type=Path,required=True,help="Shared source-time tempo JSON with beats_seconds, numerator and provenance")
+    normalize_chart.add_argument("--model-id",default="3podi/charter-v1.0-40-M-best-acc")
+    normalize_chart.add_argument("--model-revision")
+    normalize_chart.add_argument("--weights-sha256")
+    normalize_chart.add_argument("--device",default="unknown")
+    normalize_chart.add_argument("--seed",type=int)
+    normalize_chart.add_argument("--temperature",type=float)
+    normalize_chart.add_argument("--top-k",type=int)
+    normalize_chart.add_argument("--runtime-seconds",type=float)
     import_events=sub.add_parser("import-pretrained-events",help="Create a review-only MIDI/preview from normalized Expert events")
     import_events.add_argument("source",type=Path,help="Exact source WAV used for inference")
     import_events.add_argument("events",type=Path,help="Versioned normalized event bundle")
@@ -97,10 +110,12 @@ def main():
         import librosa
         import soundfile as sf
         from .pretrained import audio2chart_tokens_to_bundle,sha256_file
-        if args.output.exists():
+        if args.output.exists() or args.output.is_symlink():
             parser.error(f"Refusing to overwrite normalized event bundle: {args.output}")
         if not args.source.is_file() or not args.tokens.is_file():
             parser.error("Source WAV and token JSON must both exist")
+        if args.source.suffix.lower() != ".wav":
+            parser.error("audio2chart normalization requires the exact source WAV")
         source_info=sf.info(args.source)
         model_audio,_=librosa.load(args.source,sr=24000,mono=True)
         tempo=(json.loads(args.tempo_file.read_text(encoding="utf-8")) if args.tempo_file else None)
@@ -123,8 +138,38 @@ def main():
             tempo=tempo,
         )
         args.output.parent.mkdir(parents=True,exist_ok=True)
-        args.output.write_text(json.dumps(payload,indent=2),encoding="utf-8")
+        with args.output.open("x",encoding="utf-8") as stream:
+            json.dump(payload,stream,indent=2)
         print(f"Normalized {len(payload['events'])} audio2chart token events -> {args.output}")
+        return 0
+    if args.command=="normalize-audio2chart-chart":
+        import soundfile as sf
+        from .pretrained import audio2chart_chart_to_bundle,sha256_file
+        if args.output.exists() or args.output.is_symlink():
+            parser.error(f"Refusing to overwrite normalized event bundle: {args.output}")
+        if not args.source.is_file() or not args.chart.is_file() or args.source.suffix.lower()!=".wav":
+            parser.error("An existing source WAV and audio2chart .chart file are required")
+        source_info=sf.info(args.source)
+        tempo=json.loads(args.tempo_file.read_text(encoding="utf-8"))
+        payload=audio2chart_chart_to_bundle(
+            args.chart,
+            source_sha256=sha256_file(args.source),
+            source_sample_rate=source_info.samplerate,
+            source_duration_seconds=source_info.frames/source_info.samplerate,
+            tempo=tempo,
+            model_id=args.model_id,
+            model_revision=args.model_revision,
+            weights_sha256=args.weights_sha256,
+            device=args.device,
+            seed=args.seed,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            runtime_seconds=args.runtime_seconds,
+        )
+        args.output.parent.mkdir(parents=True,exist_ok=True)
+        with args.output.open("x",encoding="utf-8") as stream:
+            json.dump(payload,stream,indent=2)
+        print(f"Normalized {len(payload['events'])} audio2chart .chart events -> {args.output}")
         return 0
     if args.command=="import-pretrained-events":
         from .pretrained import import_event_bundle
@@ -133,7 +178,7 @@ def main():
         return 0
     if args.command=="compare-pretrained-events":
         from .pretrained import compare_bundles,load_bundle,sha256_file,validate_rights_manifest
-        if args.output.exists():
+        if args.output.exists() or args.output.is_symlink():
             parser.error(f"Refusing to overwrite evaluation report: {args.output}")
         reference=load_bundle(args.reference)
         manifest=json.loads(args.rights_manifest.read_text(encoding="utf-8"))
@@ -157,7 +202,8 @@ def main():
             ],
         }
         args.output.parent.mkdir(parents=True,exist_ok=True)
-        args.output.write_text(json.dumps(result,indent=2),encoding="utf-8")
+        with args.output.open("x",encoding="utf-8") as stream:
+            json.dump(result,stream,indent=2)
         print(f"Saved held-out event comparison -> {args.output}")
         return 0
     if args.command=="analyze-reference":

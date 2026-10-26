@@ -5,12 +5,15 @@ This module deliberately does not import or install third-party model runtimes.
 
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
 from itertools import combinations
 import hashlib
 import json
 import math
 import os
+import sys
 from pathlib import Path
+import re
 import shutil
 import tempfile
 from typing import Any
@@ -32,6 +35,32 @@ def sha256_file(path: str | Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _publish_directory_no_replace(source: Path, target: Path):
+    if os.name == "nt":
+        os.rename(source, target)
+        return
+    if sys.platform == "linux":
+        import ctypes
+
+        renameat2 = getattr(ctypes.CDLL(None, use_errno=True), "renameat2", None)
+        if renameat2 is None:
+            raise OSError("Atomic no-replace directory publication is unavailable on this Linux system")
+        renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        renameat2.restype = ctypes.c_int
+        result = renameat2(
+            -100,
+            os.fsencode(source),
+            -100,
+            os.fsencode(target),
+            1,
+        )
+        if result:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error), str(target))
+        return
+    raise OSError(f"Atomic no-replace directory publication is unsupported on {sys.platform}")
 
 
 def _finite_number(value: Any) -> bool:
@@ -90,7 +119,11 @@ def validate_bundle(payload: dict) -> dict:
         raise ValueError("source.duration_seconds must be finite and positive")
 
     inference = payload.get("inference")
-    if not isinstance(inference, dict) or not isinstance(inference.get("sampling"), dict):
+    if (
+        not isinstance(inference, dict)
+        or not {"device", "seed", "sampling", "runtime_seconds"}.issubset(inference)
+        or not isinstance(inference.get("sampling"), dict)
+    ):
         raise ValueError("inference.device, seed, sampling parameters, and runtime metadata are required")
     if not isinstance(inference.get("device"), str) or not inference["device"]:
         raise ValueError("inference.device must be a non-empty string")
@@ -107,8 +140,14 @@ def validate_bundle(payload: dict) -> dict:
     if timebase.get("unit") != "seconds" or timebase.get("origin") != "source_audio":
         raise ValueError("events must use seconds relative to source-audio time zero")
     offset = timebase.get("offset_applied_seconds")
-    if not _finite_number(offset):
-        raise ValueError("timebase.offset_applied_seconds must be finite")
+    if not _finite_number(offset) or offset < 0 or offset >= duration:
+        raise ValueError("timebase.offset_applied_seconds must be finite and within source duration")
+    if "grid_ms" in timebase and (
+        not isinstance(timebase["grid_ms"], int)
+        or isinstance(timebase["grid_ms"], bool)
+        or timebase["grid_ms"] <= 0
+    ):
+        raise ValueError("timebase.grid_ms must be a positive integer")
 
     instrument = payload.get("instrument")
     if instrument not in SUPPORTED_INSTRUMENTS:
@@ -127,6 +166,15 @@ def validate_bundle(payload: dict) -> dict:
             raise ValueError("tempo.beats_seconds must be strictly increasing")
         if tempo.get("numerator", 4) not in (3, 4, 5, 6, 7):
             raise ValueError("tempo.numerator must be from 3 through 7")
+        if "confidence" in tempo and (
+            not _finite_number(tempo["confidence"]) or not 0 <= tempo["confidence"] <= 1
+        ):
+            raise ValueError("tempo.confidence must be in [0, 1]")
+        if "warnings" in tempo and (
+            not isinstance(tempo["warnings"], list)
+            or any(not isinstance(warning, str) for warning in tempo["warnings"])
+        ):
+            raise ValueError("tempo.warnings must be a list of strings")
         provenance = tempo.get("provenance")
         if not isinstance(provenance, str) or not provenance.strip():
             raise ValueError("tempo.provenance must identify where the shared tempo map came from")
@@ -234,11 +282,24 @@ def audio2chart_tokens_to_bundle(
         raise ValueError("audio2chart grid must divide a 30-second chunk exactly")
     if not isinstance(pad_token_id, int) or isinstance(pad_token_id, bool) or pad_token_id < 0:
         raise ValueError("pad_token_id must come from the loaded checkpoint config")
-    if not isinstance(sequences, list):
-        raise ValueError("model sequences must be a list of token sequences")
+    if not isinstance(total_samples, int) or isinstance(total_samples, bool) or total_samples <= 0:
+        raise ValueError("total_samples must be a positive integer at the model sample rate")
+    if (
+        not isinstance(source_sample_rate, int)
+        or isinstance(source_sample_rate, bool)
+        or source_sample_rate <= 0
+        or not _finite_number(source_duration_seconds)
+        or source_duration_seconds <= 0
+    ):
+        raise ValueError("source sample rate and duration must be positive and finite")
     starts, chunk_samples = _audio2chart_chunk_starts(
         total_samples, AUDIO2CHART_SAMPLE_RATE, AUDIO2CHART_CHUNK_SECONDS
     )
+    duration_tolerance = 1 / source_sample_rate + 1 / AUDIO2CHART_SAMPLE_RATE
+    if abs(total_samples / AUDIO2CHART_SAMPLE_RATE - source_duration_seconds) > duration_tolerance:
+        raise ValueError("resampled model audio duration does not match the source WAV duration")
+    if not isinstance(sequences, list):
+        raise ValueError("model sequences must be a list of token sequences")
     if pad_token_id in _audio2chart_lane_map():
         raise ValueError("pad_token_id conflicts with a real guitar token or unsupported open-note token")
     if len(sequences) != len(starts):
@@ -330,44 +391,248 @@ def audio2chart_tokens_to_bundle(
     return validate_bundle(payload)
 
 
+def audio2chart_chart_to_bundle(
+    chart_path: str | Path,
+    *,
+    source_sha256: str,
+    source_sample_rate: int,
+    source_duration_seconds: float,
+    tempo: dict | None,
+    model_id: str = AUDIO2CHART_MODEL,
+    model_revision: str | None = None,
+    weights_sha256: str | None = None,
+    device: str = "unknown",
+    seed: int | None = None,
+    temperature: float | None = None,
+    top_k: int | None = None,
+    runtime_seconds: float | None = None,
+):
+    """Normalize audio2chart's written ExpertSingle .chart without model imports."""
+    sections = {}
+    current = None
+    inside = False
+    for line_number, line in enumerate(Path(chart_path).read_text(encoding="utf-8").splitlines(), 1):
+        stripped = line.strip()
+        section = re.fullmatch(r"\[([^\]]+)\]", stripped)
+        if section:
+            if current is not None and inside:
+                raise ValueError(f"Unclosed chart section before line {line_number}")
+            current = section.group(1)
+            sections.setdefault(current, [])
+            inside = False
+        elif stripped == "{":
+            if current is None or inside:
+                raise ValueError(f"Unexpected chart block at line {line_number}")
+            inside = True
+        elif stripped == "}":
+            if current is None or not inside:
+                raise ValueError(f"Unexpected chart block end at line {line_number}")
+            inside = False
+        elif stripped and not stripped.startswith("//"):
+            if current is None or not inside:
+                raise ValueError(f"Unexpected chart content at line {line_number}")
+            sections[current].append((line_number, stripped))
+    if inside:
+        raise ValueError("Unclosed final chart section")
+    if not {"Song", "SyncTrack", "ExpertSingle"}.issubset(sections):
+        raise ValueError("audio2chart chart must contain Song, SyncTrack and ExpertSingle sections")
+
+    song = {}
+    for line_number, line in sections["Song"]:
+        if "=" not in line:
+            raise ValueError(f"Malformed Song field at line {line_number}")
+        key, value = (part.strip() for part in line.split("=", 1))
+        song[key] = value.strip('"')
+    try:
+        resolution = int(song["Resolution"])
+        chart_offset = float(song.get("Offset", "0"))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Song Resolution and Offset must be valid numbers") from exc
+    if resolution <= 0:
+        raise ValueError("Song Resolution must be positive")
+    if not math.isfinite(chart_offset) or chart_offset != 0:
+        raise ValueError("Nonzero chart Offset cannot be safely normalized to source-audio time")
+
+    bpm_events = []
+    time_signatures = []
+    for line_number, line in sections["SyncTrack"]:
+        match = re.fullmatch(r"(\d+)\s*=\s*B\s+(\d+)", line)
+        if match:
+            tick, raw_bpm = map(int, match.groups())
+            if raw_bpm <= 0:
+                raise ValueError(f"Invalid SyncTrack BPM at line {line_number}")
+            bpm_events.append((tick, raw_bpm / 1000.0))
+        elif match := re.fullmatch(r"(\d+)\s*=\s*TS\s+(\d+)(?:\s+(\d+))?", line):
+            tick, numerator, denominator = match.groups()
+            numerator = int(numerator)
+            denominator = int(denominator) if denominator is not None else 4
+            if numerator not in (3, 4, 5, 6, 7) or denominator <= 0:
+                raise ValueError(f"Unsupported SyncTrack time signature at line {line_number}")
+            time_signatures.append((int(tick), numerator, denominator))
+        else:
+            raise ValueError(f"Unsupported SyncTrack event at line {line_number}")
+    bpm_events.sort()
+    if not bpm_events or bpm_events[0][0] != 0:
+        raise ValueError("SyncTrack must define a positive BPM at tick zero")
+    if any(right[0] == left[0] for left, right in zip(bpm_events, bpm_events[1:])):
+        raise ValueError("SyncTrack has conflicting BPM events at one tick")
+    segments = []
+    seconds = 0.0
+    for index, (tick, bpm) in enumerate(bpm_events):
+        if index:
+            previous_tick, previous_bpm = bpm_events[index - 1]
+            seconds += (tick - previous_tick) / resolution * 60 / previous_bpm
+        segments.append((tick, bpm, seconds))
+
+    def tick_to_seconds(tick):
+        applicable = 0
+        for index, segment in enumerate(segments):
+            if segment[0] > tick:
+                break
+            applicable = index
+        base_tick, bpm, base_seconds = segments[applicable]
+        return base_seconds + (tick - base_tick) / resolution * 60 / bpm
+
+    notes_by_tick = {}
+    for line_number, line in sections["ExpertSingle"]:
+        match = re.fullmatch(r"(\d+)\s*=\s*N\s+(\d+)\s+(\d+)", line)
+        if not match:
+            if re.match(r"\d+\s*=", line):
+                raise ValueError(f"Unsupported ExpertSingle event at line {line_number}")
+            raise ValueError(f"Malformed ExpertSingle note at line {line_number}")
+        tick, lane, sustain = map(int, match.groups())
+        if lane == 7:
+            raise ValueError(f"Unsupported open note at chart tick {tick}")
+        if lane not in range(5):
+            raise ValueError(f"Unsupported lane or modifier {lane} at chart tick {tick}")
+        lanes = notes_by_tick.setdefault(tick, {})
+        if lane in lanes:
+            raise ValueError(f"Duplicate lane {lane} at chart tick {tick}")
+        lanes[lane] = sustain
+
+    events = []
+    for tick, lanes_by_id in sorted(notes_by_tick.items()):
+        sustains = set(lanes_by_id.values())
+        if len(sustains) != 1:
+            raise ValueError(f"Chord at chart tick {tick} has inconsistent sustain lengths")
+        sustain = next(iter(sustains))
+        onset = tick_to_seconds(tick)
+        offset_seconds = tick_to_seconds(tick + sustain) if sustain else None
+        events.append(
+            {
+                "event_id": f"audio2chart-guitar-{len(events):06d}",
+                "onset_seconds": round(onset, 9),
+                "offset_seconds": round(offset_seconds, 9) if offset_seconds is not None else None,
+                "duration_status": "predicted" if offset_seconds is not None else "unknown",
+                "lanes": sorted(lanes_by_id),
+                "confidence": None,
+                "open_note": False,
+                "modifiers": [],
+            }
+        )
+    sampling = {}
+    if temperature is not None:
+        if not _finite_number(temperature):
+            raise ValueError("temperature must be finite or omitted")
+        sampling["temperature"] = float(temperature)
+    if top_k is not None:
+        if not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 0:
+            raise ValueError("top_k must be a nonnegative integer or omitted")
+        sampling["top_k"] = top_k
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "backend": {
+            "name": "audio2chart",
+            "upstream": AUDIO2CHART_UPSTREAM,
+            "upstream_revision": AUDIO2CHART_REVISION,
+            "model_id": model_id,
+            "model_revision": model_revision,
+            "weights_sha256": weights_sha256,
+        },
+        "source": {
+            "sha256": source_sha256,
+            "sample_rate": source_sample_rate,
+            "duration_seconds": source_duration_seconds,
+        },
+        "inference": {
+            "device": device,
+            "seed": seed,
+            "sampling": sampling,
+            "runtime_seconds": runtime_seconds,
+        },
+        "timebase": {
+            "unit": "seconds",
+            "origin": "source_audio",
+            "offset_applied_seconds": 0.0,
+            "chart_resolution": resolution,
+            "chart_sync_track": [[tick, bpm] for tick, bpm in bpm_events],
+            "chart_time_signatures": [list(item) for item in time_signatures],
+        },
+        "instrument": "guitar",
+        "difficulty": "expert",
+        "tempo": tempo,
+        "events": events,
+    }
+    return validate_bundle(payload)
+
+
 def load_bundle(path: str | Path) -> dict:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     return validate_bundle(payload)
 
 
 def _matching_pairs(predicted: list, reference: list, tolerance_seconds: float):
-    candidates = {}
-    for p_index, prediction in enumerate(predicted):
-        candidates[p_index] = sorted(
-            (
-                (abs(prediction["onset_seconds"] - truth["onset_seconds"]), t_index)
-                for t_index, truth in enumerate(reference)
-                if abs(prediction["onset_seconds"] - truth["onset_seconds"]) <= tolerance_seconds
-            ),
-            key=lambda row: (row[0], reference[row[1]]["event_id"]),
-        )
-    matched_truth = {}
+    truth_times = [event["onset_seconds"] for event in reference]
+    tree = [None] * (len(reference) + 1)
+    paths = []
+    empty = (0, 0.0, None)
 
-    def place(p_index, visited):
-        for _, t_index in candidates[p_index]:
-            if t_index in visited:
-                continue
-            visited.add(t_index)
-            if t_index not in matched_truth or place(matched_truth[t_index], visited):
-                matched_truth[t_index] = p_index
-                return True
+    def better(left, right):
+        if right is None:
+            return True
+        if left[0] != right[0]:
+            return left[0] > right[0]
+        if left[1] != right[1]:
+            return left[1] < right[1]
         return False
 
-    for p_index in range(len(predicted)):
-        place(p_index, set())
-    pairs = [
-        (p_index, t_index)
-        for t_index, p_index in matched_truth.items()
-    ]
-    return sorted(
-        pairs,
-        key=lambda pair: (predicted[pair[0]]["onset_seconds"], reference[pair[1]]["onset_seconds"]),
-    )
+    def query(count):
+        best = empty
+        index = count
+        while index:
+            if tree[index] is not None and better(tree[index], best):
+                best = tree[index]
+            index -= index & -index
+        return best
+
+    for p_index, event in enumerate(predicted):
+        onset = event["onset_seconds"]
+        first = bisect_left(truth_times, onset - tolerance_seconds)
+        stop = bisect_right(truth_times, onset + tolerance_seconds)
+        updates = []
+        for t_index in range(first, stop):
+            previous = query(t_index)
+            node = len(paths)
+            paths.append((p_index, t_index, previous[2]))
+            state = (
+                previous[0] + 1,
+                previous[1] + abs(onset - truth_times[t_index]),
+                node,
+            )
+            updates.append((t_index + 1, state))
+        for index, state in updates:
+            while index < len(tree):
+                if better(state, tree[index]):
+                    tree[index] = state
+                index += index & -index
+
+    best = query(len(reference))
+    pairs = []
+    node = best[2]
+    while node is not None:
+        p_index, t_index, node = paths[node]
+        pairs.append((p_index, t_index))
+    return list(reversed(pairs))
 
 
 def compare_bundles(prediction: dict, reference: dict, tolerance_ms: float = 50.0) -> dict:
@@ -376,7 +641,7 @@ def compare_bundles(prediction: dict, reference: dict, tolerance_ms: float = 50.
     validate_bundle(reference)
     if not _finite_number(tolerance_ms) or tolerance_ms <= 0:
         raise ValueError("onset tolerance must be finite and positive")
-    for key in ("sha256", "duration_seconds"):
+    for key in ("sha256", "sample_rate", "duration_seconds"):
         if prediction["source"][key] != reference["source"][key]:
             raise ValueError(f"prediction and reference do not share source {key}")
     if prediction["instrument"] != reference["instrument"] or prediction["difficulty"] != reference["difficulty"]:
@@ -384,9 +649,6 @@ def compare_bundles(prediction: dict, reference: dict, tolerance_ms: float = 50.
     prediction_tempo = prediction["tempo"]
     reference_tempo = reference["tempo"]
     same_tempo = (
-        prediction_tempo is None
-        and reference_tempo is None
-    ) or (
         isinstance(prediction_tempo, dict)
         and isinstance(reference_tempo, dict)
         and prediction_tempo.get("beats_seconds") == reference_tempo.get("beats_seconds")
@@ -566,7 +828,7 @@ def import_event_bundle(
             )
         )
     charts = {bundle["instrument"]: reductions(notes, bundle["instrument"], tempo)}
-    if target.exists():
+    if target.exists() or target.is_symlink():
         raise FileExistsError(f"Refusing to overwrite review output: {target}")
     target.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=target.parent))
@@ -613,7 +875,7 @@ def import_event_bundle(
             "validation": report,
         }
         save_json(staging / "result.json", result)
-        os.rename(staging, target)
+        _publish_directory_no_replace(staging, target)
         return {**result, "folder": str(target)}
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
