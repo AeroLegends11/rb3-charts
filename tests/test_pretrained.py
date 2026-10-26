@@ -7,6 +7,7 @@ import soundfile as sf
 from rb3charts.pretrained import (
     audio2chart_chart_to_bundle,
     audio2chart_tokens_to_bundle,
+    clonecharter_tokens_to_bundle,
     compare_bundles,
     import_event_bundle,
     sha256_file,
@@ -236,6 +237,82 @@ def test_audio2chart_chart_normalizer_rejects_malformed_sync_entries(tmp_path):
             source_sample_rate=8000,
             source_duration_seconds=5,
             tempo=_bundle([])["tempo"],
+        )
+
+
+def test_clonecharter_token_normalizer_preserves_timing_chords_sustains_and_modifiers():
+    bundle = clonecharter_tokens_to_bundle(
+        [1, 6, 4, 57, 123, 88, 9, 59, 124, 89, 2],
+        source_sha256="a" * 64,
+        source_sample_rate=8000,
+        source_duration_seconds=1.5,
+        tempo={
+            "beats_seconds": [0.0, 0.5, 1.0, 1.5],
+            "numerator": 4,
+            "provenance": "exact synthetic model feature beat map",
+        },
+        instrument="guitar",
+        difficulty="expert",
+        device="cpu",
+        temperature=0.95,
+        top_p=0.92,
+    )
+    assert bundle["backend"]["name"] == "clonecharter"
+    assert bundle["backend"]["upstream_revision"] == "e33dd4f45cd3d731e50e0ea68163ed890cbe45e5"
+    assert bundle["events"][0]["onset_seconds"] == 0
+    assert bundle["events"][0]["duration_status"] == "unknown"
+    assert bundle["events"][0]["modifiers"] == ["forced_hopo"]
+    assert bundle["events"][1]["onset_seconds"] == pytest.approx(0.5 / 12)
+    assert bundle["events"][1]["offset_seconds"] == pytest.approx(0.5 / 6)
+    assert bundle["events"][1]["lanes"] == [0, 1]
+    assert bundle["events"][1]["modifiers"] == ["tap"]
+
+
+def test_clonecharter_token_normalizer_groups_same_tick_notes_and_maps_drums():
+    guitar = clonecharter_tokens_to_bundle(
+        [1, 6, 57, 123, 58, 123, 2],
+        source_sha256="a" * 64,
+        source_sample_rate=8000,
+        source_duration_seconds=1.5,
+        tempo={"beats_seconds": [0, 0.5, 1, 1.5], "provenance": "synthetic"},
+        instrument="guitar",
+        difficulty="expert",
+    )
+    assert len(guitar["events"]) == 1
+    assert guitar["events"][0]["lanes"] == [0, 1]
+
+    drums = clonecharter_tokens_to_bundle(
+        [1, 8, 92, 10, 95, 2],
+        source_sha256="a" * 64,
+        source_sample_rate=8000,
+        source_duration_seconds=1.5,
+        tempo={"beats_seconds": [0, 0.5, 1, 1.5], "provenance": "synthetic"},
+        instrument="drums",
+        difficulty="hard",
+    )
+    assert [event["lanes"] for event in drums["events"]] == [[0], [2]]
+    assert drums["events"][1]["onset_seconds"] == pytest.approx(1 / 12)
+
+
+@pytest.mark.parametrize(
+    ("tokens", "message"),
+    [
+        ([1, 6, 57, 123, 90, 2], "open note"),
+        ([1, 6, 183, 2], "star-power/solo"),
+        ([1, 6, 3, 2], "Unsupported CloneCharter token"),
+        ([1, 6, 57, 123], "without EOS"),
+    ],
+)
+def test_clonecharter_token_normalizer_rejects_unsupported_or_truncated_sequences(tokens, message):
+    with pytest.raises(ValueError, match=message):
+        clonecharter_tokens_to_bundle(
+            tokens,
+            source_sha256="a" * 64,
+            source_sample_rate=8000,
+            source_duration_seconds=1.5,
+            tempo={"beats_seconds": [0, 0.5, 1, 1.5], "provenance": "synthetic"},
+            instrument="guitar",
+            difficulty="expert",
         )
 
 

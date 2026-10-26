@@ -62,6 +62,23 @@ def main():
     normalize_chart.add_argument("--temperature",type=float)
     normalize_chart.add_argument("--top-k",type=int)
     normalize_chart.add_argument("--runtime-seconds",type=float)
+    normalize_clone=sub.add_parser("normalize-clonecharter-tokens",help="Normalize saved CloneCharter tokens with their exact source beat map; does not run inference")
+    normalize_clone.add_argument("source",type=Path,help="The exact source WAV used to extract model features")
+    normalize_clone.add_argument("tokens",type=Path,help="JSON list of token IDs returned by AutoCharterModel.generate")
+    normalize_clone.add_argument("output",type=Path,help="New normalized event-bundle JSON path")
+    normalize_clone.add_argument("--tempo-file",type=Path,required=True,help="Exact source beat map supplied to model inference")
+    normalize_clone.add_argument("--instrument",choices=["guitar","bass","drums"],required=True)
+    normalize_clone.add_argument("--difficulty",choices=["easy","medium","hard","expert"],required=True)
+    normalize_clone.add_argument("--resolution",type=int,default=192)
+    normalize_clone.add_argument("--model-id",default="thejorseman/CloneCharter")
+    normalize_clone.add_argument("--model-revision")
+    normalize_clone.add_argument("--weights-sha256")
+    normalize_clone.add_argument("--device",default="unknown")
+    normalize_clone.add_argument("--seed",type=int)
+    normalize_clone.add_argument("--temperature",type=float)
+    normalize_clone.add_argument("--top-k",type=int)
+    normalize_clone.add_argument("--top-p",type=float)
+    normalize_clone.add_argument("--runtime-seconds",type=float)
     import_events=sub.add_parser("import-pretrained-events",help="Create a review-only MIDI/preview from normalized Expert events")
     import_events.add_argument("source",type=Path,help="Exact source WAV used for inference")
     import_events.add_argument("events",type=Path,help="Versioned normalized event bundle")
@@ -170,6 +187,39 @@ def main():
         with args.output.open("x",encoding="utf-8") as stream:
             json.dump(payload,stream,indent=2)
         print(f"Normalized {len(payload['events'])} audio2chart .chart events -> {args.output}")
+        return 0
+    if args.command=="normalize-clonecharter-tokens":
+        import soundfile as sf
+        from .pretrained import clonecharter_tokens_to_bundle,sha256_file
+        if args.output.exists() or args.output.is_symlink():
+            parser.error(f"Refusing to overwrite normalized event bundle: {args.output}")
+        if not args.source.is_file() or not args.tokens.is_file() or args.source.suffix.lower()!=".wav":
+            parser.error("An existing source WAV and CloneCharter token JSON are required")
+        source_info=sf.info(args.source)
+        tempo=json.loads(args.tempo_file.read_text(encoding="utf-8"))
+        payload=clonecharter_tokens_to_bundle(
+            json.loads(args.tokens.read_text(encoding="utf-8")),
+            source_sha256=sha256_file(args.source),
+            source_sample_rate=source_info.samplerate,
+            source_duration_seconds=source_info.frames/source_info.samplerate,
+            tempo=tempo,
+            instrument=args.instrument,
+            difficulty=args.difficulty,
+            resolution=args.resolution,
+            model_id=args.model_id,
+            model_revision=args.model_revision,
+            weights_sha256=args.weights_sha256,
+            device=args.device,
+            seed=args.seed,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            top_p=args.top_p,
+            runtime_seconds=args.runtime_seconds,
+        )
+        args.output.parent.mkdir(parents=True,exist_ok=True)
+        with args.output.open("x",encoding="utf-8") as stream:
+            json.dump(payload,stream,indent=2)
+        print(f"Normalized {len(payload['events'])} CloneCharter token events -> {args.output}")
         return 0
     if args.command=="import-pretrained-events":
         from .pretrained import import_event_bundle

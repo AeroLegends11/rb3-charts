@@ -24,7 +24,11 @@ AUDIO2CHART_REVISION = "b6abaafecd3d39a11793ca64538431263dcd99ad"
 AUDIO2CHART_MODEL = "3podi/charter-v1.0-40-M-best-acc"
 AUDIO2CHART_SAMPLE_RATE = 24_000
 AUDIO2CHART_CHUNK_SECONDS = 30
-SUPPORTED_INSTRUMENTS = {"guitar", "bass"}
+CLONECHARTER_UPSTREAM = "https://github.com/TheJorseman/CloneCharter"
+CLONECHARTER_REVISION = "e33dd4f45cd3d731e50e0ea68163ed890cbe45e5"
+CLONECHARTER_MODEL = "thejorseman/CloneCharter"
+CLONECHARTER_SUSTAIN_STEPS = list(range(48)) + [54, 60, 66, 72, 78, 84, 90, 96, 110, 120, 144, 165]
+SUPPORTED_INSTRUMENTS = {"guitar", "bass", "drums"}
 SUPPORTED_DIFFICULTIES = {"easy", "medium", "hard", "expert"}
 SUPPORTED_MODIFIERS = {"forced_hopo", "forced_strum", "tap"}
 
@@ -570,6 +574,204 @@ def audio2chart_chart_to_bundle(
         },
         "instrument": "guitar",
         "difficulty": "expert",
+        "tempo": tempo,
+        "events": events,
+    }
+    return validate_bundle(payload)
+
+
+def clonecharter_tokens_to_bundle(
+    tokens: list,
+    *,
+    source_sha256: str,
+    source_sample_rate: int,
+    source_duration_seconds: float,
+    tempo: dict,
+    instrument: str,
+    difficulty: str,
+    resolution: int = 192,
+    model_id: str = CLONECHARTER_MODEL,
+    model_revision: str | None = None,
+    weights_sha256: str | None = None,
+    device: str = "unknown",
+    seed: int | None = None,
+    temperature: float | None = None,
+    top_k: int | None = None,
+    top_p: float | None = None,
+    runtime_seconds: float | None = None,
+):
+    """Normalize CloneCharter token IDs using its pinned vocabulary grammar."""
+    if not isinstance(tokens, list) or not tokens:
+        raise ValueError("CloneCharter output must be a non-empty integer token list")
+    if any(not isinstance(token, int) or isinstance(token, bool) or token not in range(187) for token in tokens):
+        raise ValueError("CloneCharter token sequence contains a value outside the 187-token vocabulary")
+    if not isinstance(resolution, int) or isinstance(resolution, bool) or resolution <= 0 or resolution % 16:
+        raise ValueError("CloneCharter resolution must be a positive multiple of its 16-tick token grid")
+    if instrument not in SUPPORTED_INSTRUMENTS:
+        raise ValueError(f"Unsupported CloneCharter instrument: {instrument!r}")
+    if difficulty not in SUPPORTED_DIFFICULTIES:
+        raise ValueError("Only RB3 Easy/Medium/Hard/Expert difficulties are supported")
+    if not isinstance(tempo, dict) or not isinstance(tempo.get("beats_seconds"), list):
+        raise ValueError("The exact source-time beat map used for inference is required")
+    beat_times = tempo["beats_seconds"]
+    if len(beat_times) < 2 or any(not _finite_number(value) for value in beat_times):
+        raise ValueError("tempo.beats_seconds must contain at least two finite source-time beats")
+    if any(right <= left for left, right in zip(beat_times, beat_times[1:])):
+        raise ValueError("tempo.beats_seconds must be strictly increasing")
+    if not isinstance(tempo.get("provenance"), str) or not tempo["provenance"].strip():
+        raise ValueError("tempo.provenance must identify the beat map supplied to the model")
+
+    instrument_tokens = {"guitar": 6, "bass": 7, "drums": 8}
+    if len(tokens) < 2 or tokens[0] != 1 or tokens[1] != instrument_tokens[instrument]:
+        raise ValueError("CloneCharter BOS/instrument tokens do not match the selected instrument")
+
+    def seconds_at_tick(tick):
+        beat_position = tick / resolution
+        if beat_position > len(beat_times) - 1:
+            raise ValueError("The supplied source tempo map does not cover a generated CloneCharter event")
+        beat_index = int(math.floor(beat_position))
+        fraction = beat_position - beat_index
+        if beat_index < len(beat_times) - 1:
+            interval = beat_times[beat_index + 1] - beat_times[beat_index]
+            return beat_times[beat_index] + fraction * interval
+        return beat_times[-1]
+
+    def flush_event_groups(grouped):
+        rows = []
+        for tick, event in sorted(grouped.items()):
+            onset = seconds_at_tick(tick)
+            offset_seconds = seconds_at_tick(tick + event["sustain_ticks"]) if event["sustain_ticks"] else None
+            rows.append(
+                {
+                    "event_id": f"clonecharter-{instrument}-{difficulty}-{len(rows):06d}",
+                    "onset_seconds": round(onset, 9),
+                    "offset_seconds": round(offset_seconds, 9) if offset_seconds is not None else None,
+                    "duration_status": "predicted" if offset_seconds is not None else "unknown",
+                    "lanes": sorted(event["lanes"]),
+                    "confidence": None,
+                    "open_note": False,
+                    "modifiers": sorted(event["modifiers"]),
+                }
+            )
+        return rows
+
+    grouped = {}
+    cursor_tick = 0
+    index = 2
+    saw_eos = False
+    while index < len(tokens):
+        token = tokens[index]
+        if token == 2:
+            saw_eos = True
+            if any(value != 0 for value in tokens[index + 1 :]):
+                raise ValueError("Only PAD tokens may follow CloneCharter EOS")
+            break
+        if token == 0:
+            if any(value != 0 for value in tokens[index:]):
+                raise ValueError("Only PAD tokens may follow CloneCharter PAD")
+            break
+        if 9 <= token <= 56:
+            cursor_tick += (token - 8) * 16
+            index += 1
+            continue
+        if token in (4, 5):
+            index += 1
+            continue
+        if token in (183, 184, 185, 186):
+            raise ValueError("CloneCharter star-power/solo tokens are not represented by the current RB3 importer")
+        is_drum = instrument == "drums"
+        if 57 <= token <= 87 and not is_drum:
+            bitmask = token - 56
+            lanes = {lane for lane in range(5) if bitmask & (1 << lane)}
+            index += 1
+            if index >= len(tokens) or not 123 <= tokens[index] <= 182:
+                raise ValueError(f"CloneCharter guitar/bass note at tick {cursor_tick} lacks its sustain token")
+            sustain_ticks = CLONECHARTER_SUSTAIN_STEPS[tokens[index] - 123] * 16
+            index += 1
+            modifiers = set()
+            while index < len(tokens) and tokens[index] in (88, 89, 90, 91):
+                modifier = {
+                    88: "forced_hopo",
+                    89: "tap",
+                    90: "open_note",
+                    91: "forced_strum",
+                }[tokens[index]]
+                if modifier == "open_note":
+                    raise ValueError(f"CloneCharter emitted an unsupported open note at tick {cursor_tick}")
+                modifiers.add(modifier)
+                index += 1
+        elif 92 <= token <= 122 and is_drum:
+            bitmask = token - 91
+            lanes = {lane for lane in range(5) if bitmask & (1 << lane)}
+            sustain_ticks = 0
+            modifiers = set()
+            index += 1
+        else:
+            raise ValueError(f"Unsupported CloneCharter token {token} at sequence index {index}")
+
+        event = grouped.get(cursor_tick)
+        if event is None:
+            event = {
+                "lanes": set(),
+                "sustain_ticks": sustain_ticks,
+                "modifiers": set(modifiers),
+            }
+            grouped[cursor_tick] = event
+        elif event["sustain_ticks"] != sustain_ticks or event["modifiers"] != modifiers:
+            raise ValueError(f"Simultaneous CloneCharter events at tick {cursor_tick} disagree on sustain/modifiers")
+        if event["lanes"] & lanes:
+            raise ValueError(f"Duplicate CloneCharter lane at tick {cursor_tick}")
+        event["lanes"].update(lanes)
+        event["modifiers"].update(modifiers)
+
+    if not saw_eos:
+        raise ValueError("CloneCharter token sequence ended without EOS")
+
+    events = flush_event_groups(grouped)
+    sampling = {}
+    for key, value in (("temperature", temperature), ("top_k", top_k), ("top_p", top_p)):
+        if value is not None:
+            if not _finite_number(value):
+                raise ValueError(f"{key} must be finite or omitted")
+            if key == "temperature" and value <= 0:
+                raise ValueError("temperature must be positive")
+            if key == "top_k" and (
+                not isinstance(value, int) or isinstance(value, bool) or value < 0
+            ):
+                raise ValueError("top_k must be a nonnegative integer")
+            if key == "top_p" and not 0 < value <= 1:
+                raise ValueError("top_p must be in (0, 1]")
+            sampling[key] = value
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "backend": {
+            "name": "clonecharter",
+            "upstream": CLONECHARTER_UPSTREAM,
+            "upstream_revision": CLONECHARTER_REVISION,
+            "model_id": model_id,
+            "model_revision": model_revision,
+            "weights_sha256": weights_sha256,
+        },
+        "source": {
+            "sha256": source_sha256,
+            "sample_rate": source_sample_rate,
+            "duration_seconds": source_duration_seconds,
+        },
+        "inference": {
+            "device": device,
+            "seed": seed,
+            "sampling": sampling,
+            "runtime_seconds": runtime_seconds,
+        },
+        "timebase": {
+            "unit": "seconds",
+            "origin": "source_audio",
+            "offset_applied_seconds": 0.0,
+            "tick_resolution": resolution,
+            "token_grid_ticks": 16,
+        },
+        "instrument": instrument,
+        "difficulty": difficulty,
         "tempo": tempo,
         "events": events,
     }
