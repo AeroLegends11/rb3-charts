@@ -3,35 +3,35 @@
 ## Decision and scope
 
 The existing `pipeline.generate` path remains the default and is unchanged.
-This checkpoint adds a versioned event interchange, an audio2chart token
-normalizer, a source-hash-checked review MIDI/preview import, and rights-gated
-event comparison. It does **not** run either pretrained model, add a selectable
-generator backend, or add a hybrid pass. No real-song quality claim or model
-winner is supported by the evidence below.
+This checkpoint adds a versioned event interchange, audio2chart and CloneCharter
+token normalizers, a source-hash-checked review MIDI/preview import, and
+rights-gated event comparison. It does **not** run either pretrained model, add a
+selectable generator backend, or add a hybrid pass. No real-song quality claim or
+model winner is supported by the evidence below.
 
 ## Evidence matrix
 
 | Evidence | audio2chart | CloneCharter |
 | --- | --- | --- |
-| Source inspected | `3podi/audio2chart` at `b6abaafecd3d39a11793ca64538431263dcd99ad`; paths below were retrieved from raw GitHub URLs pinned to that revision. | The user-supplied model-card URL and claimed implementation link could not be fetched from this environment. |
-| Official weights | `generate.py` names `3podi/charter-v1.0-40-M-best-acc`; the default loader downloads `config.json` and `pytorch_model.bin` through Hugging Face Hub. No model file was downloaded and no HF revision or SHA-256 was verified. | Unknown: model card, file tree, weight revision and checksum were not reachable. |
-| Inference implementation | Present in upstream `inference/engine.py`; not executed here. It loads Encodec separately and generates 30-second chunks in one batch. | Unknown: implementation link, loader and inference code could not be verified. |
-| Lanes / difficulty | `chart/tokenizer.py` maps combinations of five lanes (0–4) and a separate open-note token. `generate.py` writes `[ExpertSingle]` only. Open notes are rejected by this adapter. | The card claims Guitar/Bass/Drums and Easy through Expert+++, but those claims and token semantics remain unverified. |
-| Timing / durations | Grid timestamps use checkpoint `grid_ms`. The upstream CLI's default BPM 200 and resolution 480 are chart serialization parameters, not audio tempo analysis. `convert_notes_to_ticks` emits zero sustain ticks, so offsets/confidence are recorded unknown; no sustains are invented. | Unknown: tempo, timing grid, event duration, difficulty and conversion semantics could not be inspected. |
-| Input / output | Upstream loads mono audio at 24 kHz and rejects clips shorter than 30 seconds. Its script accepts common audio paths and writes a Clone Hero `.chart` file. This adapter accepts a WAV plus returned token sequences and imports a normalized bundle into a review-only RB3 MIDI/preview. | Unknown: card claims WAV/model inference and chart output, but exact implementation behavior is unverified. |
+| Source inspected | `3podi/audio2chart` at `b6abaafecd3d39a11793ca64538431263dcd99ad`; paths below were retrieved from raw GitHub URLs pinned to that revision. | Publisher implementation at `thejorseman/auto-charter` revision `e33dd4f45cd3d731e50e0ea68163ed890cbe45e5`; model card and current Hub artifact revisions/checksums were not verified. |
+| Official weights | `generate.py` names `3podi/charter-v1.0-40-M-best-acc`; the default loader downloads `config.json` and `pytorch_model.bin` through Hugging Face Hub. No model file was downloaded and no HF revision or SHA-256 was verified. | The publisher repository includes model-loading/inference code and points to the `thejorseman/CloneCharter` Hub model. No checkpoint was downloaded; immutable Hub revision and SHA-256 remain unverified. |
+| Inference implementation | Present in upstream `inference/engine.py`; not executed here. It loads Encodec separately and generates 30-second chunks in one batch. | Source inspected at the pinned revision above; inference was not executed. Its MERT feature path requests remote code, so it was not run or enabled in this project. |
+| Lanes / difficulty | `chart/tokenizer.py` maps combinations of five lanes (0–4) and a separate open-note token. `generate.py` writes `[ExpertSingle]` only. Open notes are rejected by this adapter. | The inspected vocabulary encodes five-fret guitar/bass masks, drum masks and instrument tokens. The normalizer accepts Guitar/Bass/Drums and RB3 Easy through Expert only; it rejects open notes and unsupported solo/star-power tokens. Higher difficulties are not imported. |
+| Timing / durations | Grid timestamps use checkpoint `grid_ms`. The upstream CLI's default BPM 200 and resolution 480 are chart serialization parameters, not audio tempo analysis. `convert_notes_to_ticks` emits zero sustain ticks, so offsets/confidence are recorded unknown; no sustains are invented. | Tokens encode 16-tick waits and sustain steps on a 192-tick beat grid. Normalization requires the exact source-time beat map used for inference and preserves encoded sustain lengths; no beat map is inferred. |
+| Input / output | Upstream loads mono audio at 24 kHz and rejects clips shorter than 30 seconds. Its script accepts common audio paths and writes a Clone Hero `.chart` file. This adapter accepts a WAV plus returned token sequences and imports a normalized bundle into a review-only RB3 MIDI/preview. | Upstream code includes audio feature extraction and token generation. The project adapter currently normalizes saved token IDs only; no direct WAV inference adapter is claimed. |
 | Local runtime / hardware | Environment has no `torch`, `transformers` or Hugging Face client. No CUDA/GPU inference was attempted. | No model runtime or hardware execution was attempted. |
-| License / commercial use | The pinned GitHub `LICENSE` path returned 404 and the HF model card was inaccessible. Code, checkpoint and Encodec licensing/redistribution/commercial permissions are therefore unknown. `Charter.from_pretrained` calls `torch.load` without an explicit `weights_only` argument and does not pin the HF revision. Do not execute/download or make commercial-use claims until licensing and safe immutable loading are addressed. | Unknown. A model-card tag alone would not establish rights in weights, MERT, audio or charts. |
-| Dataset / training rights | Not used. | The problem statement describes `CloneHeroDatasetCharts` as MIT-tagged with about 43.7k rows, but that card/files/license could not be independently fetched. Audio/chart rights and commercial use remain unknown. No dataset was downloaded or used. |
-| Dependencies | Upstream `requirements.txt` pins Torch 2.9.1, Transformers 4.57.1, NumPy 2.3.4 and other research dependencies; this project pins NumPy 1.26.4 and Torch 2.8.0 in its tested setup. They were not installed into the project environment. | Unknown. No install was attempted. |
+| License / commercial use | The pinned GitHub `LICENSE` path returned 404 and the HF model card was inaccessible. Code, checkpoint and Encodec licensing/redistribution/commercial permissions are therefore unknown. `Charter.from_pretrained` calls `torch.load` without an explicit `weights_only` argument and does not pin the HF revision. Do not execute/download or make commercial-use claims until licensing and safe immutable loading are addressed. | The inspected publisher repository declares MIT. That declaration does not independently establish rights to the separately hosted weights, MERT encoder, audio or charts; no commercial clearance is claimed. |
+| Dataset / training rights | Not used. | The dataset card declares MIT, but its source charts are scraped from public Clone Hero repositories and author/audio/chart permissions are unresolved. No dataset was downloaded or used. |
+| Dependencies | Upstream `requirements.txt` pins Torch 2.9.1, Transformers 4.57.1, NumPy 2.3.4 and other research dependencies; this project pins NumPy 1.26.4 and Torch 2.8.0 in its tested setup. They were not installed into the project environment. | Publisher source uses a MERT configuration/extractor dimension of 1,024, while the dataset-card generator/README describe 768. This incompatibility remains unresolved; dependencies were not installed. |
 
 The requested external references are [audio2chart's official weight card](https://huggingface.co/3podi/charter-v1.0-40-M-best-acc),
 [CloneCharter](https://huggingface.co/thejorseman/CloneCharter), its
 [claimed implementation](https://github.com/thejorseman/auto-charter), and the
 [CloneHeroDatasetCharts card](https://huggingface.co/datasets/thejorseman/CloneHeroDatasetCharts).
 The HF host could not be resolved here; GitHub API requests timed out or returned
-403, and direct raw requests for the claimed auto-charter `main` README/LICENSE
-returned 404. These failures leave code, model files, revisions and licenses
-unverified; claims in the issue are not treated as independently confirmed.
+403. The CloneCharter publisher source was separately inspected at the pinned
+revision in the matrix. Current Hub model/dataset files, weights, immutable
+revisions and checksums remain unverified.
 
 ### audio2chart source references
 
@@ -91,6 +91,25 @@ requiring token extraction from upstream internals:
   '.research\song-audio2chart-events.json' `
   --tempo-file '.research\shared-tempo.json'
 ```
+
+`normalize-clonecharter-tokens` also consumes saved model token IDs, not audio
+and not an inference run. It requires the exact source WAV, the exact source-time
+beat map supplied to model inference, instrument, and RB3 difficulty:
+
+```powershell
+.\.venv\Scripts\python.exe -m rb3charts.cli normalize-clonecharter-tokens `
+  'C:\authorized\song.wav' 'C:\local\clonecharter-token-ids.json' `
+  '.research\song-clonecharter-events.json' `
+  --tempo-file '.research\model-beats.json' --instrument guitar --difficulty expert
+```
+
+The inspected CloneCharter vocabulary uses IDs 0–5 for special/beat tokens,
+6–8 for instrument, 9–56 for waits, 57–87 for five-fret guitar/bass masks,
+88–91 for modifiers, 92–122 for drum masks, 123–182 for sustain steps, and
+183–186 for solo/star-power tokens. This normalizer rejects unsupported open
+notes and solo/star-power events. It merges simultaneous lane masks only when
+their sustain and modifiers agree. These parser semantics are not evidence that
+the checkpoint was run.
 
 It converts the chart's ticks through its own SyncTrack BPM and resolution to
 source seconds, groups same-tick lanes as chords, preserves any explicitly
@@ -190,13 +209,16 @@ it was retained rather than switching branches.
 - Full output tree hashes and regression metrics are preserved locally, ignored
   by Git, in `.research/pretrained-charting-evaluation/baseline/`. Source WAV
   SHA-256: `1918846628d4d25823f9b32c75503e1167c680c3cc0821dd950d41b9c8fdd0c7`.
-- Current full `pytest -q`: 134 passed, 2 existing dependency deprecation
-  warnings; this includes 26 focused tests. `compileall`, main CLI help and new
-  CLI help passed.
+- Before CloneCharter token normalization was added, full `pytest -q` reported
+  134 passed and 2 existing dependency deprecation warnings. The current focused
+  `tests/test_pretrained.py` run reports 32 passed; the full suite was not rerun
+  after the CloneCharter changes. Main CLI help and the CloneCharter normalization
+  CLI smoke passed.
 - Focused tests cover synthetic chunks at 30, 30.02, 45, 60 and 61 seconds,
   overlap trimming, 20/40 ms grids, `.chart` tempo/chord/sustain parsing,
-  unsupported token/open-note failures, schema validation, one-to-one metrics,
-  held-out rights checks, source-hash mismatch and no-overwrite behavior.
+  CloneCharter guitar/bass/drum token parsing, mapped timing, chords, sustains,
+  modifiers and unsupported-token failures, schema validation, one-to-one
+  metrics, held-out rights checks, source-hash mismatch and no-overwrite behavior.
 - Both CLI paths were manually smoke-tested using only synthetic fixtures:
   token JSON and an `.chart` file each normalized to events and imported to a
   structurally valid review MIDI/preview. A deliberately identical synthetic
@@ -207,10 +229,10 @@ it was retained rather than switching branches.
   it is not the user's Windows/GPU environment.
 
 The network in this environment could not resolve `huggingface.co`; GitHub API
-requests timed out or returned 403. No CloneCharter files, model weights, audio
-or dataset were downloaded. No commercial or held-out real-song evaluation,
-GPU run, Onyx compilation, human listen, or Xbox playtest was performed. The
-CloneCharter adapter, its dependencies/download scripts, GUI selection and any
-hybrid generation pass are deferred until its code, immutable weights, licensing
-and token/time semantics can be independently verified. The existing generator
+requests timed out or returned 403. No model weights, audio or dataset were
+downloaded. No commercial or held-out real-song evaluation, GPU run, Onyx
+compilation, human listen, or Xbox playtest was performed. Direct CloneCharter
+WAV inference, dependencies/download scripts, GUI selection and hybrid
+generation remain deferred until the model artifacts, MERT compatibility,
+licensing and runtime can be independently verified. The existing generator
 remains the only automatic generation backend.
