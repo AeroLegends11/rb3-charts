@@ -132,3 +132,33 @@ before changing access or power settings. Remote access is not configured by
 this repository setup. Subscription changes, API billing and purchases remain
 user decisions; the shared conversation's pricing claims were not adopted as
 verified requirements. No additional provider is needed to use this repository.
+
+## 7. Pretrained charting adapter checkpoint — in progress
+
+Status (2026-10-26):
+
+- Preserved the task branch's actual baseline (`4aef7cc`, parent
+  `008e298`) and a local ignored synthetic cached-replay output, metrics and
+  file hashes under `.research/pretrained-charting-evaluation/baseline/`.
+- Added a versioned external-event schema, strict validation, audio2chart token
+  and `.chart` normalizers, 30-second overlap trimming, and a review-only
+  source-hash-checked MIDI/preview import. Synthetic fixtures exercise
+  rights-gated one-to-one event metrics. The existing generator path is unchanged.
+- Baseline suite: 108 passed. Current full suite: 134 passed, 2 existing
+  dependency warnings (including 26 new focused tests). CLI help, both
+  normalization/import paths, and rights-manifest comparison smoke tests passed
+  with synthetic inputs only. PowerShell wrappers ran under PowerShell 7.6.6;
+  the diagnostic identified this Linux runner, not the user's GPU.
+- No model inference, weight downloads, CloneCharter implementation review,
+  real held-out evaluation, human listening, GPU run or Xbox playtest occurred.
+  Hugging Face was not resolvable and GitHub API access failed in the runner;
+  audio2chart code was independently inspected at pinned revision
+  `b6abaafecd3d39a11793ca64538431263dcd99ad`, but its code/weight/encoder
+  licensing and immutable weight checksum remain unresolved.
+
+Do not enable a generator backend or hybrid, add model-specific dependencies or
+weight downloads, or claim charting improvement until upstream code, model and
+encoder revisions/checksums/permissions are verified and a rights-attested
+held-out comparison plus human listening review is completed. See
+`docs/PRETRAINED_CHARTING.md` for source evidence, operational limits and the
+normalized-event commands.

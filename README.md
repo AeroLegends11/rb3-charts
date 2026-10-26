@@ -129,6 +129,14 @@ A beat file is JSON: `{"beats": [0.75, 1.25, 1.76, 2.28], "numerator": 4}`.
 Each entry is the source-audio time of a consecutive quarter note. Include the
 whole song for accurate variable timing. The first entry defines downbeat phase.
 
+### Pretrained charting experiments
+
+The existing generator remains the default. The optional external-event
+normalizer, review-only MIDI/preview importer, held-out comparison command,
+PowerShell diagnostics and current model/license limitations are documented in
+[Pretrained charting evaluation](docs/PRETRAINED_CHARTING.md). These tools do not
+download weights or run either external model.
+
 ### Electronic charting style
 
 Electronic mode treats Rock Band tracks as playable musical roles. Guitar follows
