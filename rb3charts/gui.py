@@ -168,6 +168,13 @@ class Window(QMainWindow):
         source_layout.addLayout(row)
         self.batch=QCheckBox("Process every audio file in the selected folder")
         source_layout.addWidget(self.batch)
+        metadata_hint=QLabel(
+            "Optional song details for display in the game. Add the title, artist, "
+            "album and year for a more polished song listing; they are not required "
+            "to generate a chart.")
+        metadata_hint.setWordWrap(True)
+        metadata_hint.setObjectName("hint")
+        source_layout.addWidget(metadata_hint)
         fields=QFormLayout()
         fields.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         fields.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
