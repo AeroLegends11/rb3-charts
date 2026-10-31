@@ -30,7 +30,7 @@ def _redact(text):
     text = re.sub(r"(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,})",
                   "[REDACTED]", text)
     text = re.sub(r"[A-Za-z]:[\\/][^\r\n\"'<>]*", "[LOCAL PATH]", text)
-    text = re.sub(r"(?<![\w:/])/(?:home|Users|tmp|mnt|media|opt|var|private)/[^\s\"'<>]*",
+    text = re.sub(r"(?<![\w:/])/(?:root|home|Users|tmp|mnt|media|opt|var|private)/[^\s\"'<>]*",
                   "[LOCAL PATH]", text)
     return text
 

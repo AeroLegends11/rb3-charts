@@ -197,10 +197,10 @@ def test_feedback_dialog_saves_report_and_drafts_issue(app, monkeypatch, tmp_pat
     assert len(list((run / "feedback").glob("*.json"))) == 1
     dialog.issue.click()
     query = parse_qs(urlsplit(opened[-1]).query)
-    assert "Artist — Song" in query["title"][0]
+    assert "Artist" not in query["title"][0]
     assert str(tmp_path) not in query["body"][0]
     assert "1:23" in query["body"][0]
-    assert app.clipboard().text().startswith("## What I hear")
+    assert app.clipboard().text().startswith("<!-- rb3-feedback:")
     dialog.deleteLater()
 
 
@@ -214,3 +214,52 @@ def test_feedback_dialog_rejects_empty_description(app, monkeypatch, tmp_path):
     assert warnings and dialog.saved_report is None
     assert not (tmp_path / "output" / "feedback" / "index.jsonl").exists()
     dialog.deleteLater()
+
+
+def test_remote_submission_is_opt_in_and_cancellable(app, monkeypatch, tmp_path):
+    from rb3charts import gui, feedback_remote
+
+    monkeypatch.setattr(feedback_remote, "authorize",
+                        lambda *a, **k: pytest.fail("No consent was given"))
+    dialog = gui.FeedbackDialog(root=tmp_path)
+    assert not dialog.auto_submit.isChecked()
+    dialog.description.setPlainText("The app button is confusing.")
+    dialog.save_report()
+    assert dialog.remote_worker is None
+    monkeypatch.setattr(gui.QDialog, "exec", lambda self: gui.QDialog.DialogCode.Rejected)
+    dialog.submit_report()
+    assert dialog.remote_worker is None
+    dialog.deleteLater()
+
+
+def test_auto_submit_runs_only_after_save_and_public_approval(app, monkeypatch, tmp_path):
+    from rb3charts import gui, feedback_remote
+
+    dialog = gui.FeedbackDialog(root=tmp_path)
+    dialog.auto_submit.setChecked(True)
+    dialog.description.setPlainText("The app button is confusing.")
+    started = []
+    monkeypatch.setattr(gui.QDialog, "exec", lambda self: gui.QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(dialog, "start_remote", lambda report_id: started.append(report_id))
+    dialog.save_report()
+    assert started == [dialog.saved_report["id"]]
+    delivery = feedback_remote._delivery_path(started[0], tmp_path)
+    assert delivery.exists()
+    assert not dialog.description.isEnabled()
+    dialog.deleteLater()
+
+
+def test_report_worker_surfaces_auth_error_and_never_hides_failure(app, monkeypatch, tmp_path):
+    from rb3charts import gui, feedback_remote
+
+    def fail(*args, **kwargs):
+        raise ValueError("Sign in with gh auth login")
+
+    monkeypatch.setattr(feedback_remote, "sync", fail)
+    worker = gui.FeedbackSyncWorker(tmp_path)
+    results, errors = [], []
+    worker.result.connect(results.append)
+    worker.failed.connect(errors.append)
+    worker.run()
+    assert not results
+    assert errors == ["Sign in with gh auth login"]

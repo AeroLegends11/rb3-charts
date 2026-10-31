@@ -57,12 +57,44 @@ app issues). Each report records the problem type, instrument, difficulty,
 severity, song timestamp and description, plus the run's settings and app revision.
 
 - Reports are saved locally in `output/feedback/` (and in the chart run's
-  `feedback/` folder) and never uploaded automatically.
+  `feedback/` folder). Local-only is the default.
 - `output/feedback/improvement-queue.md` groups repeated reports so the most
   common problems are fixed first. `python -m rb3charts.cli feedback-summary`
   prints the same summary.
-- **Send to project on GitHub** opens a pre-filled issue (local paths redacted,
-  no audio or MIDI) and copies the text to the clipboard.
+- Check **Submit after saving** to review the exact public text and approve
+  direct delivery. Each report becomes a GitHub issue, visible remotely to
+  everyone. Song/artist/folder names are omitted, paths are redacted best-effort,
+  and no audio or MIDI is sent. Never put credentials or personal details in a report.
+- **Retry queued reports / check status** resends only previously approved
+  reports and checks whether submitted issues are open or closed.
+- **Send to project on GitHub** remains a browser alternative without GitHub CLI.
+
+For direct delivery, install [GitHub CLI](https://cli.github.com/) and sign in
+once with `gh auth login`. Reports use the user's own account; there is no
+maintainer token or shared password in the app. The repository is public, so
+users do not need collaborator access to submit issues. Anonymous submission
+is not supported; the browser alternative also needs a GitHub account.
+
+Approved payloads and delivery receipts are stored under
+`output/feedback/delivery/`. Offline/authentication failures keep reports queued,
+and retries check existing report IDs before creating a new issue. Nothing
+retries on app startup; use the button or `python -m rb3charts.cli feedback-sync`.
+An unconfirmed submission has a two-minute retry pause to allow GitHub's issue
+list to catch up rather than immediately creating a duplicate.
+Status checks retain GitHub's closure reason; closed does not always mean fixed.
+
+The **Feedback intake and dashboard** GitHub Actions workflow categorizes
+reports by problem, instrument and severity, and maintains a shared dashboard
+[issue](https://github.com/AeroLegends11/rb3-charts/issues/18). It runs when issues
+are opened/edited/closed/reopened/deleted, every six
+hours as a catch-up, and on manual dispatch. It needs Actions enabled and the
+workflow merged into the default branch; a feature branch alone does not enable
+issue or scheduled triggers. Only fixed metadata is processed, not instructions
+from report text. Maintain the original issues remotely to assign work, discuss
+findings or close them; the dashboard reflects their state. No AI credits are
+used by this deterministic triage, though normal GitHub Actions limits apply.
+The canonical dashboard issue is fixed in `feedback_dashboard.py`; the updater
+does not create another dashboard when GitHub's issue-list results are delayed.
 
 The app does not rewrite its own charting rules from reports. Each recurring
 problem becomes an issue with a regression check, and a fix is merged only after

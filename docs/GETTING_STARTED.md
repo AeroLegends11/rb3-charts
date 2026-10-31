@@ -87,8 +87,15 @@ Xbox package. Keep this folder so you can review or package again.
 - **Something sounds wrong or is confusing:** click **Report a problem**. Pick
   what kind of problem it is, the instrument, roughly where in the song (for
   example `1:23`), and describe it in your own words. The report is saved on this
-  computer with the chart you just made. **Send to project on GitHub** opens a
-  pre-filled issue in your browser that you can read before posting.
+  computer with the chart you just made. Check **Submit after saving** to review
+  and approve sending it to the project's public inbox. Anyone can read posted
+  reports, so remove private details first. Direct delivery needs GitHub CLI
+  and one-time sign-in (`gh auth login`). **Send to project on GitHub** is a
+  browser alternative. Both options need your own GitHub account.
+- **Report did not send:** it stays saved. After reconnecting or signing in,
+  click **Retry queued reports / check status**. Only reports you already approved
+  for public sharing are retried; local-only reports stay private. **Shared inbox**
+  opens all submitted issues so you can follow progress.
 
 Setup on a new computer is a separate step: follow the README's Windows
 installation instructions before launching.
