@@ -4,6 +4,10 @@ Development: read [AGENTS.md](AGENTS.md) for commands and branch rules,
 [the ordered development plan](docs/DEVELOPMENT_PLAN.md) for the next milestones,
 and [the repository review](docs/REPOSITORY_REVIEW.md) before the first GitHub upload.
 
+Ongoing improvement: [recurring research setup](docs/RECURRING_RESEARCH.md) describes
+a daily search for expert evidence and measurable benchmarks. It is a setup
+proposal, not an enabled automation.
+
 A local Windows application that turns audio into draft Rock Band 3 guitar,
 bass and drum charts at **Expert, Hard, Medium and Easy**, with optional
 five-lane keys. It compiles Xbox 360 CON packages using Onyx and Magma.
