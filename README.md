@@ -17,7 +17,9 @@ still require a listening review and Xbox playtest.
 ## Start
 
 On this computer dependencies are installed in `.venv`. Double-click
-**Launch.cmd**, select or drop a song, enter metadata, and click **Generate charts**.
+**Launch.cmd**, select or drop a song, enter metadata, and click **Generate visual review**.
+The desktop interface groups music selection, chart setup and review into
+distinct panels, with larger text, high-contrast fields and visible keyboard focus.
 If you want one-click testing of the latest local branch state, use
 **UpdateAndLaunch.cmd** (runs `git fetch` + `git pull --ff-only` for the current
 branch, then starts the GUI).

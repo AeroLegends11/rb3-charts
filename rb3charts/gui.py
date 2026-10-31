@@ -3,12 +3,81 @@ import sys
 import traceback
 from datetime import datetime
 from PySide6.QtCore import Qt, QThread, Signal, QUrl
-from PySide6.QtGui import QDesktopServices, QFontDatabase, QIcon
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog, QFormLayout, QComboBox, QCheckBox, QPlainTextEdit, QProgressBar, QGroupBox, QMessageBox, QScrollArea
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontDatabase, QIcon, QPalette
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog, QFormLayout, QComboBox, QCheckBox, QPlainTextEdit, QProgressBar, QGroupBox, QMessageBox, QScrollArea
 from .model import Options
 from . import __version__
 
 ROOT=Path(__file__).resolve().parents[1]
+
+BACKGROUND="#101722"
+SURFACE="#192434"
+TEXT="#f1f5fb"
+MUTED="#bac8dc"
+ACCENT="#75e2c0"
+
+STYLE = """
+QMainWindow, QScrollArea, QWidget#canvas { background: #101722; }
+QWidget { color: #f1f5fb; }
+QScrollArea { border: none; }
+QLabel#heading { font-size: 30pt; font-weight: 700; color: #f1f5fb; }
+QLabel#subtitle { font-size: 13pt; color: #bac8dc; }
+QLabel#build_info, QLabel#hint { color: #bac8dc; }
+QLabel#build_info { font-size: 10pt; }
+QLabel#status { font-weight: 600; }
+QGroupBox {
+    background: #192434; border: 1px solid #3c506a; border-radius: 12px;
+    margin-top: 14px; padding: 22px 16px 16px; font-weight: 600;
+}
+QGroupBox::title {
+    subcontrol-origin: margin; left: 16px; padding: 0 6px; color: #75e2c0;
+}
+QLineEdit, QComboBox, QPlainTextEdit {
+    background: #101b2a; color: #f1f5fb; border: 1px solid #516782;
+    border-radius: 8px; padding: 9px 12px; selection-background-color: #75e2c0;
+    selection-color: #101722;
+}
+QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus { border: 2px solid #75e2c0; }
+QComboBox { padding-right: 28px; }
+QComboBox QAbstractItemView {
+    background: #192434; color: #f1f5fb; border: 1px solid #75e2c0;
+    selection-background-color: #304b64; selection-color: #ffffff;
+}
+QPushButton {
+    background: #2b4058; color: #f1f5fb; border: 1px solid #627b98;
+    border-radius: 8px; padding: 10px 16px; font-weight: 600;
+}
+QPushButton:hover { background: #395775; border-color: #75e2c0; }
+QPushButton:pressed { background: #1d3047; }
+QPushButton:focus { border: 2px solid #75e2c0; }
+QPushButton:disabled {
+    background: #202d3e; color: #a7b6ca; border-color: #45566e;
+}
+QPushButton#primary {
+    background: #75e2c0; color: #10241e; border-color: #75e2c0;
+    font-size: 13pt; padding: 14px;
+}
+QPushButton#primary:hover { background: #9aeed4; }
+QPushButton#primary:pressed { background: #55c9a6; }
+QPushButton#primary:disabled { background: #334d49; color: #c2d3cf; }
+QPushButton#primary:focus { border: 2px solid #ffffff; }
+QCheckBox { spacing: 9px; }
+QCheckBox::indicator, QGroupBox::indicator {
+    width: 18px; height: 18px; border: 1px solid #8095b0;
+    border-radius: 4px; background: #101b2a;
+}
+QCheckBox::indicator:checked, QGroupBox::indicator:checked {
+    background: #75e2c0; border-color: #75e2c0; image: url("__CHECK_ICON__");
+}
+QCheckBox::indicator:checked:disabled { background: #69887f; }
+QCheckBox:focus { color: #75e2c0; }
+QProgressBar {
+    background: #101b2a; border: 1px solid #516782; border-radius: 5px;
+    min-height: 8px; max-height: 8px;
+}
+QProgressBar::chunk { background: #75e2c0; border-radius: 4px; }
+QToolTip { background: #24364c; color: #f1f5fb; border: 1px solid #75e2c0; }
+"""
 
 class Worker(QThread):
     message=Signal(str)
@@ -35,78 +104,127 @@ class Window(QMainWindow):
         self.setWindowTitle(f"RB3 Charts • Local authoring • v{__version__}")
         icon=ROOT/"assets"/"rb3-chart-maker.ico"
         if icon.exists():self.setWindowIcon(QIcon(str(icon)))
-        self.resize(930,860)
+        self.setFont(QFont("Segoe UI",11))
+        palette=self.palette()
+        for role,color in (
+            (QPalette.ColorRole.Window,BACKGROUND),
+            (QPalette.ColorRole.WindowText,TEXT),
+            (QPalette.ColorRole.Base,BACKGROUND),
+            (QPalette.ColorRole.AlternateBase,SURFACE),
+            (QPalette.ColorRole.Text,TEXT),
+            (QPalette.ColorRole.Button,SURFACE),
+            (QPalette.ColorRole.ButtonText,TEXT),
+            (QPalette.ColorRole.PlaceholderText,MUTED),
+            (QPalette.ColorRole.Highlight,ACCENT),
+            (QPalette.ColorRole.HighlightedText,BACKGROUND),
+        ):
+            palette.setColor(role,QColor(color))
+        self.setPalette(palette)
+        self.resize(1100,960)
         self.setAcceptDrops(True)
         self.worker=None
         self.last_folder=None
         self.last_result=None
         self.review_path=None
         central=QWidget()
+        central.setObjectName("canvas")
         scroll=QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(central)
         self.setCentralWidget(scroll)
         layout=QVBoxLayout(central)
-        layout.setContentsMargins(24,18,24,18)
-        layout.setSpacing(10)
+        layout.setContentsMargins(28,24,28,24)
+        layout.setSpacing(16)
+        header=QVBoxLayout()
+        header.setSpacing(4)
         heading=QLabel("RB3 CHARTS")
         heading.setObjectName("heading")
-        layout.addWidget(heading)
+        header.addWidget(heading)
         build_info=QLabel(f"v{__version__} · Launched {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         build_info.setObjectName("build_info")
-        layout.addWidget(build_info)
         subtitle=QLabel("Your songs. Four difficulties. A better first draft.")
         subtitle.setObjectName("subtitle")
-        layout.addWidget(subtitle)
+        header.addWidget(subtitle)
+        header.addWidget(build_info)
+        layout.addLayout(header)
+        self.setup_panels=QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self.setup_panels.setSpacing(16)
+        layout.addLayout(self.setup_panels)
+        source_group=QGroupBox("01  /  Choose your music")
+        source_layout=QVBoxLayout(source_group)
+        source_layout.setSpacing(12)
         self.source=QLineEdit()
         self.source.setPlaceholderText("Drop an audio file here, or select a song…")
         row=QHBoxLayout()
         row.addWidget(self.source)
+        source_layout.addLayout(row)
+        row=QHBoxLayout()
         select=QPushButton("Select song")
         select.clicked.connect(self.select_song)
         row.addWidget(select)
         batch_button=QPushButton("Select folder")
         batch_button.clicked.connect(self.select_folder)
         row.addWidget(batch_button)
-        layout.addLayout(row)
+        source_layout.addLayout(row)
         self.batch=QCheckBox("Process every audio file in the selected folder")
-        layout.addWidget(self.batch)
+        source_layout.addWidget(self.batch)
         fields=QFormLayout()
-        fields.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        fields.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         fields.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        fields.setVerticalSpacing(12)
+        fields.setHorizontalSpacing(20)
         self.title=QLineEdit()
         self.artist=QLineEdit()
         self.album=QLineEdit()
         self.year=QLineEdit()
         for label,field in [("Song title",self.title),("Artist",self.artist),("Album",self.album),("Year",self.year)]:
+            field.setPlaceholderText(label+" (optional)")
             fields.addRow(label,field)
-        layout.addLayout(fields)
+        source_layout.addLayout(fields)
+        self.setup_panels.addWidget(source_group,1)
+        instrument_group=QGroupBox("02  /  Chart setup")
+        setup_layout=QVBoxLayout(instrument_group)
+        setup_layout.setSpacing(12)
         profile_row=QFormLayout()
+        profile_row.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.profile=QComboBox()
         self.profile.addItems(["Auto — detect instruments and musical roles","Band — guitar and bass instruments","Electronic — lead synth on Guitar, low synth/pulses on Bass"])
         profile_row.addRow("Charting style",self.profile)
-        layout.addLayout(profile_row)
-        instrument_group=QGroupBox("Instruments · Expert, Hard, Medium and Easy included")
-        instruments=QHBoxLayout(instrument_group)
+        self.profile.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.profile.setMinimumContentsLength(24)
+        self.profile.setToolTip(self.profile.currentText())
+        self.profile.currentTextChanged.connect(self.profile.setToolTip)
+        setup_layout.addLayout(profile_row)
+        instruments=QHBoxLayout()
         self.instruments={}
         for name in ("Guitar","Bass","Drums","Keys"):
             box=QCheckBox(name if name!="Keys" else "Keys (experimental)")
             box.setChecked(name!="Keys")
             self.instruments[name.lower()]=box
             instruments.addWidget(box)
-        layout.addWidget(instrument_group)
-        advanced=QGroupBox("Analysis & timing · Precision mode selected")
+        setup_layout.addLayout(instruments)
+        difficulties=QLabel("Expert, Hard, Medium and Easy are included for every selected instrument.")
+        difficulties.setWordWrap(True)
+        difficulties.setObjectName("hint")
+        setup_layout.addWidget(difficulties)
+        self.setup_panels.addWidget(instrument_group,1)
+        advanced=QGroupBox("Analysis and timing · Precision mode selected")
         advanced.setCheckable(True)
         advanced.setChecked(False)
         advanced_body=QWidget()
         advanced_layout=QVBoxLayout(advanced)
         advanced_layout.addWidget(advanced_body)
         form=QFormLayout(advanced_body)
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        form.setVerticalSpacing(12)
         advanced.toggled.connect(advanced_body.setVisible)
         advanced_body.setVisible(False)
         self.quality=QComboBox()
         self.quality.addItems(["Precision — two separation models, slower","Balanced — one separation model"])
+        self.quality.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.quality.setMinimumContentsLength(24)
+        self.quality.setToolTip(self.quality.currentText())
+        self.quality.currentTextChanged.connect(self.quality.setToolTip)
         form.addRow("Quality",self.quality)
         self.device=QComboBox()
         self.device.addItems(["Automatic GPU / CPU","NVIDIA GPU","CPU"])
@@ -122,28 +240,35 @@ class Window(QMainWindow):
         self.compile=QCheckBox("Compile immediately (skip the review-first workflow)")
         self.compile.setChecked(False)
         form.addRow(self.compile)
-        layout.addWidget(advanced)
+        setup_layout.addWidget(advanced)
         note=QLabel("Precision preserves note timing. Trained drum and pitch models still need listening review.\nPro Drums and keys are experimental. Vocals are not available in this version.")
         note.setWordWrap(True)
         note.setObjectName("hint")
-        layout.addWidget(note)
+        setup_layout.addWidget(note)
+        review_group=QGroupBox("03  /  Generate and review")
+        review_layout=QVBoxLayout(review_group)
+        review_layout.setSpacing(12)
+        layout.addWidget(review_group)
         self.generate=QPushButton("Generate visual review")
         self.generate.setObjectName("primary")
         self.generate.clicked.connect(self.start)
-        layout.addWidget(self.generate)
+        review_layout.addWidget(self.generate)
         self.progress=QProgressBar()
         self.progress.setRange(0,1)
         self.progress.setValue(0)
         self.progress.setTextVisible(False)
-        layout.addWidget(self.progress)
+        review_layout.addWidget(self.progress)
         self.status=QLabel("Ready · Drop in a song to begin")
-        layout.addWidget(self.status)
+        self.status.setObjectName("status")
+        self.status.setWordWrap(True)
+        review_layout.addWidget(self.status)
         self.log=QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(1500)
-        self.log.setMinimumHeight(90)
-        self.log.setMaximumHeight(110)
-        layout.addWidget(self.log,1)
+        self.log.setPlaceholderText("Analysis progress and review notes will appear here.")
+        self.log.setMinimumHeight(100)
+        self.log.setMaximumHeight(120)
+        review_layout.addWidget(self.log,1)
         row=QHBoxLayout()
         self.review=QPushButton("Listen & review chart")
         self.review.setEnabled(False)
@@ -153,14 +278,27 @@ class Window(QMainWindow):
         self.package.setEnabled(False)
         self.package.clicked.connect(self.package_reviewed)
         row.addWidget(self.package)
+        review_layout.addLayout(row)
+        row=QHBoxLayout()
         self.open_output=QPushButton("Open output folder")
         self.open_output.clicked.connect(lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.last_folder or ROOT/"output"))))
         row.addWidget(self.open_output)
-        layout.addLayout(row)
         self.share=QPushButton("Export for ChatGPT")
         self.share.clicked.connect(self.export_for_chatgpt)
-        layout.addWidget(self.share)
-        self.setStyleSheet('''QMainWindow,QWidget{background:#111a28;color:#e5edf8;font:14px "Segoe UI"}QLabel#heading{font-size:28px;font-weight:700;letter-spacing:3px;color:#6ee7c5}QLabel#build_info{font-size:11px;color:#7c8ea8;letter-spacing:1px}QLabel#subtitle{font-size:18px;color:#b1c2d9}QLabel#hint{color:#a6b6ce;font-size:12px}QLineEdit,QComboBox,QPlainTextEdit{background:#1b293b;border:1px solid #34475e;border-radius:6px;padding:7px}QPushButton{background:#263a52;border:1px solid #435e7a;border-radius:7px;padding:9px 16px}QPushButton:hover{background:#33516e}QPushButton:disabled{color:#697b90}QPushButton#primary{background:#51c9a5;color:#10241e;font-weight:700;font-size:16px;padding:12px}QGroupBox{border:1px solid #34475e;border-radius:8px;margin-top:8px;padding-top:16px}QGroupBox::title{subcontrol-origin:margin;left:10px;padding:0 4px}''')
+        row.addWidget(self.share)
+        review_layout.addLayout(row)
+        layout.addStretch()
+        self.setStyleSheet(STYLE.replace("__CHECK_ICON__",(ROOT/"assets"/"check.svg").as_posix()))
+        for field in (*self.findChildren(QLineEdit),self.log):
+            field_palette=field.palette()
+            field_palette.setColor(QPalette.ColorRole.PlaceholderText,QColor(MUTED))
+            field.setPalette(field_palette)
+
+    def resizeEvent(self,event):
+        self.setup_panels.setDirection(
+            QBoxLayout.Direction.TopToBottom if event.size().width()<1000
+            else QBoxLayout.Direction.LeftToRight)
+        super().resizeEvent(event)
 
     def export_for_chatgpt(self):
         from .sharing import export_chatgpt
