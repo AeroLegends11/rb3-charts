@@ -20,6 +20,9 @@ On this computer dependencies are installed in `.venv`. Double-click
 **Launch.cmd**, select or drop a song, enter metadata, and click **Generate visual review**.
 The desktop interface groups music selection, chart setup and review into
 distinct panels, with larger text, high-contrast fields and visible keyboard focus.
+Click **Getting started** for offline help. The same guides are available here:
+[Getting started](docs/GETTING_STARTED.md) and
+[Playing on Xbox 360](docs/PLAYING_ON_XBOX.md).
 If you want one-click testing of the latest local branch state, use
 **UpdateAndLaunch.cmd** (runs `git fetch` + `git pull --ff-only` for the current
 branch, then starts the GUI).

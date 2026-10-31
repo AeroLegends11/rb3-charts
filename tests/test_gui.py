@@ -134,3 +134,38 @@ def test_generate_forwards_settings_without_changing_engine(window, monkeypatch,
     assert "Fixture failure" in window.log.toPlainText()
     window.worker.finished.emit()
     assert window.generate.isEnabled()
+
+
+def test_help_opens_local_guides_without_changing_options(window, monkeypatch):
+    from PySide6.QtWidgets import QTabWidget, QTextBrowser
+    from rb3charts import gui
+
+    def inspect_dialog(dialog):
+        tabs = dialog.findChild(QTabWidget)
+        assert tabs.count() == 2
+        assert tabs.tabText(0) == "Getting started"
+        assert tabs.tabText(1) == "Playing on Xbox 360"
+        browsers = dialog.findChildren(QTextBrowser)
+        assert all(not browser.openLinks() for browser in browsers)
+        assert "not a chart editor" in browsers[0].toPlainText()
+        assert "does not install songs on a console" in browsers[1].toPlainText()
+        assert "model downloads" in browsers[0].toPlainText()
+        return 0
+
+    monkeypatch.setattr(gui.QDialog, "exec", inspect_dialog)
+    window.help.click()
+    assert window.profile.currentIndex() == 0
+    assert not window.compile.isChecked()
+    assert window.worker is None
+
+
+def test_missing_help_guide_reports_error(window, monkeypatch, tmp_path):
+    from rb3charts import gui
+
+    warnings = []
+    monkeypatch.setattr(gui, "ROOT", tmp_path)
+    monkeypatch.setattr(gui.QMessageBox, "warning", lambda *args: warnings.append(args))
+    window.open_help()
+    assert len(warnings) == 1
+    assert warnings[0][1] == "Help unavailable"
+    assert "Could not open the local guide" in warnings[0][2]

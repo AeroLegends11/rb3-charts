@@ -4,7 +4,7 @@ import traceback
 from datetime import datetime
 from PySide6.QtCore import Qt, QThread, Signal, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontDatabase, QIcon, QPalette
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog, QFormLayout, QComboBox, QCheckBox, QPlainTextEdit, QProgressBar, QGroupBox, QMessageBox, QScrollArea
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog, QFormLayout, QComboBox, QCheckBox, QPlainTextEdit, QProgressBar, QGroupBox, QMessageBox, QScrollArea, QDialog, QDialogButtonBox, QTabWidget, QTextBrowser
 from .model import Options
 from . import __version__
 
@@ -17,7 +17,7 @@ MUTED="#bac8dc"
 ACCENT="#75e2c0"
 
 STYLE = """
-QMainWindow, QScrollArea, QWidget#canvas { background: #101722; }
+QMainWindow, QDialog, QScrollArea, QWidget#canvas { background: #101722; }
 QWidget { color: #f1f5fb; }
 QScrollArea { border: none; }
 QLabel#heading { font-size: 30pt; font-weight: 700; color: #f1f5fb; }
@@ -32,7 +32,7 @@ QGroupBox {
 QGroupBox::title {
     subcontrol-origin: margin; left: 16px; padding: 0 6px; color: #75e2c0;
 }
-QLineEdit, QComboBox, QPlainTextEdit {
+QLineEdit, QComboBox, QPlainTextEdit, QTextBrowser {
     background: #101b2a; color: #f1f5fb; border: 1px solid #516782;
     border-radius: 8px; padding: 9px 12px; selection-background-color: #75e2c0;
     selection-color: #101722;
@@ -77,6 +77,9 @@ QProgressBar {
 }
 QProgressBar::chunk { background: #75e2c0; border-radius: 4px; }
 QToolTip { background: #24364c; color: #f1f5fb; border: 1px solid #75e2c0; }
+QTabWidget::pane { border: 1px solid #516782; }
+QTabBar::tab { background: #192434; color: #bac8dc; padding: 10px 16px; }
+QTabBar::tab:selected { background: #2b4058; color: #f1f5fb; }
 """
 
 class Worker(QThread):
@@ -139,10 +142,19 @@ class Window(QMainWindow):
         header.setSpacing(4)
         heading=QLabel("RB3 CHARTS")
         heading.setObjectName("heading")
-        header.addWidget(heading)
+        heading_row=QHBoxLayout()
+        heading_row.addWidget(heading,1)
+        self.help=QPushButton("Getting started")
+        self.help.setToolTip("Open the offline beginner guide and Xbox packaging information.")
+        self.help.clicked.connect(self.open_help)
+        heading_row.addWidget(self.help)
+        header.addLayout(heading_row)
         build_info=QLabel(f"v{__version__} · Launched {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         build_info.setObjectName("build_info")
-        subtitle=QLabel("Your songs. Four difficulties. A better first draft.")
+        subtitle=QLabel(
+            "Turn a music file into draft note charts for Rock Band 3. "
+            "Review the result before creating an Xbox 360 package.")
+        subtitle.setWordWrap(True)
         subtitle.setObjectName("subtitle")
         header.addWidget(subtitle)
         header.addWidget(build_info)
@@ -168,6 +180,12 @@ class Window(QMainWindow):
         source_layout.addLayout(row)
         self.batch=QCheckBox("Process every audio file in the selected folder")
         source_layout.addWidget(self.batch)
+        source_hint=QLabel(
+            "Choose a music file saved on your computer, such as MP3, WAV or FLAC. "
+            "Streaming links are not supported. Your music stays on this computer.")
+        source_hint.setWordWrap(True)
+        source_hint.setObjectName("hint")
+        source_layout.addWidget(source_hint)
         metadata_hint=QLabel(
             "Optional song details for display in the game. Add the title, artist, "
             "album and year for a more polished song listing; they are not required "
@@ -192,6 +210,10 @@ class Window(QMainWindow):
         instrument_group=QGroupBox("02  /  Chart setup")
         setup_layout=QVBoxLayout(instrument_group)
         setup_layout.setSpacing(12)
+        setup_hint=QLabel("Not sure what to choose? Leave Auto selected and keep the default settings.")
+        setup_hint.setWordWrap(True)
+        setup_hint.setObjectName("hint")
+        setup_layout.addWidget(setup_hint)
         profile_row=QFormLayout()
         profile_row.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.profile=QComboBox()
@@ -215,11 +237,15 @@ class Window(QMainWindow):
         difficulties.setObjectName("hint")
         setup_layout.addWidget(difficulties)
         self.setup_panels.addWidget(instrument_group,1)
-        advanced=QGroupBox("Analysis and timing · Precision mode selected")
+        advanced=QGroupBox("Advanced settings (optional)")
         advanced.setCheckable(True)
         advanced.setChecked(False)
         advanced_body=QWidget()
         advanced_layout=QVBoxLayout(advanced)
+        advanced_hint=QLabel("Leave these unchanged unless you know you need them.")
+        advanced_hint.setWordWrap(True)
+        advanced_hint.setObjectName("hint")
+        advanced_layout.addWidget(advanced_hint)
         advanced_layout.addWidget(advanced_body)
         form=QFormLayout(advanced_body)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
@@ -235,14 +261,17 @@ class Window(QMainWindow):
         form.addRow("Quality",self.quality)
         self.device=QComboBox()
         self.device.addItems(["Automatic GPU / CPU","NVIDIA GPU","CPU"])
+        self.device.setToolTip("Auto chooses an available graphics processor or uses the CPU. CPU analysis can take longer.")
         form.addRow("Compute",self.device)
         self.bpm=QLineEdit()
         self.bpm.setPlaceholderText("Automatic variable tempo; enter BPM only if known")
+        self.bpm.setToolTip("BPM means beats per minute. Leave blank for automatic timing.")
         form.addRow("BPM override",self.bpm)
         self.first=QLineEdit("0")
         form.addRow("First beat (seconds; manual BPM)",self.first)
         self.stems=QLineEdit()
         self.stems.setPlaceholderText("Optional folder with aligned guitar.wav, bass.wav, drums.wav")
+        self.stems.setToolTip("Stems are separate instrument recordings. They must share the original song's start time and length.")
         form.addRow("Existing stems",self.stems)
         self.compile=QCheckBox("Compile immediately (skip the review-first workflow)")
         self.compile.setChecked(False)
@@ -256,6 +285,12 @@ class Window(QMainWindow):
         review_layout=QVBoxLayout(review_group)
         review_layout.setSpacing(12)
         layout.addWidget(review_group)
+        review_hint=QLabel(
+            "Generate a draft, then listen and check it. Automatic notes may need corrections. "
+            "First use downloads analysis models and can take longer; progress appears below.")
+        review_hint.setWordWrap(True)
+        review_hint.setObjectName("hint")
+        review_layout.addWidget(review_hint)
         self.generate=QPushButton("Generate visual review")
         self.generate.setObjectName("primary")
         self.generate.clicked.connect(self.start)
@@ -280,18 +315,30 @@ class Window(QMainWindow):
         self.review=QPushButton("Listen & review chart")
         self.review.setEnabled(False)
         self.review.clicked.connect(self.open_review)
+        self.review.setToolTip("Check timing, repeated riffs, extra notes and missing notes against the music.")
         row.addWidget(self.review)
         self.package=QPushButton("Package reviewed chart for Xbox")
         self.package.setEnabled(False)
         self.package.clicked.connect(self.package_reviewed)
+        self.package.setToolTip(
+            "Builds an Xbox 360 game package from the existing draft without analyzing "
+            "the song again. Does not transfer it to your console.")
         row.addWidget(self.package)
         review_layout.addLayout(row)
+        next_steps=QLabel(
+            "Listen for notes that match the music, consistent riffs and quiet sections "
+            "without extra notes. Packaging reuses this draft; it does not transfer "
+            "the song to your console.")
+        next_steps.setWordWrap(True)
+        next_steps.setObjectName("hint")
+        review_layout.addWidget(next_steps)
         row=QHBoxLayout()
         self.open_output=QPushButton("Open output folder")
         self.open_output.clicked.connect(lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.last_folder or ROOT/"output"))))
         row.addWidget(self.open_output)
         self.share=QPushButton("Export for ChatGPT")
         self.share.clicked.connect(self.export_for_chatgpt)
+        self.share.setToolTip("Saves a text file for you to review and share manually. Nothing is uploaded automatically.")
         row.addWidget(self.share)
         review_layout.addLayout(row)
         layout.addStretch()
@@ -306,6 +353,34 @@ class Window(QMainWindow):
             QBoxLayout.Direction.TopToBottom if event.size().width()<1000
             else QBoxLayout.Direction.LeftToRight)
         super().resizeEvent(event)
+
+    def open_help(self):
+        guides=[]
+        try:
+            for title,filename in (
+                ("Getting started","GETTING_STARTED.md"),
+                ("Playing on Xbox 360","PLAYING_ON_XBOX.md"),
+            ):
+                guides.append((title,(ROOT/"docs"/filename).read_text(encoding="utf-8")))
+        except OSError as exc:
+            QMessageBox.warning(self,"Help unavailable",f"Could not open the local guide:\n{exc}")
+            return
+        dialog=QDialog(self)
+        dialog.setWindowTitle("RB3 Charts · Help")
+        dialog.resize(720,640)
+        layout=QVBoxLayout(dialog)
+        tabs=QTabWidget()
+        for title,text in guides:
+            browser=QTextBrowser()
+            browser.setOpenLinks(False)
+            browser.setMarkdown(text)
+            tabs.addTab(browser,title)
+        layout.addWidget(tabs)
+        buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
+        dialog.deleteLater()
 
     def export_for_chatgpt(self):
         from .sharing import export_chatgpt
