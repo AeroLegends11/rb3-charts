@@ -520,6 +520,26 @@ class Window(QMainWindow):
         else:
             event.accept()
 
+class FeedbackSyncWorker(QThread):
+    result=Signal(object)
+    failed=Signal(str)
+
+    def __init__(self,root,report_id=None,parent=None):
+        super().__init__(parent)
+        self.root=root
+        self.report_id=report_id
+
+    def run(self):
+        from . import feedback_remote
+        try:
+            result=([feedback_remote.submit(self.report_id,root=self.root)]
+                    if self.report_id else feedback_remote.sync(root=self.root))
+        except (OSError,ValueError) as exc:
+            self.failed.emit(str(exc))
+        else:
+            self.result.emit(result)
+
+
 class FeedbackDialog(QDialog):
     """Collects one report; storage and summaries live in rb3charts.feedback."""
     def __init__(self,parent=None,run_folder=None,root=ROOT):
@@ -527,6 +547,7 @@ class FeedbackDialog(QDialog):
         self.run_folder=run_folder
         self.root=root
         self.saved_report=None
+        self.remote_worker=None
         self.setWindowTitle("RB3 Charts · Report a problem")
         self.resize(640,620)
         layout=QVBoxLayout(self)
@@ -580,6 +601,30 @@ class FeedbackDialog(QDialog):
         self.summary.setObjectName("hint")
         layout.addWidget(self.summary)
         self.refresh_summary()
+        self.auto_submit=QCheckBox("Submit after saving (public; review before sending)")
+        layout.addWidget(self.auto_submit)
+        remote_hint=QLabel(
+            "Direct submission needs GitHub CLI and one-time sign-in: gh auth login. "
+            "No shared password is included in the app. You can use the browser instead.")
+        remote_hint.setWordWrap(True)
+        remote_hint.setObjectName("hint")
+        layout.addWidget(remote_hint)
+        remote_row=QHBoxLayout()
+        self.submit=QPushButton("Submit saved report")
+        self.submit.setEnabled(False)
+        self.submit.clicked.connect(self.submit_report)
+        remote_row.addWidget(self.submit)
+        self.sync=QPushButton("Retry queued reports / check status")
+        self.sync.clicked.connect(lambda:self.start_remote())
+        remote_row.addWidget(self.sync)
+        self.inbox=QPushButton("Shared inbox")
+        self.inbox.clicked.connect(self.open_inbox)
+        remote_row.addWidget(self.inbox)
+        layout.addLayout(remote_row)
+        self.remote_status=QLabel("Only reports you approve for public sharing will be sent.")
+        self.remote_status.setWordWrap(True)
+        self.remote_status.setObjectName("hint")
+        layout.addWidget(self.remote_status)
         buttons=QDialogButtonBox()
         self.save=buttons.addButton("Save report",QDialogButtonBox.ButtonRole.AcceptRole)
         self.issue=buttons.addButton("Send to project on GitHub",QDialogButtonBox.ButtonRole.ActionRole)
@@ -620,15 +665,114 @@ class FeedbackDialog(QDialog):
         self.issue.setEnabled(True)
         self.save.setText("Saved ✓")
         self.save.setEnabled(False)
+        self.submit.setEnabled(True)
+        for field in (self.category,self.instrument,self.difficulty,self.severity,
+                      self.start,self.end,self.description):
+            field.setEnabled(False)
         self.refresh_summary()
+        if self.auto_submit.isChecked():
+            self.submit_report()
+
+    def submit_report(self):
+        if not self.saved_report:return
+        from . import feedback_remote
+        preview=QDialog(self)
+        preview.setWindowTitle("Review your PUBLIC report")
+        preview.resize(700,600)
+        layout=QVBoxLayout(preview)
+        warning=QLabel(
+            "This report will be visible to everyone on GitHub under your GitHub account. "
+            "Check for personal information, credentials or private details. "
+            "Automatic redaction is best-effort. No audio or MIDI is sent.")
+        warning.setWordWrap(True)
+        layout.addWidget(warning)
+        payload=feedback_remote.public_payload(self.saved_report)
+        text=QTextBrowser()
+        text.setPlainText(payload["title"]+"\n\n"+payload["body"])
+        layout.addWidget(text)
+        buttons=QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok|QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Approve and submit")
+        buttons.accepted.connect(preview.accept)
+        buttons.rejected.connect(preview.reject)
+        layout.addWidget(buttons)
+        approved=preview.exec()==QDialog.DialogCode.Accepted
+        preview.deleteLater()
+        if not approved:return
+        try:
+            feedback_remote.authorize(self.saved_report,root=self.root)
+        except (OSError,ValueError) as exc:
+            QMessageBox.warning(self,"Could not queue report",str(exc))
+            return
+        self.start_remote(self.saved_report["id"])
+
+    def start_remote(self,report_id=None):
+        if self.remote_worker and self.remote_worker.isRunning():return
+        self.submit.setEnabled(False)
+        self.sync.setEnabled(False)
+        self.remote_status.setText("Connecting to GitHub; your local reports are safe...")
+        self.remote_worker=FeedbackSyncWorker(self.root,report_id,self)
+        self.remote_worker.result.connect(self.remote_finished)
+        self.remote_worker.failed.connect(self.remote_failed)
+        self.remote_worker.finished.connect(self.remote_reset)
+        self.remote_worker.start()
+
+    def remote_finished(self,deliveries):
+        if not deliveries:
+            self.remote_status.setText("No approved reports queued. Save and approve a report first.")
+            return
+        opened=sum(item["issue"]["state"]=="open" for item in deliveries)
+        self.remote_status.setText(
+            f"Synced {len(deliveries)} report(s): {opened} open, "
+            f"{len(deliveries)-opened} closed. Details are in the shared inbox.")
+
+    def remote_failed(self,error):
+        self.remote_status.setText("Not synced. Approved reports remain queued for retry.")
+        QMessageBox.warning(self,"Report delivery failed",error)
+
+    def remote_reset(self):
+        self.submit.setEnabled(self.saved_report is not None)
+        self.sync.setEnabled(True)
+
+    def reject(self):
+        if self.remote_worker and self.remote_worker.isRunning():
+            QMessageBox.information(self,"Sync in progress","Wait for report sync to finish before closing.")
+            return
+        super().reject()
+
+    def closeEvent(self,event):
+        if self.remote_worker and self.remote_worker.isRunning():
+            self.reject()
+            event.ignore()
+        else:
+            super().closeEvent(event)
+
+    def open_inbox(self):
+        from .feedback_remote import INBOX_URL
+        QDesktopServices.openUrl(QUrl(INBOX_URL))
 
     def open_issue(self):
         if not self.saved_report:return
-        QGuiApplication.clipboard().setText(feedback.issue_body(self.saved_report))
-        QDesktopServices.openUrl(QUrl(feedback.issue_url(self.saved_report)))
+        from .feedback_remote import public_payload,REPOSITORY
+        from urllib.parse import urlencode
+        payload=public_payload(self.saved_report)
+        QGuiApplication.clipboard().setText(payload["body"])
+        query=urlencode({**payload,"labels":"user-feedback"})
+        url=f"https://github.com/{REPOSITORY}/issues/new?{query}"
+        if len(url)>feedback.MAX_URL:
+            QMessageBox.information(
+                self,"Paste your report",
+                "The report is too long for a browser link. Its full text has been copied; "
+                "paste it into the new issue and review it before posting.")
+            url=f"https://github.com/{REPOSITORY}/issues/new"
+        QDesktopServices.openUrl(QUrl(url))
 
     def open_queue(self):
-        path=feedback.write_improvement_queue(self.root)
+        try:
+            path=feedback.write_improvement_queue(self.root)
+        except (OSError,ValueError) as exc:
+            QMessageBox.warning(self,"Could not open improvement list",str(exc))
+            return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
 def launch():

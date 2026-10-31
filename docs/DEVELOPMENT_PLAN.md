@@ -118,7 +118,15 @@ similarity from audio similarity; the latter needs independent audio features.
 User feedback loop (implemented): `rb3charts/feedback.py` stores in-app reports
 locally, groups recurring category/instrument pairs into
 `output/feedback/improvement-queue.md` and drafts redacted GitHub issues. Reports
-prioritize work; they never alter chart rules directly. Next: turn recurring
+prioritize work; they never alter chart rules directly.
+
+Remote intake: `feedback_remote.py` submits individually approved public payloads
+using each user's GitHub CLI authentication, retains delivery receipts, recovers
+existing report IDs on retry, and refreshes issue resolution states.
+`feedback-intake.yml` runs deterministic category/instrument/severity triage
+and a shared dashboard on issue events and six-hour catch-up runs once merged
+into the default branch. No shared credentials or automatic code changes.
+Next: turn recurring
 reports with timestamps into cached-replay regression targets.
 
 ## 5. Tempo and broader musical structure

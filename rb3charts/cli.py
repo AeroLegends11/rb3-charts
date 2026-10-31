@@ -20,6 +20,7 @@ def main():
     share.add_argument("--folder",type=Path,help="Individual chart output folder containing result.json")
     share.add_argument("--output",type=Path,required=True,help="New .txt file to review and transfer to your phone")
     sub.add_parser("feedback-summary",help="Show recurring problems from locally saved user reports")
+    sub.add_parser("feedback-sync",help="Send only approved queued reports and refresh GitHub issue status")
     demo=sub.add_parser("demo")
     demo.add_argument("--compile",action="store_true")
     demo.add_argument("--output",type=Path,default=Path("output"))
@@ -72,6 +73,17 @@ def main():
         for item in summary["recurring"] or [{"count":0,"label":"none yet","instrument":"-"}]:
             print(f"  {item['count']}x {item['label']} ({item['instrument']})")
         print(f"Improvement list: {write_improvement_queue()}")
+        return 0
+    if args.command=="feedback-sync":
+        from .feedback_remote import sync
+        try:
+            deliveries=sync()
+        except (OSError,ValueError) as exc:
+            parser.error(str(exc))
+        for delivery in deliveries:
+            issue=delivery["issue"]
+            print(f"{delivery['report_id']}: {issue['state']} - {issue['url']}")
+        print(f"Synced {len(deliveries)} approved report(s).")
         return 0
     from .pipeline import generate,batch,package_existing,replay_cached
     if args.command=="analyze-reference":

@@ -1,0 +1,27 @@
+name: Feedback intake and dashboard
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened, deleted]
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: feedback-intake
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Group reports and update shared dashboard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m rb3charts.feedback_dashboard
