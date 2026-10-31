@@ -3,9 +3,10 @@ import sys
 import traceback
 from datetime import datetime
 from PySide6.QtCore import Qt, QThread, Signal, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontDatabase, QIcon, QPalette
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontDatabase, QGuiApplication, QIcon, QPalette
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QLabel, QPushButton, QLineEdit, QFileDialog, QFormLayout, QComboBox, QCheckBox, QPlainTextEdit, QProgressBar, QGroupBox, QMessageBox, QScrollArea, QDialog, QDialogButtonBox, QTabWidget, QTextBrowser
 from .model import Options
+from . import feedback
 from . import __version__
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -312,7 +313,7 @@ class Window(QMainWindow):
         self.log.setMaximumHeight(120)
         review_layout.addWidget(self.log,1)
         row=QHBoxLayout()
-        self.review=QPushButton("Listen & review chart")
+        self.review=QPushButton("Listen and review chart")
         self.review.setEnabled(False)
         self.review.clicked.connect(self.open_review)
         self.review.setToolTip("Check timing, repeated riffs, extra notes and missing notes against the music.")
@@ -340,6 +341,13 @@ class Window(QMainWindow):
         self.share.clicked.connect(self.export_for_chatgpt)
         self.share.setToolTip("Saves a text file for you to review and share manually. Nothing is uploaded automatically.")
         row.addWidget(self.share)
+        self.report=QPushButton("Report a problem")
+        self.report.setToolTip(
+            "Tell the project what sounded wrong or what was confusing. Reports are saved "
+            "on this computer and grouped into an improvement list; nothing is uploaded "
+            "unless you choose to open a GitHub issue.")
+        self.report.clicked.connect(self.open_feedback)
+        row.addWidget(self.report)
         review_layout.addLayout(row)
         layout.addStretch()
         self.setStyleSheet(STYLE.replace("__CHECK_ICON__",(ROOT/"assets"/"check.svg").as_posix()))
@@ -379,6 +387,11 @@ class Window(QMainWindow):
         buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
+        dialog.exec()
+        dialog.deleteLater()
+
+    def open_feedback(self):
+        dialog=FeedbackDialog(self,self.last_folder if self.last_result else None)
         dialog.exec()
         dialog.deleteLater()
 
@@ -465,7 +478,7 @@ class Window(QMainWindow):
             self.last_folder=Path(result["folder"])
             self.last_result=result
             self.review_path=Path(result["review"])
-            self.review.setText("Listen & review chart")
+            self.review.setText("Listen and review chart")
             self.status.setText({"compiled_needs_playtest":"Package compiled · Listening review and Xbox playtest needed","draft_ready":"Draft ready · Review timing before compilation","compile_failed":"Charts ready, compilation failed · See log"}[result["status"]])
             self.log.appendPlainText(f"Charting style used: {result.get('chart_profile','unknown')}")
             if result.get("missing_instruments"):
@@ -506,6 +519,117 @@ class Window(QMainWindow):
             event.ignore()
         else:
             event.accept()
+
+class FeedbackDialog(QDialog):
+    """Collects one report; storage and summaries live in rb3charts.feedback."""
+    def __init__(self,parent=None,run_folder=None,root=ROOT):
+        super().__init__(parent)
+        self.run_folder=run_folder
+        self.root=root
+        self.saved_report=None
+        self.setWindowTitle("RB3 Charts · Report a problem")
+        self.resize(640,620)
+        layout=QVBoxLayout(self)
+        intro=QLabel(
+            "Describe one problem per report. Reports are saved on this computer, linked to "
+            "the chart you just made, and grouped so problems many people notice are fixed "
+            "first. Fixes are tested before they change how charts are made.")
+        intro.setWordWrap(True)
+        intro.setObjectName("hint")
+        layout.addWidget(intro)
+        form=QFormLayout()
+        self.category=QComboBox()
+        for key,label in feedback.CATEGORIES.items():
+            self.category.addItem(label,key)
+        form.addRow("What kind of problem?",self.category)
+        self.instrument=QComboBox()
+        for key in feedback.INSTRUMENTS:
+            self.instrument.addItem("Any / not sure" if key=="any" else key.title(),key)
+        form.addRow("Instrument",self.instrument)
+        self.difficulty=QComboBox()
+        for key in feedback.DIFFICULTIES:
+            self.difficulty.addItem("Any / not sure" if key=="any" else key.title(),key)
+        form.addRow("Difficulty",self.difficulty)
+        self.severity=QComboBox()
+        for key,label in feedback.SEVERITIES.items():
+            self.severity.addItem(label,key)
+        form.addRow("How serious?",self.severity)
+        times=QHBoxLayout()
+        self.start=QLineEdit()
+        self.start.setPlaceholderText("Start, e.g. 1:23")
+        self.end=QLineEdit()
+        self.end.setPlaceholderText("End (optional)")
+        times.addWidget(self.start)
+        times.addWidget(self.end)
+        form.addRow("Where in the song?",times)
+        self.description=QPlainTextEdit()
+        self.description.setPlaceholderText(
+            "What happened, and what did you expect? For example: the guitar riff at "
+            "the chorus repeats four times in the song but the chart uses different frets each time.")
+        self.description.setMinimumHeight(120)
+        form.addRow("Details",self.description)
+        layout.addLayout(form)
+        attached=QLabel(
+            f"Linked chart: {Path(run_folder).name}" if run_folder else
+            "No chart linked. Make a draft first to attach its settings, or report an app problem.")
+        attached.setWordWrap(True)
+        attached.setObjectName("hint")
+        layout.addWidget(attached)
+        self.summary=QLabel()
+        self.summary.setWordWrap(True)
+        self.summary.setObjectName("hint")
+        layout.addWidget(self.summary)
+        self.refresh_summary()
+        buttons=QDialogButtonBox()
+        self.save=buttons.addButton("Save report",QDialogButtonBox.ButtonRole.AcceptRole)
+        self.issue=buttons.addButton("Send to project on GitHub",QDialogButtonBox.ButtonRole.ActionRole)
+        self.issue.setToolTip("Opens a pre-filled GitHub issue in your browser. You review it before posting.")
+        self.issue.setEnabled(False)
+        self.queue=buttons.addButton("Open improvement list",QDialogButtonBox.ButtonRole.ActionRole)
+        close=buttons.addButton(QDialogButtonBox.StandardButton.Close)
+        self.save.clicked.connect(self.save_report)
+        self.issue.clicked.connect(self.open_issue)
+        self.queue.clicked.connect(self.open_queue)
+        close.clicked.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def refresh_summary(self):
+        summary=feedback.summarize(feedback.load_reports(self.root))
+        if not summary["total"]:
+            self.summary.setText("No reports saved on this computer yet.")
+            return
+        top=summary["recurring"][:3]
+        text=f"{summary['total']} report(s) saved on this computer."
+        if top:
+            text+=" Most common: "+"; ".join(
+                f"{item['label'].split(' — ')[0]} ({item['instrument']}, {item['count']}×)" for item in top)
+        self.summary.setText(text)
+
+    def save_report(self):
+        try:
+            report=feedback.make_report(
+                self.category.currentData(),self.description.toPlainText(),
+                instrument=self.instrument.currentData(),difficulty=self.difficulty.currentData(),
+                severity=self.severity.currentData(),start=self.start.text(),end=self.end.text(),
+                run_folder=self.run_folder)
+            feedback.save_report(report,run_folder=self.run_folder,root=self.root)
+        except (OSError,ValueError) as exc:
+            QMessageBox.warning(self,"Check the report",str(exc))
+            return
+        self.saved_report=report
+        self.issue.setEnabled(True)
+        self.save.setText("Saved ✓")
+        self.save.setEnabled(False)
+        self.refresh_summary()
+
+    def open_issue(self):
+        if not self.saved_report:return
+        QGuiApplication.clipboard().setText(feedback.issue_body(self.saved_report))
+        QDesktopServices.openUrl(QUrl(feedback.issue_url(self.saved_report)))
+
+    def open_queue(self):
+        path=feedback.write_improvement_queue(self.root)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
 def launch():
     app=QApplication.instance() or QApplication(sys.argv)
