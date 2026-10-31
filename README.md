@@ -50,6 +50,24 @@ Supported input: WAV, FLAC, MP3, OGG, M4A, AIFF and WMA through bundled FFmpeg.
 Audio stays on this machine. Internet is used for installing tools and downloading
 model weights; source songs are not uploaded. Spotify links/downloads are not input files.
 
+## Report problems and improve the charter
+
+Click **Report a problem** in the GUI after listening to a draft (or anytime for
+app issues). Each report records the problem type, instrument, difficulty,
+severity, song timestamp and description, plus the run's settings and app revision.
+
+- Reports are saved locally in `output/feedback/` (and in the chart run's
+  `feedback/` folder) and never uploaded automatically.
+- `output/feedback/improvement-queue.md` groups repeated reports so the most
+  common problems are fixed first. `python -m rb3charts.cli feedback-summary`
+  prints the same summary.
+- **Send to project on GitHub** opens a pre-filled issue (local paths redacted,
+  no audio or MIDI) and copies the text to the clipboard.
+
+The app does not rewrite its own charting rules from reports. Each recurring
+problem becomes an issue with a regression check, and a fix is merged only after
+tests and a before/after comparison show it helps without breaking other songs.
+
 ## Share context with ChatGPT on your phone
 
 Click **Export for ChatGPT** in the GUI. The readable `.txt` file includes project

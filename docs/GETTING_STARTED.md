@@ -84,6 +84,11 @@ Xbox package. Keep this folder so you can review or package again.
   saves project context and optional chart diagnostics to a text file. Review
   it for private information before sharing manually; redaction is best-effort.
   Exporting does not automatically upload anything.
+- **Something sounds wrong or is confusing:** click **Report a problem**. Pick
+  what kind of problem it is, the instrument, roughly where in the song (for
+  example `1:23`), and describe it in your own words. The report is saved on this
+  computer with the chart you just made. **Send to project on GitHub** opens a
+  pre-filled issue in your browser that you can read before posting.
 
 Setup on a new computer is a separate step: follow the README's Windows
 installation instructions before launching.

@@ -115,6 +115,12 @@ Add generated-versus-human comparisons with explicit time alignment and provenan
 Never substitute reference notes into generated output. Distinguish event-level
 similarity from audio similarity; the latter needs independent audio features.
 
+User feedback loop (implemented): `rb3charts/feedback.py` stores in-app reports
+locally, groups recurring category/instrument pairs into
+`output/feedback/improvement-queue.md` and drafts redacted GitHub issues. Reports
+prioritize work; they never alter chart rules directly. Next: turn recurring
+reports with timestamps into cached-replay regression targets.
+
 ## 5. Tempo and broader musical structure
 
 Address accelerating electronic tempo independently from motif fingering. The

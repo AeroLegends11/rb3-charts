@@ -169,3 +169,48 @@ def test_missing_help_guide_reports_error(window, monkeypatch, tmp_path):
     assert len(warnings) == 1
     assert warnings[0][1] == "Help unavailable"
     assert "Could not open the local guide" in warnings[0][2]
+
+
+def test_review_button_has_no_mnemonic_underscore(window):
+    assert "&" not in window.review.text()
+
+
+def test_feedback_dialog_saves_report_and_drafts_issue(app, monkeypatch, tmp_path):
+    import json
+    from urllib.parse import parse_qs, urlsplit
+    from rb3charts import gui
+
+    run = tmp_path / "output" / "Artist - Song - 20250101"
+    run.mkdir(parents=True)
+    (run / "result.json").write_text(json.dumps(
+        {"status": "draft_ready", "title": "Song", "artist": "Artist", "chart_profile": "band"}))
+    opened = []
+    monkeypatch.setattr(gui.QDesktopServices, "openUrl", lambda url: opened.append(url.toString()))
+    dialog = gui.FeedbackDialog(None, run, root=tmp_path)
+    assert not dialog.issue.isEnabled()
+    dialog.category.setCurrentIndex(dialog.category.findData("repeated_riff"))
+    dialog.instrument.setCurrentIndex(dialog.instrument.findData("guitar"))
+    dialog.start.setText("1:23")
+    dialog.description.setPlainText("Chorus riff uses different frets on each repeat.")
+    dialog.save.click()
+    assert dialog.saved_report["start_seconds"] == 83
+    assert len(list((run / "feedback").glob("*.json"))) == 1
+    dialog.issue.click()
+    query = parse_qs(urlsplit(opened[-1]).query)
+    assert "Artist — Song" in query["title"][0]
+    assert str(tmp_path) not in query["body"][0]
+    assert "1:23" in query["body"][0]
+    assert app.clipboard().text().startswith("## What I hear")
+    dialog.deleteLater()
+
+
+def test_feedback_dialog_rejects_empty_description(app, monkeypatch, tmp_path):
+    from rb3charts import gui
+
+    warnings = []
+    monkeypatch.setattr(gui.QMessageBox, "warning", lambda *args: warnings.append(args))
+    dialog = gui.FeedbackDialog(None, None, root=tmp_path)
+    dialog.save.click()
+    assert warnings and dialog.saved_report is None
+    assert not (tmp_path / "output" / "feedback" / "index.jsonl").exists()
+    dialog.deleteLater()

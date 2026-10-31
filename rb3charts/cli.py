@@ -19,6 +19,7 @@ def main():
     share=sub.add_parser("share-chatgpt",help="Export project context and optional chart diagnostics locally")
     share.add_argument("--folder",type=Path,help="Individual chart output folder containing result.json")
     share.add_argument("--output",type=Path,required=True,help="New .txt file to review and transfer to your phone")
+    sub.add_parser("feedback-summary",help="Show recurring problems from locally saved user reports")
     demo=sub.add_parser("demo")
     demo.add_argument("--compile",action="store_true")
     demo.add_argument("--output",type=Path,default=Path("output"))
@@ -63,6 +64,14 @@ def main():
         except (OSError,ValueError) as exc:
             parser.error(str(exc))
         print(f"Saved {destination}. Review before sharing; nothing was uploaded.")
+        return 0
+    if args.command=="feedback-summary":
+        from .feedback import load_reports,summarize,write_improvement_queue
+        summary=summarize(load_reports())
+        print(f"{summary['total']} report(s). Recurring problems:")
+        for item in summary["recurring"] or [{"count":0,"label":"none yet","instrument":"-"}]:
+            print(f"  {item['count']}x {item['label']} ({item['instrument']})")
+        print(f"Improvement list: {write_improvement_queue()}")
         return 0
     from .pipeline import generate,batch,package_existing,replay_cached
     if args.command=="analyze-reference":
