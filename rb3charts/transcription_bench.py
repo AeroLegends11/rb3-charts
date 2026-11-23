@@ -81,3 +81,32 @@ def run_transcription_benchmark(leak=.6, seed=7, folder=None):
             focused, _ = band_guitar_lead_events(path, notes, 60 / 100)
             results[label + "_focused"] = score(truth, focused)
     return results
+
+
+def run_chord_benchmark(leak=.6, seed=3, bpm=100):
+    """Power-chord progression with the same leakage; scores cleaned-stem lead focus."""
+    from .audio import clean_guitar_stem
+    from .transcribe import pitched, band_guitar_lead_events
+    rng = np.random.default_rng(seed)
+    beat, bars = 60 / bpm, 8
+    guitar = np.zeros(int(SR * (bars * 4 * beat + 1)))
+    truth = []
+    for i in range(bars * 4):
+        root, a = int(rng.choice([40, 43, 45, 47])), int(i * beat * SR)
+        for pitch in (root, root + 7, root + 12):
+            y = _pluck(pitch, beat * .8)[:len(guitar) - a]
+            guitar[a:a + len(y)] += y
+        truth += [(i * beat, root), (i * beat, root + 7), (i * beat, root + 12)]
+    guitar /= np.max(np.abs(guitar))
+    _, _, vocals, drums = render(7, bars=bars, bpm=bpm)
+    fit = lambda x: np.pad(x, (0, max(0, len(guitar) - len(x))))[:len(guitar)]
+    vocals, drums = fit(vocals), fit(drums)
+    with tempfile.TemporaryDirectory() as scratch:
+        paths = {}
+        for name, data in (("guitar", guitar + leak * vocals + .3 * drums), ("vocals", vocals), ("drums", drums), ("bass", np.zeros_like(guitar))):
+            paths[name] = Path(scratch) / f"{name}.wav"
+            sf.write(paths[name], np.stack([data, data]).T, SR, subtype="FLOAT")
+        path = clean_guitar_stem(paths, lambda message: None)["guitar"]
+        notes = pitched(path, "guitar", .5, lambda message: None)
+        focused, _ = band_guitar_lead_events(path, notes, beat)
+    return {"cleaned": score(truth, notes), "cleaned_focused": score(truth, focused)}

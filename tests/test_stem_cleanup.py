@@ -38,7 +38,7 @@ def test_clean_guitar_stem_leaves_raw_stem_and_reuses_output(tmp_path):
         sf.write(paths[name], stereo(data).T, SR, subtype="FLOAT")
     raw_bytes = paths["guitar"].read_bytes()
     stems = clean_guitar_stem(paths, lambda message: None)
-    assert stems["guitar"].name == "guitar-clean.wav" and stems["guitar_raw"] == paths["guitar"]
+    assert stems["guitar"].name.startswith("guitar-clean-") and stems["guitar_raw"] == paths["guitar"]
     assert paths["guitar"].read_bytes() == raw_bytes
     modified = stems["guitar"].stat().st_mtime_ns
     assert clean_guitar_stem(paths, lambda message: None)["guitar"].stat().st_mtime_ns == modified
@@ -67,3 +67,24 @@ def test_lead_focus_keeps_confident_octave_candidates():
     result = run_transcription_benchmark(leak=.6)
     assert result["cleaned_focused"]["recall"] >= result["cleaned"]["recall"] - .03
     assert result["cleaned_focused"]["precision"] > result["cleaned"]["precision"]
+
+
+def test_clean_guitar_stem_replaces_output_older_than_raw_stem(tmp_path):
+    import os
+    guitar, vocal = tone(196), tone(587, start=1.0)
+    paths = {}
+    for name, data in (("guitar", guitar + .5 * vocal), ("vocals", vocal)):
+        paths[name] = tmp_path / f"{name}.wav"
+        sf.write(paths[name], stereo(data).T, SR, subtype="FLOAT")
+    first = clean_guitar_stem(paths, lambda message: None)["guitar"]
+    old = first.stat().st_mtime_ns - 10**9
+    os.utime(first, ns=(old, old))
+    assert clean_guitar_stem(paths, lambda message: None)["guitar"].stat().st_mtime_ns > old
+
+
+def test_lead_focus_keeps_stacked_power_chords():
+    import pytest
+    pytest.importorskip("basic_pitch")
+    from rb3charts.transcription_bench import run_chord_benchmark
+    result = run_chord_benchmark()
+    assert result["cleaned_focused"]["recall"] >= result["cleaned"]["recall"] - .03

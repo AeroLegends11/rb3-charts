@@ -141,6 +141,14 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
             if len(strong)>=2:
                 selected.extend(group)
                 continue
+            # Power-chord stacks (fifths/octaves) from weaker candidates are kept
+            # as a unit; unrelated bleed pitches rarely line up this way.
+            moderate=[event for event in group if event["confidence"]>=.5]
+            stacked=[a for a in moderate if any(abs(a["pitch"]-b["pitch"]) in (7,12,19) for b in moderate if b is not a)]
+            if len(stacked)>=2:
+                selected.extend(stacked)
+                report["stacked_chords_kept"]=report.get("stacked_chords_kept",0)+1
+                continue
             if guide is not None:
                 # Octave-equivalent guide matches tie-break on confidence, since the
                 # contour octave is only an estimate while harmonics are weaker.

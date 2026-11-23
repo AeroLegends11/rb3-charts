@@ -88,19 +88,21 @@ def separate(wav, cache, quality, device, log):
     return paths
 
 def clean_guitar_stem(stems, log, floor_ratio=.35):
-    """Write guitar-clean.wav beside the cached guitar stem and return updated stems.
+    """Write guitar-clean-<settings>.wav beside the cached guitar stem and return updated stems.
 
     The raw cached stem is untouched and stays available as `guitar_raw`. The
     cleaned file is rejected, keeping the raw stem, if it loses most of the energy.
     """
-    from .stem_cleanup import suppress_bleed
+    from .stem_cleanup import suppress_bleed, SETTINGS_TAG
     guitar = stems.get("guitar")
     names = [name for name in ("vocals", "drums", "bass") if stems.get(name)]
     if not guitar or not names:
         return stems
     guitar = Path(guitar)
-    target = guitar.with_name("guitar-clean.wav")
-    if not target.exists():
+    target = guitar.with_name(f"guitar-clean-{SETTINGS_TAG}.wav")
+    # The tag changes with the suppression settings; the mtime check rejects a
+    # file left from a different raw stem written to the same folder.
+    if not target.exists() or target.stat().st_mtime_ns < guitar.stat().st_mtime_ns:
         log("Suppressing vocal/drum/bass bleed in the guitar stem")
         raw, sr = sf.read(guitar, dtype="float32", always_2d=True)
         others = []
@@ -116,7 +118,7 @@ def clean_guitar_stem(stems, log, floor_ratio=.35):
             log("Guitar bleed cleanup removed too much energy; using the raw stem")
             return stems
         sf.write(target, cleaned, sr, subtype="FLOAT")
-        log(f"Guitar bleed cleanup kept {rms(cleaned)/max(rms(raw),1e-12):.0%} of the raw stem's RMS; compare guitar-clean.wav with guitar.wav")
+        log(f"Guitar bleed cleanup kept {rms(cleaned)/max(rms(raw),1e-12):.0%} of the raw stem's RMS; compare {target.name} with {guitar.name}")
     return {**stems, "guitar": target, "guitar_raw": guitar}
 
 

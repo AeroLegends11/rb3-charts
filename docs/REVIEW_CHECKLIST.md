@@ -17,7 +17,7 @@ Expect everything to pass. These changes were only tested on synthetic data.
 1. **Hand window** (`rb3charts/phrases.py`): rising past orange resets to green, falling past green resets to orange.
 2. **Same pattern, other key**: same contour and rhythm reuses fingering (intervals within 1 semitone).
 3. **No same color on a real pitch change**: phrase resets, motif reuse, phrase boundaries, and Hard/Medium reductions (`rb3charts/chart.py`).
-4. **Guitar stem bleed cleanup** (`rb3charts/stem_cleanup.py`, `audio.clean_guitar_stem`): writes `guitar-clean.wav`; raw stem kept as `guitar_raw`; `--raw-guitar-stem` or the GUI checkbox "Suppress vocal/drum/bass bleed in the guitar stem" disables it.
+4. **Guitar stem bleed cleanup** (`rb3charts/stem_cleanup.py`, `audio.clean_guitar_stem`): writes `guitar-clean-*.wav`; raw stem kept as `guitar_raw`; `--raw-guitar-stem` or the GUI checkbox "Suppress vocal/drum/bass bleed in the guitar stem" disables it.
 5. **Tempo**: synthetic acceleration tests only; no behavior change.
 
 ## Update log
@@ -27,10 +27,12 @@ Expect everything to pass. These changes were only tested on synthetic data.
 - Basic Pitch ONNX now runs in the test env, so there is an audio-level benchmark (`rb3charts/transcription_bench.py`): synthetic guitar + leaked vocals/drums, raw vs cleaned stem, scored against known notes. Precision rose from ~0.54-0.59 to ~0.77-0.80 with recall unchanged (~0.98).
 - Cleanup made stronger from that sweep (weight 2, floor .03, power 2). Synthetic only: on real songs listen for thin/watery guitar; if so, `--raw-guitar-stem` or ease the constants in `stem_cleanup.py`.
 - Lead-focus fix (`transcribe._focus_band_guitar_candidates`): it was rewriting a confident true note to the contour's octave (recall 0.98 -> 0.91 after focus). Now octave-equivalent candidates tie-break on confidence and the octave rewrite only applies to low-confidence picks. Cleaned-stem benchmark after focus: precision 0.88 -> 0.96, recall 0.91 -> 0.98. Check real riffs for wrong-octave notes.
+- Chord benchmark (`run_chord_benchmark`): lead focus was dropping power chords (recall 0.885 -> 0.677). Moderate-confidence fifth/octave stacks are now kept as a unit (recall 0.875). Listen for real chords being thinned to single notes, or bleed pitches kept as fake chord tones.
+- The cleaned stem is now `guitar-clean-<settings>.wav`, rebuilt if older than the raw stem, so earlier cleaned files with old settings are never silently reused.
 
 ## Things to check by ear/eye (needs real songs)
 
-- Mr. Brightside: compare `guitar-clean.wav` vs the raw guitar stem in the review Audio selector. Is the blended/faded sound reduced? Any watery/thin artifacts? Are vocal/drum notes gone from the guitar chart?
+- Mr. Brightside: compare `guitar-clean-*.wav` vs the raw guitar stem in the review Audio selector. Is the blended/faded sound reduced? Any watery/thin artifacts? Are vocal/drum notes gone from the guitar chart?
 - Same song regenerated with `--raw-guitar-stem` for a before/after chart comparison.
 - Fast runs: do rapid different pitches get different colors? Do long rising runs reset to green sensibly?
 - Repeated riffs, including transposed ones: same colors?

@@ -13,6 +13,8 @@ INTERFERENCE_WEIGHT = 2.0
 MASK_FLOOR = .03
 MASK_POWER = 2.0
 
+SETTINGS_TAG = f"{N_FFT}-{HOP}-{INTERFERENCE_WEIGHT:g}-{MASK_FLOOR:g}-{MASK_POWER:g}"
+
 
 def _stft(channel):
     import librosa
