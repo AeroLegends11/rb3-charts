@@ -9,9 +9,9 @@ import numpy as np
 
 N_FFT = 4096
 HOP = 1024
-INTERFERENCE_WEIGHT = 1.0
-MASK_FLOOR = .08
-MASK_POWER = 1.0
+INTERFERENCE_WEIGHT = 2.0
+MASK_FLOOR = .03
+MASK_POWER = 2.0
 
 
 def _stft(channel):

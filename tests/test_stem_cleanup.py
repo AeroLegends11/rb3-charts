@@ -49,3 +49,12 @@ def test_clean_guitar_stem_skips_mismatched_stems(tmp_path):
     sf.write(tmp_path / "vocals.wav", stereo(tone(587, seconds=1.0)).T, SR)
     stems = {"guitar": tmp_path / "guitar.wav", "vocals": tmp_path / "vocals.wav"}
     assert clean_guitar_stem(stems, lambda message: None) == stems
+
+
+def test_cleanup_raises_transcription_precision_without_losing_recall():
+    import pytest
+    pytest.importorskip("basic_pitch")
+    from rb3charts.transcription_bench import run_transcription_benchmark
+    result = run_transcription_benchmark(leak=.6)
+    assert result["cleaned"]["precision"] > result["raw"]["precision"] + .1
+    assert result["cleaned"]["recall"] >= result["raw"]["recall"] - .02
