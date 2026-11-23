@@ -226,7 +226,9 @@ def author_guitar_phrases(notes, tempo):
             beat = tempo.beat_at(note.start)
             period = tempo.seconds_at(beat + 1) - tempo.seconds_at(beat)
             rest = note.start - current[-1].end
-            if rest > period * .75 or beat - tempo.beat_at(current[0].start) >= 8:
+            # Short gems leave a long rest even on steady quarter notes, which
+            # still read as one line; split on onset spacing as well.
+            if (rest > period * .75 and note.start - current[-1].start > period * 1.1) or beat - tempo.beat_at(current[0].start) >= 8:
                 phrases.append(current)
                 current = []
         current.append(note)

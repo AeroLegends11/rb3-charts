@@ -471,8 +471,19 @@ def conform_expert_to_reference(notes,tempo,instrument):
     for note in sorted(triads,key=lambda row:(row.confidence,row.end-row.start))[:max(0,len(triads)-triad_target)]:
         note.lanes=(note.lanes[0],note.lanes[-1])
     chords=[note for note in result if len(note.lanes)>1]
-    for note in sorted(chords,key=lambda row:(row.confidence,row.end-row.start))[:max(0,len(chords)-chord_target)]:
-        note.lanes=(round(float(np.mean(note.lanes))),)
+    # Identical chords are demoted together so a repeated chord is not charted as
+    # a chord in one bar and a single gem in the next. The weakest families go
+    # first, and a family is only demoted when that lands closer to the target.
+    families={}
+    for note in chords:families.setdefault((round(note.pitch),note.lanes),[]).append(note)
+    excess=len(chords)-chord_target
+    ordered=sorted(families.values(),key=lambda rows:(float(np.mean([row.confidence for row in rows])),
+                                                      float(np.mean([row.end-row.start for row in rows]))))
+    for rows in ordered:
+        if excess<=0:break
+        if len(rows)/2>excess:continue
+        for note in rows:note.lanes=(round(float(np.mean(note.lanes))),)
+        excess-=len(rows)
     holds=[note for note in result if note.end-note.start>=BAND_SUSTAIN_SECONDS]
     hold_target=int(np.ceil(len(result)*hold_limit))
     for note in sorted(holds,key=lambda row:(row.end-row.start,row.confidence))[:max(0,len(holds)-hold_target)]:

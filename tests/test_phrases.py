@@ -260,3 +260,12 @@ def test_reduction_separates_color_in_opposite_direction_at_the_edge():
     medium=reductions(expert,"guitar",TempoMap(np.arange(0,20,.1875).tolist()))["medium"]
     for a,b in zip(medium,medium[1:]):
         assert a.lanes!=b.lanes
+
+
+def test_steady_quarter_note_line_keeps_pitch_contour():
+    tempo = TempoMap([i * .5 for i in range(100)])
+    pitches = [52, 55, 57, 59, 57, 55, 52]
+    notes = [Note(1 + i * .5, 1 + i * .5 + .065, (2,), source_id=str(i), pitch=p, confidence=.8)
+             for i, p in enumerate(pitches)]
+    lanes = [n.lanes[0] for n in author_guitar_phrases(notes, tempo)[0]]
+    assert lanes == [0, 1, 2, 3, 2, 1, 0]
