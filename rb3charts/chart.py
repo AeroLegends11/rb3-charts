@@ -572,8 +572,11 @@ def _separate_reduced_lane(note, prev_note, prev_lane, lanes, max_lanes, beats):
     """
     if note.pitch == prev_note.pitch or beats > 2 or lanes[0] != prev_lane:
         return lanes
-    candidate = lanes[0] + (1 if note.pitch > prev_note.pitch else -1)
-    return (candidate,) if 0 <= candidate < max_lanes else lanes
+    direction = 1 if note.pitch > prev_note.pitch else -1
+    for candidate in (lanes[0] + direction, lanes[0] - direction):
+        if 0 <= candidate < max_lanes:
+            return (candidate,)
+    return lanes
 
 
 def reductions(expert, instrument, tempo):

@@ -50,7 +50,7 @@ def run_benchmark(seed=7, trials=300, pitch_range=(6, 9)):
         notes = _melody(rng, trial, rng.randint(*pitch_range))
         result, _ = author_guitar_phrases(notes, tempo)
         totals["notes"] += len(notes)
-        totals["attacks_changed"] += sum((a.start, a.source_id, a.pitch) != (b.start, b.source_id, b.pitch)
+        totals["attacks_changed"] += abs(len(notes) - len(result)) + sum((a.start, a.source_id, a.pitch) != (b.start, b.source_id, b.pitch)
                                          for a, b in zip(notes, result))
         totals["out_of_range"] += sum(not 0 <= lane <= 4 for note in result for lane in note.lanes)
         for a, b in zip(result, result[1:]):

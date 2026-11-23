@@ -253,3 +253,10 @@ def test_reductions_keep_pitch_changes_visible_when_squeezing_or_dropping_notes(
         for a,b in zip(charts[name],charts[name][1:]):
             if b.start-a.start<.8 and a.pitch!=b.pitch:
                 assert a.lanes!=b.lanes,(name,a,b)
+
+
+def test_reduction_separates_color_in_opposite_direction_at_the_edge():
+    expert=[Note(1,1.1,(2,),.9,"a",65),Note(1.3,1.4,(3,),.9,"b",64),Note(1.6,1.7,(1,),.9,"c",63),Note(1.9,2.0,(0,),.9,"d",62)]
+    medium=reductions(expert,"guitar",TempoMap(np.arange(0,20,.1875).tolist()))["medium"]
+    for a,b in zip(medium,medium[1:]):
+        assert a.lanes!=b.lanes

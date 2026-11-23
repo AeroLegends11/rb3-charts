@@ -8,7 +8,7 @@ import numpy as np
 from .motifs import discover_phrase_motifs
 
 HAND_RESET_COST = 10
-WRONG_RESET_SIDE_COST = 1  # small tie-break; the hand-window rule still prefers green after a rise
+WRONG_RESET_SIDE_COST = 6  # Rising past orange resets to green, falling past green to orange, unless that repeats a color
 
 
 def select_lead_phrases(source_events):
@@ -134,7 +134,7 @@ def _hand_window_lanes(pitches, unique, rows, previous, avoid=None):
     states = {}
     for base in range(ranks[0] - 4, ranks[0] + 1):
         lane = ranks[0] - base
-        cost = 25 if lane == avoid else 0
+        cost = 1000 if lane == avoid else 0
         if previous is not None:
             cost += _transition_cost(pitches[0] - previous.pitch, previous.lanes[0], lane, rows[0].start - previous.start)
         states[base] = (cost, [lane])
@@ -152,7 +152,7 @@ def _hand_window_lanes(pitches, unique, rows, previous, avoid=None):
             for new_base, new_cost in options:
                 lane = rank - new_base
                 if lane == path[-1] and pitches[i] != pitches[i - 1]:
-                    new_cost += 25  # A real pitch change must not repeat the previous color.
+                    new_cost += 1000  # A real pitch change must not repeat the previous color.
                 if new_base == base:
                     new_cost += _transition_cost(pitches[i] - pitches[i - 1], path[-1], lane, rows[i].start - rows[i - 1].start)
                 if new_base not in nxt or new_cost < nxt[new_base][0]:
