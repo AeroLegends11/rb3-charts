@@ -122,6 +122,9 @@ class Window(QMainWindow):
         self.compile=QCheckBox("Compile immediately (skip the review-first workflow)")
         self.compile.setChecked(False)
         form.addRow(self.compile)
+        self.clean_guitar=QCheckBox("Suppress vocal/drum/bass bleed in the guitar stem")
+        self.clean_guitar.setChecked(True)
+        form.addRow(self.clean_guitar)
         layout.addWidget(advanced)
         note=QLabel("Precision preserves note timing. Trained drum and pitch models still need listening review.\nPro Drums and keys are experimental. Vocals are not available in this version.")
         note.setWordWrap(True)
@@ -212,7 +215,7 @@ class Window(QMainWindow):
         try:
             if not self.source.text().strip():
                 raise ValueError("Select a song first.")
-            options=Options(source=Path(self.source.text()),output=ROOT/"output",title=self.title.text(),artist=self.artist.text(),album=self.album.text(),year=self.year.text(),instruments=tuple(i for i,b in self.instruments.items() if b.isChecked()),chart_profile=["auto","band","electronic"][self.profile.currentIndex()],quality="precision" if self.quality.currentIndex()==0 else "balanced",device=["auto","cuda","cpu"][self.device.currentIndex()],bpm=float(self.bpm.text()) if self.bpm.text().strip() else None,first_beat=float(self.first.text()),stems=Path(self.stems.text()) if self.stems.text().strip() else None,compile=self.compile.isChecked())
+            options=Options(source=Path(self.source.text()),output=ROOT/"output",title=self.title.text(),artist=self.artist.text(),album=self.album.text(),year=self.year.text(),instruments=tuple(i for i,b in self.instruments.items() if b.isChecked()),chart_profile=["auto","band","electronic"][self.profile.currentIndex()],quality="precision" if self.quality.currentIndex()==0 else "balanced",device=["auto","cuda","cpu"][self.device.currentIndex()],bpm=float(self.bpm.text()) if self.bpm.text().strip() else None,first_beat=float(self.first.text()),stems=Path(self.stems.text()) if self.stems.text().strip() else None,compile=self.compile.isChecked(),clean_guitar_stem=self.clean_guitar.isChecked())
         except ValueError as exc:
             QMessageBox.warning(self,"Check input",str(exc))
             return

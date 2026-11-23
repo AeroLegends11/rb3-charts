@@ -116,6 +116,7 @@ def clean_guitar_stem(stems, log, floor_ratio=.35):
             log("Guitar bleed cleanup removed too much energy; using the raw stem")
             return stems
         sf.write(target, cleaned, sr, subtype="FLOAT")
+        log(f"Guitar bleed cleanup kept {rms(cleaned)/max(rms(raw),1e-12):.0%} of the raw stem's RMS; compare guitar-clean.wav with guitar.wav")
     return {**stems, "guitar": target, "guitar_raw": guitar}
 
 

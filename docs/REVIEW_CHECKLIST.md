@@ -17,8 +17,13 @@ Expect everything to pass. These changes were only tested on synthetic data.
 1. **Hand window** (`rb3charts/phrases.py`): rising past orange resets to green, falling past green resets to orange.
 2. **Same pattern, other key**: same contour and rhythm reuses fingering (intervals within 1 semitone).
 3. **No same color on a real pitch change**: phrase resets, motif reuse, phrase boundaries, and Hard/Medium reductions (`rb3charts/chart.py`).
-4. **Guitar stem bleed cleanup** (`rb3charts/stem_cleanup.py`, `audio.clean_guitar_stem`): writes `guitar-clean.wav`; raw stem kept as `guitar_raw`; `--raw-guitar-stem` disables it.
+4. **Guitar stem bleed cleanup** (`rb3charts/stem_cleanup.py`, `audio.clean_guitar_stem`): writes `guitar-clean.wav`; raw stem kept as `guitar_raw`; `--raw-guitar-stem` or the GUI checkbox "Suppress vocal/drum/bass bleed in the guitar stem" disables it.
 5. **Tempo**: synthetic acceleration tests only; no behavior change.
+
+## Update log
+
+- Added the GUI checkbox for the guitar bleed cleanup (default on).
+- The run log now reports how much RMS the cleanup kept (roughly 70-95% is plausible; under 50% suggests over-suppression).
 
 ## Things to check by ear/eye (needs real songs)
 
