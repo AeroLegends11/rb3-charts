@@ -397,9 +397,11 @@ source ID and detected pitch are preserved by this pass.
 reused fingering, continuity source, tail changes and contour diagnostics. This
 is a heuristic authoring layer, not a trained imitation of professional
 charters. It cannot recover notes that transcription missed, and hand-position
-resets are chosen by cost, not by a human charter's judgment. Electronic tempo
-acceleration detection remains unfinished: the constant-tempo assumption still
-needs correction for songs such as Less Talk More Rokk. Reference charts are
+resets are chosen by cost, not by a human charter's judgment. Sustained tempo
+acceleration is detected from audio and tracked with a variable beat map; on
+synthetic click/burst fixtures the 90th-percentile beat error is about 15 ms,
+but it has not been validated on real recordings such as Less Talk More Rokk,
+so confirm sync by listening. Reference charts are
 used for validation, never copied into the generated output.
 
 See [docs/RESEARCH.md](docs/RESEARCH.md) for sources, decisions and tool licensing.
