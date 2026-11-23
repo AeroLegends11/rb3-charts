@@ -331,7 +331,15 @@ def refine_band_guitar(notes,tempo):
             for pitch in variants:
                 if pitch!=representative and original_mass[pitch]<=original_mass[representative]*.65:
                     representatives[pitch]=representative
-        for note in rows:note.pitch=representatives.get(note.pitch,note.pitch)
+        # A real octave line elsewhere in the section is not a harmonic flip:
+        # fold only beside the established form within a beat and a half, and only when
+        # it is clearly stronger or the variant is two or more octaves away.
+        beats=[(tempo.beat_at(note.start),note.pitch,note.confidence) for note in rows]
+        for note in rows:
+            target=representatives.get(note.pitch)
+            if target is None:continue
+            here=tempo.beat_at(note.start)
+            if any(pitch==target and abs(beat-here)<=1.5 and (confidence>=note.confidence+.05 or abs(note.pitch-target)>=24) for beat,pitch,confidence in beats):note.pitch=target
     section_maps={}
     section_pitch_counts={section:dict(Counter(note.pitch for note in rows)) for section,rows in sections.items()}
     for section,rows in sections.items():
