@@ -207,3 +207,14 @@ def test_phrase_motif_matching_is_deterministic():
     second,second_report=author_guitar_phrases(notes,grid())
     assert [(n.lanes,n.pitch,n.end) for n in first]==[(n.lanes,n.pitch,n.end) for n in second]
     assert first_report["phrases"]==second_report["phrases"]
+
+
+def test_wide_rising_run_repositions_to_green_and_same_contour_in_other_key_matches():
+    def run(t, pitches):
+        return [Note(t+i*.125,t+i*.125+.065,(1,),.9,f"{t}-{i}",p) for i,p in enumerate(pitches)]
+    major=[60,62,64,65,67,69,71,72]
+    minor=[p+(7 if i else 7) - (1 if i in (2,5,6) else 0) for i,p in enumerate(major)]
+    result,_=author_guitar_phrases(run(1,major)+run(4,minor),grid())
+    first=[n.lanes[0] for n in result[:8]]
+    assert first[:5]==[0,1,2,3,4] and first[5]==0 and first[6:]==[1,2]
+    assert [n.lanes for n in result[:8]]==[n.lanes for n in result[8:]]
