@@ -142,12 +142,14 @@ def _focus_band_guitar_candidates(events,times,midi_f0,voiced,beat_period=None):
                 selected.extend(group)
                 continue
             if guide is not None:
-                chosen=min(group,key=lambda event:(abs(event["pitch"]-guide),-event["confidence"]))
+                # Octave-equivalent guide matches tie-break on confidence, since the
+                # contour octave is only an estimate while harmonics are weaker.
+                chosen=min(group,key=lambda event:(min((event["pitch"]-guide)%12,(guide-event["pitch"])%12),-event["confidence"]))
             else:
                 chosen=max(group,key=lambda event:event["confidence"])
             chosen=dict(chosen)
             chosen["source_id"]="+".join(event["source_id"] for event in group)
-            if guide is not None and chosen["pitch"]!=guide and (abs(chosen["pitch"]-guide)<=5 or abs(abs(chosen["pitch"]-guide)-12)<=1):
+            if guide is not None and chosen["pitch"]!=guide and (abs(chosen["pitch"]-guide)<=5 or (chosen["confidence"]<.56 and abs(abs(chosen["pitch"]-guide)-12)<=1)):
                 chosen["pitch"]=guide
                 chosen["_lead_focus_corrected"]=True
                 report["pitch_corrections"]+=1

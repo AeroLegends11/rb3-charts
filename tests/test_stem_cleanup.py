@@ -58,3 +58,12 @@ def test_cleanup_raises_transcription_precision_without_losing_recall():
     result = run_transcription_benchmark(leak=.6)
     assert result["cleaned"]["precision"] > result["raw"]["precision"] + .1
     assert result["cleaned"]["recall"] >= result["raw"]["recall"] - .02
+
+
+def test_lead_focus_keeps_confident_octave_candidates():
+    import pytest
+    pytest.importorskip("basic_pitch")
+    from rb3charts.transcription_bench import run_transcription_benchmark
+    result = run_transcription_benchmark(leak=.6)
+    assert result["cleaned_focused"]["recall"] >= result["cleaned"]["recall"] - .03
+    assert result["cleaned_focused"]["precision"] > result["cleaned"]["precision"]

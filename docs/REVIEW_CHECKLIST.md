@@ -26,6 +26,7 @@ Expect everything to pass. These changes were only tested on synthetic data.
 - The run log now reports how much RMS the cleanup kept (roughly 70-95% is plausible; under 50% suggests over-suppression).
 - Basic Pitch ONNX now runs in the test env, so there is an audio-level benchmark (`rb3charts/transcription_bench.py`): synthetic guitar + leaked vocals/drums, raw vs cleaned stem, scored against known notes. Precision rose from ~0.54-0.59 to ~0.77-0.80 with recall unchanged (~0.98).
 - Cleanup made stronger from that sweep (weight 2, floor .03, power 2). Synthetic only: on real songs listen for thin/watery guitar; if so, `--raw-guitar-stem` or ease the constants in `stem_cleanup.py`.
+- Lead-focus fix (`transcribe._focus_band_guitar_candidates`): it was rewriting a confident true note to the contour's octave (recall 0.98 -> 0.91 after focus). Now octave-equivalent candidates tie-break on confidence and the octave rewrite only applies to low-confidence picks. Cleaned-stem benchmark after focus: precision 0.88 -> 0.96, recall 0.91 -> 0.98. Check real riffs for wrong-octave notes.
 
 ## Things to check by ear/eye (needs real songs)
 

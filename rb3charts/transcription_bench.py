@@ -64,7 +64,7 @@ def score(truth, notes, tolerance=.08):
 
 def run_transcription_benchmark(leak=.6, seed=7, folder=None):
     from .audio import clean_guitar_stem
-    from .transcribe import pitched
+    from .transcribe import pitched, band_guitar_lead_events
     truth, guitar, vocals, drums = render(seed)
     leaky = guitar + leak * vocals + .3 * drums
     with tempfile.TemporaryDirectory() as scratch:
@@ -78,4 +78,6 @@ def run_transcription_benchmark(leak=.6, seed=7, folder=None):
         for label, path in (("raw", paths["guitar"]), ("cleaned", cleaned["guitar"])):
             notes = pitched(path, "guitar", .5, lambda message: None)
             results[label] = score(truth, notes)
+            focused, _ = band_guitar_lead_events(path, notes, 60 / 100)
+            results[label + "_focused"] = score(truth, focused)
     return results
