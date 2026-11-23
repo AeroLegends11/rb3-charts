@@ -243,3 +243,13 @@ def test_synthetic_benchmark_has_no_same_color_pitch_changes_and_consistent_tran
     r=run_benchmark(seed=3,trials=90)
     assert r["collapsed"]==0 and r["out_of_range"]==0 and r["attacks_changed"]==0
     assert r["repeat_groups_identical"]==r["repeat_groups"]
+
+
+def test_reductions_keep_pitch_changes_visible_when_squeezing_or_dropping_notes():
+    expert=[Note(1,1.1,(1,),.9,"a",71),Note(1.5,1.6,(2,),.9,"b",76),Note(2,2.1,(1,),.9,"c",67),
+            Note(4,4.1,(2,),.9,"d",60),Note(4.5,4.6,(3,),.9,"e",62)]
+    charts=reductions(expert,"guitar",grid())
+    for name in ("hard","medium"):
+        for a,b in zip(charts[name],charts[name][1:]):
+            if b.start-a.start<.8 and a.pitch!=b.pitch:
+                assert a.lanes!=b.lanes,(name,a,b)
