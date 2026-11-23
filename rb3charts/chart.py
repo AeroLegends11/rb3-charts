@@ -331,7 +331,15 @@ def refine_band_guitar(notes,tempo):
             for pitch in variants:
                 if pitch!=representative and original_mass[pitch]<=original_mass[representative]*.65:
                     representatives[pitch]=representative
-        for note in rows:note.pitch=representatives.get(note.pitch,note.pitch)
+        # A real octave line elsewhere in the section is not a harmonic flip:
+        # fold only beside the established form within a beat and a half, and only when
+        # it is clearly stronger or the variant is two or more octaves away.
+        beats=[(tempo.beat_at(note.start),note.pitch,note.confidence) for note in rows]
+        for note in rows:
+            target=representatives.get(note.pitch)
+            if target is None:continue
+            here=tempo.beat_at(note.start)
+            if any(pitch==target and abs(beat-here)<=1.5 and (confidence>=note.confidence+.05 or abs(note.pitch-target)>=24) for beat,pitch,confidence in beats):note.pitch=target
     section_maps={}
     section_pitch_counts={section:dict(Counter(note.pitch for note in rows)) for section,rows in sections.items()}
     for section,rows in sections.items():
@@ -564,12 +572,28 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
     report["supported_phrase_attacks_per_beat"]=4 if phrase_aware and instrument=="guitar" else per_beat
     return result,report
 
+def _separate_reduced_lane(note, prev_note, prev_lane, lanes, max_lanes, beats):
+    """Keep a real pitch change visible when five source lanes are squeezed into fewer.
+
+    The straight rounding is kept unless it repeats the previous color on a
+    different pitch; the note then moves one lane in the direction of the pitch change.
+    """
+    if note.pitch == prev_note.pitch or beats > 2 or lanes[0] != prev_lane:
+        return lanes
+    direction = 1 if note.pitch > prev_note.pitch else -1
+    for candidate in (lanes[0] + direction, lanes[0] - direction):
+        if 0 <= candidate < max_lanes:
+            return (candidate,)
+    return lanes
+
+
 def reductions(expert, instrument, tempo):
     charts = {"expert": expert}
     parent = expert
     for difficulty, spacing, max_lanes, chord_size in [("hard",0.46,5,2), ("medium",0.95,4,2), ("easy",1.90,3,1)]:
         candidates = []
         last_beat = -100.0
+        previous = None
         for n in parent:
             beat = tempo.beat_at(n.start)
             phase = abs(beat-round(beat))
@@ -590,6 +614,9 @@ def reductions(expert, instrument, tempo):
                 # Compress lane vocabulary consistently, retaining contour.
                 source_lanes = 5 if difficulty == "hard" else (5 if difficulty == "medium" else 4)
                 lanes = tuple(sorted(set(round(x*(max_lanes-1)/(source_lanes-1)) for x in n.lanes)))[:chord_size]
+                if len(n.lanes) == 1 and previous is not None and len(previous[1]) == 1:
+                    lanes = _separate_reduced_lane(n, previous[0], previous[1][0], lanes, max_lanes, beat - last_beat)
+                previous = (n, lanes)
             candidates.append(dataclasses.replace(n, lanes=lanes, toms=tuple(t for t in n.toms if t in lanes)))
             last_beat = beat
         if difficulty=="hard" and instrument in ("guitar","bass","keys"):

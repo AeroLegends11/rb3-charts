@@ -7,6 +7,9 @@ from dataclasses import replace
 import numpy as np
 from .motifs import discover_phrase_motifs
 
+HAND_RESET_COST = 10
+WRONG_RESET_SIDE_COST = 6  # Rising past orange resets to green, falling past green to orange, unless that repeats a color
+
 
 def select_lead_phrases(source_events):
     """Choose a continuous voice using neighboring candidates in both directions.
@@ -97,7 +100,7 @@ def _transition_cost(interval, old, new, gap):
     return musical+ergonomic
 
 
-def _fingering(rows, previous=None):
+def _fingering(rows, previous=None, avoid=None):
     pitches = [note.pitch for note in rows]
     unique = sorted(set(pitches))
     if len(unique) <= 5:
@@ -105,33 +108,76 @@ def _fingering(rows, previous=None):
         # pitch elsewhere cannot flatten this riff into a single color.
         options=[[offset+unique.index(pitch) for pitch in pitches] for offset in range(6-len(unique))]
         if previous is None:
-            return options[(5-len(unique))//2]
-        best=min(options,key=lambda lanes:_transition_cost(pitches[0]-previous.pitch,
-                 previous.lanes[0],lanes[0],rows[0].start-previous.start))
-        if _transition_cost(pitches[0]-previous.pitch,previous.lanes[0],best[0],rows[0].start-previous.start)<5:
-            return best
+            apart = [lanes for lanes in options if avoid is None or lanes[0] != avoid]
+            if apart:
+                return apart[min((5 - len(unique)) // 2, len(apart) - 1)]
+            # Every rigid fingering repeats the neighbor's color; use the windowed search.
+        else:
+            best=min(options,key=lambda lanes:_transition_cost(pitches[0]-previous.pitch,
+                     previous.lanes[0],lanes[0],rows[0].start-previous.start))
+            if _transition_cost(pitches[0]-previous.pitch,previous.lanes[0],best[0],rows[0].start-previous.start)<5:
+                return best
         # No rigid pitch dictionary joins this boundary naturally. Let the
         # sequence optimizer preserve the incoming note and choose a later reset.
-    target = np.interp(pitches, unique, np.linspace(0, 4, len(unique)))
-    costs = .2 * (np.arange(5) - target[0])**2
-    if previous is not None:
-        costs+=np.array([_transition_cost(pitches[0]-previous.pitch,previous.lanes[0],lane,
-                                         rows[0].start-previous.start) for lane in range(5)])
-    links = []
-    for i in range(1, len(rows)):
-        interval = pitches[i] - pitches[i - 1]
-        matrix = np.zeros((5, 5))
-        for old in range(5):
-            for new in range(5):
-                matrix[old, new] = costs[old] + _transition_cost(interval,old,new,rows[i].start-rows[i-1].start) + .2 * (new - target[i])**2
-        links.append(np.argmin(matrix, axis=0))
-        costs = np.min(matrix, axis=0)
-    lane = int(np.argmin(costs))
-    output = [lane]
-    for link in reversed(links):
-        lane = int(link[lane])
-        output.append(lane)
-    return list(reversed(output))
+    return _hand_window_lanes(pitches, unique, rows, previous, avoid)
+
+
+def _hand_window_lanes(pitches, unique, rows, previous, avoid=None):
+    """Fret by pitch rank inside a five-fret hand window.
+
+    Rising runs that would pass orange reposition to green; falling runs that
+    would pass green reposition to orange. Distinct nearby pitches keep distinct
+    adjacent frets, so only the repositioning notes jump.
+    """
+    ranks = [unique.index(pitch) for pitch in pitches]
+    reset_cost = HAND_RESET_COST
+    states = {}
+    for base in range(ranks[0] - 4, ranks[0] + 1):
+        lane = ranks[0] - base
+        cost = 1000 if lane == avoid else 0
+        if previous is not None:
+            cost += _transition_cost(pitches[0] - previous.pitch, previous.lanes[0], lane, rows[0].start - previous.start)
+        states[base] = (cost, [lane])
+    for i in range(1, len(ranks)):
+        rank, step = ranks[i], ranks[i] - ranks[i - 1]
+        nxt = {}
+        for base, (cost, path) in states.items():
+            if base <= rank <= base + 4:
+                options = [(base, cost)]
+            else:
+                # Prefer green after rising, orange after falling.
+                prefer_green = rank > base
+                options = [(rank, cost + reset_cost + .01 * (len(ranks) - i) + (0 if prefer_green else WRONG_RESET_SIDE_COST)),
+                           (rank - 4, cost + reset_cost + .01 * (len(ranks) - i) + (WRONG_RESET_SIDE_COST if prefer_green else 0))]
+            for new_base, new_cost in options:
+                lane = rank - new_base
+                if lane == path[-1] and pitches[i] != pitches[i - 1]:
+                    new_cost += 1000  # A real pitch change must not repeat the previous color.
+                if new_base == base:
+                    new_cost += _transition_cost(pitches[i] - pitches[i - 1], path[-1], lane, rows[i].start - rows[i - 1].start)
+                if new_base not in nxt or new_cost < nxt[new_base][0]:
+                    nxt[new_base] = (new_cost, path + [lane])
+        states = nxt
+    return min(states.values(), key=lambda item: item[0])[1]
+
+
+def _collapsed_changes(pitches, lanes):
+    return sum(a != b and x == y for a, b, x, y in zip(pitches, pitches[1:], lanes, lanes[1:]))
+
+
+def _separate_from_previous(lanes, rows, previous):
+    """Move a phrase one fret when its first note repeats the previous color on a new pitch."""
+    if (previous is None or len(previous.lanes) != 1 or rows[0].start - previous.start >= .8
+            or previous.pitch == rows[0].pitch or lanes[0] != previous.lanes[0]):
+        return lanes
+    direction = 1 if rows[0].pitch > previous.pitch else -1
+    for shift in (direction, -direction):
+        moved = [lane + shift for lane in lanes]
+        if min(moved) >= 0 and max(moved) <= 4:
+            return moved
+    # No whole-phrase shift fits the five frets; refinger the phrase around the neighbor.
+    refit = _fingering(rows, None, previous.lanes[0])
+    return refit if refit[0] != previous.lanes[0] else lanes
 
 
 def _continuity_anchor(notes, index, start, tempo):
@@ -187,6 +233,7 @@ def author_guitar_phrases(notes, tempo):
     if current:
         phrases.append(current)
     vocabulary = {}
+    rank_vocabulary = {}
     phrase_report = []
     indices={id(note):i for i,note in enumerate(result)}
     local_lanes = {}
@@ -215,8 +262,17 @@ def author_guitar_phrases(notes, tempo):
         signature = (tuple(n.pitch - root for n in rows),
                      tuple(round((tempo.beat_at(b.start) - tempo.beat_at(a.start)) * 12)
                            for a, b in zip(rows, rows[1:])))
-        reused = signature in vocabulary
+        # Same contour and rhythm in another scale/key also counts as the same pattern.
+        unique_pitches = sorted({n.pitch for n in rows})
+        rank_signature = (tuple(unique_pitches.index(n.pitch) for n in rows), signature[1])
         lanes = vocabulary.get(signature)
+        intervals = [b.pitch - a.pitch for a, b in zip(rows, rows[1:])]
+        if lanes is None and len(rows) >= 4:
+            for known_intervals, known_lanes in rank_vocabulary.get(rank_signature, ()):
+                if all(abs(x - y) <= 1 for x, y in zip(intervals, known_intervals)):
+                    lanes = known_lanes
+                    break
+        reused = lanes is not None
         shift=0
         if lanes is not None and continuity_source == "adjacent_single" and previous is not None:
             shift=min(range(-min(lanes),5-max(lanes)),key=lambda s:
@@ -237,16 +293,23 @@ def author_guitar_phrases(notes, tempo):
                 for source, target in motif_info["alignment"]:
                     if source < len(canonical) and target < len(projected):
                         projected[target] = canonical[source]
-                if projected != local_lanes[phrase_index]:
-                    motif_reused = True
-                lanes = projected
-        if lanes is None:
+                pitch_list = [n.pitch for n in rows]
+                if (_collapsed_changes(pitch_list, projected)
+                        <= _collapsed_changes(pitch_list, local_lanes[phrase_index])):
+                    if projected != local_lanes[phrase_index]:
+                        motif_reused = True
+                    lanes = projected
+        pitch_list = [n.pitch for n in rows]
+        if lanes is None or _collapsed_changes(pitch_list, lanes) > _collapsed_changes(pitch_list, local_lanes[phrase_index]):
             lanes = local_lanes[phrase_index]
+            reused = False
         vocabulary.setdefault(signature,lanes)
+        rank_vocabulary.setdefault(rank_signature,[]).append((intervals,lanes))
         if continuity_source == "adjacent_single" and previous is not None and previous.pitch == rows[0].pitch and len(previous.lanes) == 1:
             boundary_delta = previous.lanes[0] - lanes[0]
             if all(0 <= lane + boundary_delta <= 4 for lane in lanes):
                 lanes = [lane + boundary_delta for lane in lanes]
+        lanes = _separate_from_previous(lanes, rows, result[index - 1] if index else None)
         before = [n.lanes[0] for n in rows]
         for note, lane in zip(rows, lanes):
             note.lanes = (lane,)

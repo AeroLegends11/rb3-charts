@@ -25,6 +25,13 @@ branch, then starts the GUI).
 - Precision mode uses six-stem Demucs for guitar/keys and fine-tuned Demucs for
   drums/bass/vocals. It is slower and caches its results.
 - Balanced mode uses the six-stem model only.
+- The six-stem guitar estimate is the weakest stem and picks up vocals, drums and
+  bass when they enter. Generation therefore writes `guitar-clean-<settings>.wav` beside the
+  cached stem, softly attenuating spectral bins where the vocal/drum/bass stems
+  dominate, and charts from it. The raw stem is untouched and listed as `guitar_raw`;
+  `--raw-guitar-stem` disables the cleanup, and it is skipped for supplied stems.
+  Synthetic leakage tests improved guitar SDR by about 8 dB; this has not been
+  validated on real songs such as Mr. Brightside, so compare both stems by ear.
 - NVIDIA GPU is selected automatically when available; CPU can be selected.
 - All four difficulties are always generated. Keys are optional and experimental.
 - **Auto** charting style is the default. It compares separated guitar, piano and
@@ -383,19 +390,25 @@ before lower difficulties are derived. It groups single-note passages at rests,
 chords and eight-beat boundaries. Brief chord barriers still preserve nearby
 single-note continuity for returning riffs, but they do not create or infer new
 attacks. Phrases with up to five distinct pitches use distinct adjacent frets.
-Larger pitch ranges use a whole-sequence cost balancing melodic direction,
-repeated pitches, hand movement and local register. Identical relative-pitch/
-rhythm phrases reuse their fingering, including transpositions. Chords and
+Larger pitch ranges use a five-fret hand window over pitch ranks: a rising run
+that would pass orange repositions to green, and a falling run that would pass
+green repositions to orange. A real pitch change never repeats the previous
+color, including across a short rest or when a repeated motif is projected.
+Identical relative-pitch/rhythm phrases reuse their fingering, including
+transpositions, and so do phrases with the same contour and rhythm in another
+key or scale (every interval within one semitone). Chords and
 meaningful long holds remain; short tails become taps. Every attack's time,
 source ID and detected pitch are preserved by this pass.
 
 `analysis/phrase-authoring.json` records each phrase's pitches, old/new frets,
 reused fingering, continuity source, tail changes and contour diagnostics. This
 is a heuristic authoring layer, not a trained imitation of professional
-charters. It cannot recover notes that transcription missed, and ranges wider
-than five frets may still need hand-position resets. Electronic tempo
-acceleration detection remains unfinished: the constant-tempo assumption still
-needs correction for songs such as Less Talk More Rokk. Reference charts are
+charters. It cannot recover notes that transcription missed, and hand-position
+resets are chosen by cost, not by a human charter's judgment. Sustained tempo
+acceleration is detected from audio and tracked with a variable beat map; on
+synthetic click/burst fixtures the 90th-percentile beat error is about 15 ms,
+but it has not been validated on real recordings such as Less Talk More Rokk,
+so confirm sync by listening. Reference charts are
 used for validation, never copied into the generated output.
 
 See [docs/RESEARCH.md](docs/RESEARCH.md) for sources, decisions and tool licensing.

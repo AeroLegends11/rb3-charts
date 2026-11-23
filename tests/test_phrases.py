@@ -207,3 +207,56 @@ def test_phrase_motif_matching_is_deterministic():
     second,second_report=author_guitar_phrases(notes,grid())
     assert [(n.lanes,n.pitch,n.end) for n in first]==[(n.lanes,n.pitch,n.end) for n in second]
     assert first_report["phrases"]==second_report["phrases"]
+
+
+def test_wide_rising_run_repositions_to_green_and_same_contour_in_other_key_matches():
+    def run(t, pitches):
+        return [Note(t+i*.125,t+i*.125+.065,(1,),.9,f"{t}-{i}",p) for i,p in enumerate(pitches)]
+    major=[60,62,64,65,67,69,71,72]
+    minor=[p+(7 if i else 7) - (1 if i in (2,5,6) else 0) for i,p in enumerate(major)]
+    result,_=author_guitar_phrases(run(1,major)+run(4,minor),grid())
+    first=[n.lanes[0] for n in result[:8]]
+    assert first[:5]==[0,1,2,3,4] and first[5]==0 and first[6:]==[1,2]
+    assert [n.lanes for n in result[:8]]==[n.lanes for n in result[8:]]
+
+
+def test_rapid_pitch_changes_never_repeat_a_color_after_reset_or_motif_reuse():
+    pitches=[40,55,40,55,41,57,43,60,40,55]
+    notes=[Note(1+i*.125,1+i*.125+.065,(1,),.9,str(i),p) for i,p in enumerate(pitches)]
+    notes+=[Note(4+i*.125,4+i*.125+.065,(1,),.9,f"b{i}",p) for i,p in enumerate([60,63,60,60])]
+    notes+=[Note(6+i*.125,6+i*.125+.065,(1,),.9,f"c{i}",p) for i,p in enumerate([60,62,60,60])]
+    result,_=author_guitar_phrases(notes,grid())
+    for a,b in zip(result,result[1:]):
+        if b.start-a.start<.5 and a.pitch!=b.pitch:
+            assert a.lanes!=b.lanes
+
+
+def test_new_phrase_after_short_rest_does_not_repeat_color_on_new_pitch():
+    notes=[Note(1,1.1,(2,),.9,"a",60),Note(1.5,1.6,(2,),.9,"b",64),Note(1.625,1.7,(2,),.9,"c",67)]
+    result,_=author_guitar_phrases(notes,grid())
+    assert result[0].lanes!=result[1].lanes
+    assert all(0<=lane<=4 for n in result for lane in n.lanes)
+
+
+def test_synthetic_benchmark_has_no_same_color_pitch_changes_and_consistent_transposed_repeats():
+    from rb3charts.synthetic_bench import run_benchmark
+    r=run_benchmark(seed=3,trials=90)
+    assert r["collapsed"]==0 and r["out_of_range"]==0 and r["attacks_changed"]==0
+    assert r["repeat_groups_identical"]==r["repeat_groups"]
+
+
+def test_reductions_keep_pitch_changes_visible_when_squeezing_or_dropping_notes():
+    expert=[Note(1,1.1,(1,),.9,"a",71),Note(1.5,1.6,(2,),.9,"b",76),Note(2,2.1,(1,),.9,"c",67),
+            Note(4,4.1,(2,),.9,"d",60),Note(4.5,4.6,(3,),.9,"e",62)]
+    charts=reductions(expert,"guitar",grid())
+    for name in ("hard","medium"):
+        for a,b in zip(charts[name],charts[name][1:]):
+            if b.start-a.start<.8 and a.pitch!=b.pitch:
+                assert a.lanes!=b.lanes,(name,a,b)
+
+
+def test_reduction_separates_color_in_opposite_direction_at_the_edge():
+    expert=[Note(1,1.1,(2,),.9,"a",65),Note(1.3,1.4,(3,),.9,"b",64),Note(1.6,1.7,(1,),.9,"c",63),Note(1.9,2.0,(0,),.9,"d",62)]
+    medium=reductions(expert,"guitar",TempoMap(np.arange(0,20,.1875).tolist()))["medium"]
+    for a,b in zip(medium,medium[1:]):
+        assert a.lanes!=b.lanes

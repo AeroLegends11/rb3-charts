@@ -6,7 +6,7 @@ import re
 import shutil
 import traceback
 from .model import Options, save_json
-from .audio import decode, fingerprint, separate, read_mono, write_padded_audio, detect_chart_profile
+from .audio import decode, fingerprint, separate, clean_guitar_stem, read_mono, write_padded_audio, detect_chart_profile
 from .timing import analyze_tempo
 from .transcribe import pitched, neural_drums, import_gm_drums, electronic_bass_events, band_guitar_lead_events
 from .chart import map_pitched, clean, reductions, overdrive, align_drum_activations, enforce_playability, analyze_patterns, refine_band_guitar, conform_expert_to_reference, stabilize_repeated_phrases
@@ -146,9 +146,12 @@ def generate(options: Options, progress=print):
             log("Using supplied stems (must share source timing)")
         else:
             stems=separate(wav,ROOT/"cache"/"stems",options.quality,options.device,log)
+        profile_stems=stems  # chart-style detection stays on the unfiltered stems
+        if options.clean_guitar_stem and not options.stems:
+            stems=clean_guitar_stem(stems,log)
         save_json(folder/"analysis"/"stems.json",stems)
         if options.chart_profile=="auto":
-            resolved_profile,profile_evidence=detect_chart_profile(stems,metadata["genre"])
+            resolved_profile,profile_evidence=detect_chart_profile(profile_stems,metadata["genre"])
             log(f"Automatic charting style: {resolved_profile} ({profile_evidence['reason']})")
         else:
             resolved_profile=options.chart_profile

@@ -117,6 +117,25 @@ similarity from audio similarity; the latter needs independent audio features.
 
 ## 5. Tempo and broader musical structure
 
+Progress (hand window and color separation): `phrases._fingering` now uses a
+five-fret hand window for phrases with more than five pitches (rising past orange
+resets to green, falling past green resets to orange). Same-contour phrases in
+another key reuse fingering when all intervals agree within one semitone. Motif
+and dictionary reuse is rejected when it would collapse more pitch changes than
+the phrase's own fingering, and a new phrase is moved one fret when it would repeat
+the previous color on a new pitch. Synthetic fuzz (300 random melodies, 6-9 pitch
+scales) cut same-color pitch changes within 0.8 s from 877 to 22 while reversed
+lane movement rose from 174 to 316 (the accepted cost of hand resets). No real
+song replay has been run; compare cached candidates before trusting these numbers.
+
+Progress (tempo, synthetic only): `analyze_tempo` already switches to a variable
+beat map on sustained acceleration/ritardando. Clean-click fixtures at 8 kHz track
+beats within 7 ms; noise bursts at the pipeline's 22.05 kHz rate stay within about
+15 ms p90 (`tests/test_tempo_changes.py`). Constant studio grids on the same bursts
+sit a consistent ~15 ms late (std < 3 ms), the onset-envelope peak lagging the
+attack start. `refine_onset` recovered only ~3 ms of it, so no correction was added:
+a global phase shift needs validation on real audio first.
+
 Address accelerating electronic tempo independently from motif fingering. The
 existing constant-tempo preference is a known limitation for Less Talk More Rokk.
 Then explore sections, phrase vocabulary, drum grooves and richer human priors.

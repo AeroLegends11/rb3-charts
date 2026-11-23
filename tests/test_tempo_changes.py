@@ -29,3 +29,21 @@ def test_audio_acceleration_overrides_studio_preference_but_not_manual_bpm():
     assert any('Sustained tempo change' in warning for warning in tempo.warnings)
     manual=analyze_tempo(y,sr,duration,bpm=120,prefer_constant=True)
     assert np.allclose(np.diff(manual.beats),.5)
+
+
+def test_accelerating_bursts_at_pipeline_rate_stay_within_timing_bound():
+    sr=22050
+    rng=np.random.default_rng(0)
+    duration=50
+    y=np.zeros(sr*duration,dtype=np.float32)
+    time,truth=.2,[]
+    while time<duration-.1:
+        index,length=int(time*sr),int(.03*sr)
+        y[index:index+length]+=np.hanning(length)*rng.standard_normal(length)*.5
+        truth.append(time)
+        time+=60/(80+50*min(time/40,1))
+    tempo=analyze_tempo(y,sr,duration,prefer_constant=True)
+    beats=np.array(tempo.beats)
+    errors=np.array([abs(beats[np.argmin(abs(beats-x))]-x) for x in truth[:-3]])
+    assert abs(len(beats)-len(truth))<=2
+    assert np.percentile(errors,90)<.025  # measured about 15 ms on this fixture
