@@ -632,6 +632,14 @@ def reductions(expert, instrument, tempo):
                 lanes=tuple(lanes)
                 if lanes==(0,4):lanes=(0,3)
                 normalized.append(dataclasses.replace(note,lanes=lanes))
+            if instrument=="guitar":
+                # The edge shifts above can recreate a repeated color on a pitch change.
+                for index in range(1,len(normalized)):
+                    before,note=normalized[index-1],normalized[index]
+                    if len(before.lanes)==1==len(note.lanes):
+                        beats=tempo.beat_at(note.start)-tempo.beat_at(before.start)
+                        lanes=_separate_reduced_lane(note,before,before.lanes[0],note.lanes,5,beats)
+                        if lanes!=note.lanes:normalized[index]=dataclasses.replace(note,lanes=lanes)
             candidates=normalized
         parent = clean(candidates, instrument)
         charts[difficulty] = parent

@@ -43,3 +43,10 @@ def test_transposed_riff_keeps_pitches_and_fingering(tmp_path):
     # Bars repeat the riff; the later bars of each four-bar group are the same riff transposed
     assert lanes[1] == lanes[5] == lanes[9] == lanes[13]
     assert lanes[3] == lanes[7] == lanes[11] == lanes[15]
+    charts = json.loads((folder / "analysis" / "charts.json").read_text())["guitar"]
+    for difficulty in ("hard", "medium"):
+        rows = charts[difficulty]
+        repeated = [1 for a, b in zip(rows, rows[1:])
+                    if len(a["lanes"]) == 1 == len(b["lanes"]) and a["lanes"] == b["lanes"]
+                    and a["pitch"] != b["pitch"] and b["start"] - a["start"] <= .8]
+        assert not repeated, difficulty
