@@ -52,6 +52,7 @@ def main():
         p.add_argument("--confidence",type=float,default=0.35)
         p.add_argument("--onyx",type=Path)
         p.add_argument("--no-compile",action="store_true")
+        p.add_argument("--raw-guitar-stem",action="store_true",help="Chart from the unfiltered separated guitar stem")
     args=parser.parse_args()
     if args.command in (None,"gui"):
         from .gui import launch
@@ -82,6 +83,7 @@ def main():
         values=vars(args).copy()
         command=values.pop("command")
         values["compile"]=not values.pop("no_compile")
+        values["clean_guitar_stem"]=not values.pop("raw_guitar_stem")
         result=(batch if command=="batch" else generate)(Options(**values))
     results=result if isinstance(result,list) else [result]
     return 1 if any(r["status"] in ("failed","compile_failed") for r in results) else 0

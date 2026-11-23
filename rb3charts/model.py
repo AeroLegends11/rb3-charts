@@ -68,6 +68,7 @@ class Options:
     confidence: float = 0.35
     onyx: Path | None = None
     compile: bool = True
+    clean_guitar_stem: bool = True
 
 def save_json(path, data):
     Path(path).parent.mkdir(parents=True, exist_ok=True)

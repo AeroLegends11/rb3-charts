@@ -87,6 +87,38 @@ def separate(wav, cache, quality, device, log):
     save_json(manifest, {"models": models, "device": device, "source": fingerprint(wav)})
     return paths
 
+def clean_guitar_stem(stems, log, floor_ratio=.35):
+    """Write guitar-clean.wav beside the cached guitar stem and return updated stems.
+
+    The raw cached stem is untouched and stays available as `guitar_raw`. The
+    cleaned file is rejected, keeping the raw stem, if it loses most of the energy.
+    """
+    from .stem_cleanup import suppress_bleed
+    guitar = stems.get("guitar")
+    names = [name for name in ("vocals", "drums", "bass") if stems.get(name)]
+    if not guitar or not names:
+        return stems
+    guitar = Path(guitar)
+    target = guitar.with_name("guitar-clean.wav")
+    if not target.exists():
+        log("Suppressing vocal/drum/bass bleed in the guitar stem")
+        raw, sr = sf.read(guitar, dtype="float32", always_2d=True)
+        others = []
+        for name in names:
+            data, other_sr = sf.read(stems[name], dtype="float32", always_2d=True)
+            if other_sr != sr or data.shape != raw.shape:
+                log(f"Skipping guitar bleed cleanup: {name} stem does not match the guitar stem")
+                return stems
+            others.append(data.T)
+        cleaned = suppress_bleed(raw.T, others).T
+        rms = lambda x: float(np.sqrt(np.mean(np.square(x, dtype=np.float64))))
+        if rms(cleaned) < floor_ratio * max(rms(raw), 1e-12):
+            log("Guitar bleed cleanup removed too much energy; using the raw stem")
+            return stems
+        sf.write(target, cleaned, sr, subtype="FLOAT")
+    return {**stems, "guitar": target, "guitar_raw": guitar}
+
+
 def write_padded_audio(wav, output, lead, tail=3.0):
     y, sr = sf.read(wav, dtype="float32", always_2d=True)
     padded = np.pad(y, ((round(lead*sr), round(tail*sr)), (0, 0)))

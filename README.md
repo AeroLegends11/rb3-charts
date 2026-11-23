@@ -25,6 +25,13 @@ branch, then starts the GUI).
 - Precision mode uses six-stem Demucs for guitar/keys and fine-tuned Demucs for
   drums/bass/vocals. It is slower and caches its results.
 - Balanced mode uses the six-stem model only.
+- The six-stem guitar estimate is the weakest stem and picks up vocals, drums and
+  bass when they enter. Generation therefore writes `guitar-clean.wav` beside the
+  cached stem, softly attenuating spectral bins where the vocal/drum/bass stems
+  dominate, and charts from it. The raw stem is untouched and listed as `guitar_raw`;
+  `--raw-guitar-stem` disables the cleanup, and it is skipped for supplied stems.
+  Synthetic leakage tests improved guitar SDR by about 8 dB; this has not been
+  validated on real songs such as Mr. Brightside, so compare both stems by ear.
 - NVIDIA GPU is selected automatically when available; CPU can be selected.
 - All four difficulties are always generated. Keys are optional and experimental.
 - **Auto** charting style is the default. It compares separated guitar, piano and
