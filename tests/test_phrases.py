@@ -269,3 +269,16 @@ def test_steady_quarter_note_line_keeps_pitch_contour():
              for i, p in enumerate(pitches)]
     lanes = [n.lanes[0] for n in author_guitar_phrases(notes, tempo)[0]]
     assert lanes == [0, 1, 2, 3, 2, 1, 0]
+
+
+def test_playability_keeps_regular_sixteenth_runs_but_not_ragged_clusters():
+    tempo = TempoMap([i * .4 for i in range(100)])
+    pitches = [45, 50, 47, 55, 49, 60, 52, 58, 46, 62, 51, 57, 48, 64, 53, 59]
+    even = [Note(2.004 + i * .1, 2.069 + i * .1, (i % 5,), confidence=.7, source_id=f"e{i}", pitch=p)
+            for i, p in enumerate(pitches)]
+    kept, _ = enforce_playability(even, "guitar", tempo, "band", phrase_aware=True)
+    assert len(kept) == 16
+    ragged = [Note(2.004 + t, 2.069 + t, (i % 5,), confidence=.7, source_id=f"r{i}", pitch=p)
+              for i, (t, p) in enumerate(zip([0, .03, .07, .1, .4, .43, .47, .5], pitches))]
+    kept, _ = enforce_playability(ragged, "guitar", tempo, "band", phrase_aware=True)
+    assert len(kept) < 8

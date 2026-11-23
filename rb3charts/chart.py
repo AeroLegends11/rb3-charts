@@ -495,6 +495,17 @@ def conform_expert_to_reference(notes,tempo,instrument):
         "triads_before":len(triads),"triads_after":sum(len(note.lanes)>2 for note in result),
         "holds_before":len(holds),"holds_after":sum(note.end-note.start>=BAND_SUSTAIN_SECONDS for note in result)}
 
+def _on_sixteenth_grid(group,tempo,tolerance=.3):
+    """True when four attacks fill the four sixteenth slots of one beat."""
+    slots=set()
+    for note in group:
+        position=tempo.beat_at(note.start)*4
+        slot=round(position)
+        if abs(position-slot)>tolerance:return False
+        slots.add(slot)
+    return len(slots)==4
+
+
 def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=False):
     """Apply controller-oriented density limits before deriving difficulties.
 
@@ -540,6 +551,11 @@ def enforce_playability(notes, instrument, tempo, profile="band", phrase_aware=F
         if profile=="band" and pitched and len(ranked)>per_beat:
             patterned=next((note for note in ranked[per_beat:] if note.source_id in motif_bonus),None)
             if patterned is not None:chosen.append(patterned)
+            # Dense Expert runs (fast solos) legitimately use all four sixteenths.
+            # A beat whose attacks all sit on distinct sixteenth-note grid slots
+            # is a real run; bleed and harmonics rarely line up that evenly.
+            elif len(group)==4 and _on_sixteenth_grid(group,tempo):
+                chosen=list(ranked)
         if phrase_aware and instrument=="guitar" and profile=="electronic":
             # Expert repeated figures may contain four real attacks per beat.
             # Preserve supported members rather than replacing the whole rule
