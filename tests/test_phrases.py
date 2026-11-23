@@ -218,3 +218,14 @@ def test_wide_rising_run_repositions_to_green_and_same_contour_in_other_key_matc
     first=[n.lanes[0] for n in result[:8]]
     assert first[:5]==[0,1,2,3,4] and first[5]==0 and first[6:]==[1,2]
     assert [n.lanes for n in result[:8]]==[n.lanes for n in result[8:]]
+
+
+def test_rapid_pitch_changes_never_repeat_a_color_after_reset_or_motif_reuse():
+    pitches=[40,55,40,55,41,57,43,60,40,55]
+    notes=[Note(1+i*.125,1+i*.125+.065,(1,),.9,str(i),p) for i,p in enumerate(pitches)]
+    notes+=[Note(4+i*.125,4+i*.125+.065,(1,),.9,f"b{i}",p) for i,p in enumerate([60,63,60,60])]
+    notes+=[Note(6+i*.125,6+i*.125+.065,(1,),.9,f"c{i}",p) for i,p in enumerate([60,62,60,60])]
+    result,_=author_guitar_phrases(notes,grid())
+    for a,b in zip(result,result[1:]):
+        if b.start-a.start<.5 and a.pitch!=b.pitch:
+            assert a.lanes!=b.lanes

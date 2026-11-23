@@ -144,12 +144,18 @@ def _hand_window_lanes(pitches, unique, rows, previous):
                            (rank - 4, cost + reset_cost + .01 * (len(ranks) - i) + (3 if prefer_green else 0))]
             for new_base, new_cost in options:
                 lane = rank - new_base
+                if lane == path[-1] and pitches[i] != pitches[i - 1]:
+                    new_cost += 8  # A real pitch change must not repeat the previous color.
                 if new_base == base:
                     new_cost += _transition_cost(pitches[i] - pitches[i - 1], path[-1], lane, rows[i].start - rows[i - 1].start)
                 if new_base not in nxt or new_cost < nxt[new_base][0]:
                     nxt[new_base] = (new_cost, path + [lane])
         states = nxt
     return min(states.values(), key=lambda item: item[0])[1]
+
+
+def _collapsed_changes(pitches, lanes):
+    return sum(a != b and x == y for a, b, x, y in zip(pitches, pitches[1:], lanes, lanes[1:]))
 
 
 def _continuity_anchor(notes, index, start, tempo):
@@ -265,11 +271,16 @@ def author_guitar_phrases(notes, tempo):
                 for source, target in motif_info["alignment"]:
                     if source < len(canonical) and target < len(projected):
                         projected[target] = canonical[source]
-                if projected != local_lanes[phrase_index]:
-                    motif_reused = True
-                lanes = projected
-        if lanes is None:
+                pitch_list = [n.pitch for n in rows]
+                if (_collapsed_changes(pitch_list, projected)
+                        <= _collapsed_changes(pitch_list, local_lanes[phrase_index])):
+                    if projected != local_lanes[phrase_index]:
+                        motif_reused = True
+                    lanes = projected
+        pitch_list = [n.pitch for n in rows]
+        if lanes is None or _collapsed_changes(pitch_list, lanes) > _collapsed_changes(pitch_list, local_lanes[phrase_index]):
             lanes = local_lanes[phrase_index]
+            reused = False
         vocabulary.setdefault(signature,lanes)
         rank_vocabulary.setdefault(rank_signature,[]).append((intervals,lanes))
         if continuity_source == "adjacent_single" and previous is not None and previous.pitch == rows[0].pitch and len(previous.lanes) == 1:
