@@ -229,3 +229,10 @@ def test_rapid_pitch_changes_never_repeat_a_color_after_reset_or_motif_reuse():
     for a,b in zip(result,result[1:]):
         if b.start-a.start<.5 and a.pitch!=b.pitch:
             assert a.lanes!=b.lanes
+
+
+def test_new_phrase_after_short_rest_does_not_repeat_color_on_new_pitch():
+    notes=[Note(1,1.1,(2,),.9,"a",60),Note(1.5,1.6,(2,),.9,"b",64),Note(1.625,1.7,(2,),.9,"c",67)]
+    result,_=author_guitar_phrases(notes,grid())
+    assert result[0].lanes!=result[1].lanes
+    assert all(0<=lane<=4 for n in result for lane in n.lanes)

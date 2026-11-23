@@ -145,7 +145,7 @@ def _hand_window_lanes(pitches, unique, rows, previous):
             for new_base, new_cost in options:
                 lane = rank - new_base
                 if lane == path[-1] and pitches[i] != pitches[i - 1]:
-                    new_cost += 8  # A real pitch change must not repeat the previous color.
+                    new_cost += 25  # A real pitch change must not repeat the previous color.
                 if new_base == base:
                     new_cost += _transition_cost(pitches[i] - pitches[i - 1], path[-1], lane, rows[i].start - rows[i - 1].start)
                 if new_base not in nxt or new_cost < nxt[new_base][0]:
@@ -156,6 +156,19 @@ def _hand_window_lanes(pitches, unique, rows, previous):
 
 def _collapsed_changes(pitches, lanes):
     return sum(a != b and x == y for a, b, x, y in zip(pitches, pitches[1:], lanes, lanes[1:]))
+
+
+def _separate_from_previous(lanes, rows, previous):
+    """Move a phrase one fret when its first note repeats the previous color on a new pitch."""
+    if (previous is None or len(previous.lanes) != 1 or rows[0].start - previous.start >= .8
+            or previous.pitch == rows[0].pitch or lanes[0] != previous.lanes[0]):
+        return lanes
+    direction = 1 if rows[0].pitch > previous.pitch else -1
+    for shift in (direction, -direction):
+        moved = [lane + shift for lane in lanes]
+        if min(moved) >= 0 and max(moved) <= 4:
+            return moved
+    return lanes
 
 
 def _continuity_anchor(notes, index, start, tempo):
@@ -287,6 +300,7 @@ def author_guitar_phrases(notes, tempo):
             boundary_delta = previous.lanes[0] - lanes[0]
             if all(0 <= lane + boundary_delta <= 4 for lane in lanes):
                 lanes = [lane + boundary_delta for lane in lanes]
+        lanes = _separate_from_previous(lanes, rows, result[index - 1] if index else None)
         before = [n.lanes[0] for n in rows]
         for note, lane in zip(rows, lanes):
             note.lanes = (lane,)
