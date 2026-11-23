@@ -7,6 +7,9 @@ from dataclasses import replace
 import numpy as np
 from .motifs import discover_phrase_motifs
 
+HAND_RESET_COST = 10
+WRONG_RESET_SIDE_COST = 1  # small tie-break; the hand-window rule still prefers green after a rise
+
 
 def select_lead_phrases(source_events):
     """Choose a continuous voice using neighboring candidates in both directions.
@@ -97,7 +100,7 @@ def _transition_cost(interval, old, new, gap):
     return musical+ergonomic
 
 
-def _fingering(rows, previous=None):
+def _fingering(rows, previous=None, avoid=None):
     pitches = [note.pitch for note in rows]
     unique = sorted(set(pitches))
     if len(unique) <= 5:
@@ -105,17 +108,21 @@ def _fingering(rows, previous=None):
         # pitch elsewhere cannot flatten this riff into a single color.
         options=[[offset+unique.index(pitch) for pitch in pitches] for offset in range(6-len(unique))]
         if previous is None:
-            return options[(5-len(unique))//2]
-        best=min(options,key=lambda lanes:_transition_cost(pitches[0]-previous.pitch,
-                 previous.lanes[0],lanes[0],rows[0].start-previous.start))
-        if _transition_cost(pitches[0]-previous.pitch,previous.lanes[0],best[0],rows[0].start-previous.start)<5:
-            return best
+            apart = [lanes for lanes in options if avoid is None or lanes[0] != avoid]
+            if apart:
+                return apart[min((5 - len(unique)) // 2, len(apart) - 1)]
+            # Every rigid fingering repeats the neighbor's color; use the windowed search.
+        else:
+            best=min(options,key=lambda lanes:_transition_cost(pitches[0]-previous.pitch,
+                     previous.lanes[0],lanes[0],rows[0].start-previous.start))
+            if _transition_cost(pitches[0]-previous.pitch,previous.lanes[0],best[0],rows[0].start-previous.start)<5:
+                return best
         # No rigid pitch dictionary joins this boundary naturally. Let the
         # sequence optimizer preserve the incoming note and choose a later reset.
-    return _hand_window_lanes(pitches, unique, rows, previous)
+    return _hand_window_lanes(pitches, unique, rows, previous, avoid)
 
 
-def _hand_window_lanes(pitches, unique, rows, previous):
+def _hand_window_lanes(pitches, unique, rows, previous, avoid=None):
     """Fret by pitch rank inside a five-fret hand window.
 
     Rising runs that would pass orange reposition to green; falling runs that
@@ -123,11 +130,11 @@ def _hand_window_lanes(pitches, unique, rows, previous):
     adjacent frets, so only the repositioning notes jump.
     """
     ranks = [unique.index(pitch) for pitch in pitches]
-    reset_cost = 10
+    reset_cost = HAND_RESET_COST
     states = {}
     for base in range(ranks[0] - 4, ranks[0] + 1):
         lane = ranks[0] - base
-        cost = 0
+        cost = 25 if lane == avoid else 0
         if previous is not None:
             cost += _transition_cost(pitches[0] - previous.pitch, previous.lanes[0], lane, rows[0].start - previous.start)
         states[base] = (cost, [lane])
@@ -140,8 +147,8 @@ def _hand_window_lanes(pitches, unique, rows, previous):
             else:
                 # Prefer green after rising, orange after falling.
                 prefer_green = rank > base
-                options = [(rank, cost + reset_cost + .01 * (len(ranks) - i) + (0 if prefer_green else 3)),
-                           (rank - 4, cost + reset_cost + .01 * (len(ranks) - i) + (3 if prefer_green else 0))]
+                options = [(rank, cost + reset_cost + .01 * (len(ranks) - i) + (0 if prefer_green else WRONG_RESET_SIDE_COST)),
+                           (rank - 4, cost + reset_cost + .01 * (len(ranks) - i) + (WRONG_RESET_SIDE_COST if prefer_green else 0))]
             for new_base, new_cost in options:
                 lane = rank - new_base
                 if lane == path[-1] and pitches[i] != pitches[i - 1]:
@@ -168,7 +175,9 @@ def _separate_from_previous(lanes, rows, previous):
         moved = [lane + shift for lane in lanes]
         if min(moved) >= 0 and max(moved) <= 4:
             return moved
-    return lanes
+    # No whole-phrase shift fits the five frets; refinger the phrase around the neighbor.
+    refit = _fingering(rows, None, previous.lanes[0])
+    return refit if refit[0] != previous.lanes[0] else lanes
 
 
 def _continuity_anchor(notes, index, start, tempo):

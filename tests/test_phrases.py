@@ -236,3 +236,10 @@ def test_new_phrase_after_short_rest_does_not_repeat_color_on_new_pitch():
     result,_=author_guitar_phrases(notes,grid())
     assert result[0].lanes!=result[1].lanes
     assert all(0<=lane<=4 for n in result for lane in n.lanes)
+
+
+def test_synthetic_benchmark_has_no_same_color_pitch_changes_and_consistent_transposed_repeats():
+    from rb3charts.synthetic_bench import run_benchmark
+    r=run_benchmark(seed=3,trials=90)
+    assert r["collapsed"]==0 and r["out_of_range"]==0 and r["attacks_changed"]==0
+    assert r["repeat_groups_identical"]==r["repeat_groups"]
